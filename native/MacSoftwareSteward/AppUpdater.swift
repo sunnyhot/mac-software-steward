@@ -105,9 +105,44 @@ final class AppUpdateModel: ObservableObject {
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw AppUpdateError.message("无法读取 GitHub Release。请确认仓库 \(repositoryName) 可访问。")
+            return try await fetchLatestReleaseByRedirect()
         }
-        return try JSONDecoder().decode(GitHubRelease.self, from: data)
+        do {
+            return try JSONDecoder().decode(GitHubRelease.self, from: data)
+        } catch {
+            return try await fetchLatestReleaseByRedirect()
+        }
+    }
+
+    private func fetchLatestReleaseByRedirect() async throws -> GitHubRelease {
+        guard let url = URL(string: "https://github.com/\(owner)/\(repo)/releases/latest") else {
+            throw AppUpdateError.message("GitHub Release URL 无效。")
+        }
+
+        let (_, response) = try await session.data(from: url)
+        guard let finalURL = response.url?.absoluteString,
+              let tag = finalURL.components(separatedBy: "/releases/tag/").last,
+              !tag.isEmpty,
+              tag != finalURL else {
+            throw AppUpdateError.message("无法解析 GitHub 最新版本。请稍后再试。")
+        }
+
+        let downloadURL = "https://github.com/\(owner)/\(repo)/releases/download/\(tag)/\(assetName)"
+        return GitHubRelease(
+            tagName: tag,
+            name: tag,
+            htmlURL: "https://github.com/\(owner)/\(repo)/releases/tag/\(tag)",
+            body: "GitHub API 暂不可用，已通过 Release 重定向检测到最新版本。",
+            draft: false,
+            prerelease: false,
+            assets: [
+                GitHubRelease.Asset(
+                    name: assetName,
+                    browserDownloadURL: downloadURL,
+                    size: 0
+                )
+            ]
+        )
     }
 
     private func download(asset: GitHubRelease.Asset) async throws -> URL {
