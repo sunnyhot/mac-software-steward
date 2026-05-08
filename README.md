@@ -36,6 +36,7 @@ build/MacSoftwareSteward.app
 - 单个软件手动升级与一键升级可管理来源
 - 任务日志与命令输出追踪
 - 每日巡检：通过用户级 LaunchAgent 定时扫描，发现可升级项后自动升级
+- 应用自更新：从 GitHub Releases 检查、下载、安装并重启应用
 
 ## Web 面板运行
 
@@ -64,6 +65,28 @@ API 只绑定到 `127.0.0.1:4317`。
 如果 `mas` CLI 未安装，但 Homebrew 可用，原生应用会显示“安装 mas CLI”按钮。安装任务会进入任务日志，成功后自动重新扫描。
 
 普通 `.app` 没有统一升级协议。很多应用使用 Sparkle、内置更新器或专有安装器，第一版不会伪造“自动升级”能力，避免误删或误装。
+
+## 应用自更新
+
+原生应用的“应用更新”页支持：
+
+- 启动时自动检查新版本
+- 手动检查 GitHub Release
+- 下载 `MacSoftwareSteward.zip`
+- 解压后替换当前 `.app`
+- 自动重启应用
+
+当前默认更新源：
+
+```text
+https://github.com/sunnyhot/mac-software-steward/releases/latest
+```
+
+Release 资产名必须包含：
+
+```text
+MacSoftwareSteward.zip
+```
 
 ## 每日巡检
 
