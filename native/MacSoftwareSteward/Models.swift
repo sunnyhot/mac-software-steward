@@ -1,0 +1,204 @@
+import Foundation
+
+enum AppTab: String, CaseIterable, Identifiable {
+    case updates = "可升级"
+    case brew = "Homebrew"
+    case applications = "应用程序"
+    case mas = "App Store"
+    case daily = "每日巡检"
+    case appUpdate = "应用更新"
+    case jobs = "任务日志"
+
+    var id: String { rawValue }
+
+    var symbol: String {
+        switch self {
+        case .updates: return "arrow.triangle.2.circlepath"
+        case .brew: return "shippingbox"
+        case .applications: return "macwindow"
+        case .mas: return "bag"
+        case .daily: return "calendar.badge.clock"
+        case .appUpdate: return "arrow.down.app"
+        case .jobs: return "terminal"
+        }
+    }
+}
+
+enum JobStatus: String {
+    case queued = "排队"
+    case running = "运行中"
+    case succeeded = "完成"
+    case failed = "失败"
+}
+
+struct AppItem: Identifiable, Hashable {
+    var id: String
+    var name: String
+    var version: String
+    var path: String
+    var source: String
+    var obtainedFrom: String
+    var architecture: String
+    var managedBy: String
+    var updateState: String
+}
+
+struct BrewPackage: Identifiable, Hashable {
+    var id: String
+    var kind: String
+    var name: String
+    var installedVersion: String
+    var currentVersion: String
+    var pinned: Bool
+    var autoUpdates: Bool
+    var outdated: Bool
+    var upgradeable: Bool
+}
+
+struct MasApp: Identifiable, Hashable {
+    var id: String
+    var appId: String
+    var name: String
+    var installedVersion: String
+    var currentVersion: String
+    var outdated: Bool
+    var upgradeable: Bool
+}
+
+struct ApplicationsScan {
+    var source: String
+    var ok: Bool
+    var error: String
+    var items: [AppItem]
+}
+
+struct BrewScan {
+    var available: Bool
+    var path: String
+    var prefix: String
+    var version: String
+    var error: String
+    var includeGreedy: Bool
+    var formulae: [BrewPackage]
+    var casks: [BrewPackage]
+
+    var outdatedCount: Int {
+        formulae.filter(\.outdated).count + casks.filter(\.outdated).count
+    }
+}
+
+struct MasScan {
+    var available: Bool
+    var path: String
+    var error: String
+    var apps: [MasApp]
+
+    var outdatedCount: Int {
+        apps.filter(\.outdated).count
+    }
+}
+
+struct ScanSummary {
+    var applications: Int
+    var brewFormulae: Int
+    var brewCasks: Int
+    var masApps: Int
+    var outdated: Int
+    var actionable: Int
+    var scanMs: Int
+}
+
+struct ScanResult {
+    var scannedAt: Date
+    var includeGreedy: Bool
+    var summary: ScanSummary
+    var applications: ApplicationsScan
+    var brew: BrewScan
+    var mas: MasScan
+}
+
+enum UpdatablePackage: Identifiable, Hashable {
+    case brew(BrewPackage)
+    case mas(MasApp)
+
+    var id: String {
+        switch self {
+        case .brew(let package): return package.id
+        case .mas(let app): return app.id
+        }
+    }
+
+    var name: String {
+        switch self {
+        case .brew(let package): return package.name
+        case .mas(let app): return app.name
+        }
+    }
+
+    var source: String {
+        switch self {
+        case .brew(let package): return package.kind == "cask" ? "Brew Cask" : "Brew Formula"
+        case .mas: return "Mac App Store"
+        }
+    }
+
+    var installedVersion: String {
+        switch self {
+        case .brew(let package): return package.installedVersion
+        case .mas(let app): return app.installedVersion
+        }
+    }
+
+    var currentVersion: String {
+        switch self {
+        case .brew(let package): return package.currentVersion
+        case .mas(let app): return app.currentVersion
+        }
+    }
+
+    var upgradeable: Bool {
+        switch self {
+        case .brew(let package): return package.upgradeable
+        case .mas(let app): return app.upgradeable
+        }
+    }
+
+    var isPinned: Bool {
+        if case .brew(let package) = self {
+            return package.pinned
+        }
+        return false
+    }
+
+    var autoUpdates: Bool {
+        if case .brew(let package) = self {
+            return package.autoUpdates
+        }
+        return false
+    }
+}
+
+struct UpgradeCommand: Hashable {
+    var executable: String
+    var arguments: [String]
+    var display: String
+}
+
+struct LogLine: Identifiable, Hashable {
+    var id = UUID()
+    var date = Date()
+    var stream: String
+    var text: String
+}
+
+struct UpgradeJob: Identifiable, Hashable {
+    var id = UUID()
+    var label: String
+    var status: JobStatus = .queued
+    var createdAt = Date()
+    var startedAt: Date?
+    var finishedAt: Date?
+    var exitCode: Int32?
+    var commands: [String]
+    var log: [LogLine] = []
+}

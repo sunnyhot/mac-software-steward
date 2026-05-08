@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>zh_CN</string>
+  <key>CFBundleExecutable</key>
+  <string>MacSoftwareSteward</string>
+  <key>CFBundleIdentifier</key>
+  <string>local.codex.MacSoftwareSteward</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>Mac 软件管家</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.2.0</string>
+  <key>CFBundleVersion</key>
+  <string>2</string>
+  <key>GitHubReleaseOwner</key>
+  <string>sunnyhot</string>
+  <key>GitHubReleaseRepo</key>
+  <string>mac-software-steward</string>
+  <key>GitHubReleaseAssetName</key>
+  <string>MacSoftwareSteward.zip</string>
+  <key>GitHubReleaseAppBundleName</key>
+  <string>MacSoftwareSteward.app</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>14.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+  <key>NSSupportsAutomaticTermination</key>
+  <false/>
+  <key>NSSupportsSuddenTermination</key>
+  <false/>
+</dict>
+</plist>
