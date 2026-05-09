@@ -245,7 +245,10 @@ final class StewardModel: ObservableObject {
             $0.log.append(LogLine(stream: "system", text: "开始：\($0.label)"))
         }
 
-        for (index, step) in steps.enumerated() {
+        var failedCount = 0
+        var firstErrorCode: Int32?
+
+        for step in steps {
             let command = step.command
             markRunning(step)
             appendLog(id: id, stream: "command", text: "$ \(command.display)")
@@ -258,26 +261,29 @@ final class StewardModel: ObservableObject {
             let code = result.code
 
             if code != 0 {
+                failedCount += 1
+                if firstErrorCode == nil { firstErrorCode = code }
                 let detail = failureDetail(command: command.display, code: code, output: result.recentOutput)
                 markFailed(step, detail: detail)
-                markPendingFailed(Array(steps.dropFirst(index + 1)), detail: "未执行：前一步 \(command.display) 失败")
                 updateJob(id) {
-                    $0.status = .failed
-                    $0.exitCode = code
-                    $0.finishedAt = Date()
                     $0.log.append(LogLine(stream: "system", text: "失败：\(command.display)，退出码 \(code)"))
                 }
-                return
+            } else {
+                markSucceeded(step)
             }
-
-            markSucceeded(step)
         }
 
         updateJob(id) {
-            $0.status = .succeeded
-            $0.exitCode = 0
+            if failedCount > 0 {
+                $0.status = .failed
+                $0.exitCode = firstErrorCode ?? 1
+                $0.log.append(LogLine(stream: "system", text: "完成，\(failedCount) 个步骤失败"))
+            } else {
+                $0.status = .succeeded
+                $0.exitCode = 0
+                $0.log.append(LogLine(stream: "system", text: "完成"))
+            }
             $0.finishedAt = Date()
-            $0.log.append(LogLine(stream: "system", text: "完成"))
         }
 
         if rescanAfterSuccess {
