@@ -52,7 +52,7 @@ async function runJob(job) {
   job.startedAt = new Date().toISOString();
   appendLog(job, 'system', `开始：${job.label}`);
 
-  for (const command of job.commands) {
+  for (const [index, command] of job.commands.entries()) {
     command.status = 'running';
     command.startedAt = new Date().toISOString();
     appendLog(job, 'command', `$ ${command.display}`);
@@ -66,6 +66,12 @@ async function runJob(job) {
       job.status = 'failed';
       job.exitCode = result.code;
       appendLog(job, 'system', `失败：${command.display}，退出码 ${result.code}`);
+      for (const pending of job.commands.slice(index + 1)) {
+        if (pending.status === 'queued') {
+          pending.status = 'failed';
+          pending.finishedAt = new Date().toISOString();
+        }
+      }
       break;
     }
   }
@@ -134,7 +140,9 @@ async function commandsForUpgradeOne(payload) {
     return [{
       command: brewPath,
       args,
-      display: ['brew', ...args].join(' ')
+      display: ['brew', ...args].join(' '),
+      packageID: payload.packageID || `brew:${payload.kind}:${payload.name}`,
+      packageName: payload.name
     }];
   }
 
@@ -144,7 +152,9 @@ async function commandsForUpgradeOne(payload) {
     return [{
       command: masPath,
       args: ['upgrade', appId],
-      display: `mas upgrade ${appId}`
+      display: `mas upgrade ${appId}`,
+      packageID: payload.packageID || `mas:${appId}`,
+      packageName: payload.name || appId
     }];
   }
 
@@ -153,6 +163,33 @@ async function commandsForUpgradeOne(payload) {
 
 async function commandsForUpgradeAll(payload) {
   const commands = [];
+  const packages = Array.isArray(payload.packages) ? payload.packages : [];
+
+  if (packages.length > 0) {
+    const brewPackages = packages.filter((item) => item.manager === 'brew');
+    if (brewPackages.length > 0 && payload.runBrewUpdate) {
+      const brewPath = await requireCommand('brew');
+      commands.push({
+        command: brewPath,
+        args: ['update'],
+        display: 'brew update'
+      });
+    }
+
+    for (const item of packages) {
+      const [command] = await commandsForUpgradeOne({
+        ...item,
+        greedy: payload.greedy
+      });
+      commands.push(command);
+    }
+
+    if (commands.length === 0) {
+      throw new Error('No upgrade source selected.');
+    }
+
+    return commands;
+  }
 
   if (payload.brewFormulae || payload.brewCasks) {
     const brewPath = await requireCommand('brew');

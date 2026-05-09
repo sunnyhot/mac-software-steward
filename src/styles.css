@@ -382,10 +382,6 @@ h3 {
 }
 
 .package-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -395,6 +391,18 @@ h3 {
 .package-row.outdated {
   border-color: #edcf93;
   background: #fffaf0;
+}
+
+.package-row.active-progress {
+  border-color: #95bddf;
+  background: #f0f7ff;
+}
+
+.package-row-mainline {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
 }
 
 .package-main {
@@ -423,6 +431,14 @@ h3 {
 .package-main p {
   margin-bottom: 0;
   color: var(--text-muted);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.progress-detail {
+  margin: 10px 0 0 54px;
+  color: var(--text-muted);
+  font-size: 13px;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
@@ -498,7 +514,7 @@ h3 {
 
 .app-row {
   display: grid;
-  grid-template-columns: minmax(170px, 1.2fr) minmax(96px, 0.6fr) minmax(120px, 0.7fr) minmax(112px, 0.7fr) minmax(240px, 1.6fr);
+  grid-template-columns: minmax(160px, 1.2fr) minmax(92px, 0.55fr) minmax(108px, 0.65fr) minmax(108px, 0.65fr) minmax(112px, 0.65fr) minmax(220px, 1.5fr);
   gap: 12px;
   align-items: center;
   min-height: 58px;
@@ -516,6 +532,10 @@ h3 {
   background: #f0f4ec;
   font-size: 13px;
   font-weight: 800;
+}
+
+.app-row.active-progress {
+  background: #f0f7ff;
 }
 
 .strong {
@@ -624,7 +644,7 @@ h3 {
   .topbar,
   .toolbar,
   .panel-head,
-  .package-row {
+  .package-row-mainline {
     flex-direction: column;
     align-items: stretch;
   }

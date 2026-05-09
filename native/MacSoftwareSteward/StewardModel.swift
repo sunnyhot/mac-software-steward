@@ -25,13 +25,45 @@ final class StewardModel: ObservableObject {
 
     var availableUpdates: [UpdatablePackage] {
         guard let scan else { return [] }
-        return scan.brew.formulae.filter(\.outdated).map(UpdatablePackage.brew)
-            + scan.brew.casks.filter(\.outdated).map(UpdatablePackage.brew)
-            + scan.mas.apps.filter(\.outdated).map(UpdatablePackage.mas)
+        return scan.brew.formulae.filter(\.upgradeable).map(UpdatablePackage.brew)
+            + scan.brew.casks.filter(\.upgradeable).map(UpdatablePackage.brew)
+            + scan.mas.apps.filter(\.upgradeable).map(UpdatablePackage.mas)
     }
 
     var hasRunningJob: Bool {
         jobs.contains { $0.status == .queued || $0.status == .running }
+    }
+
+    var jobNotice: JobNotice? {
+        if let job = jobs.first(where: { $0.status == .queued || $0.status == .running }) {
+            return JobNotice(
+                title: job.status == .queued ? "升级任务已排队" : "升级任务正在执行",
+                detail: currentCommandText(for: job),
+                symbol: job.status == .queued ? "clock" : "arrow.triangle.2.circlepath",
+                isFailure: false
+            )
+        }
+
+        if let job = jobs.first(where: { $0.status == .failed }) {
+            return JobNotice(
+                title: "上次升级失败",
+                detail: failureSummary(for: job),
+                symbol: "exclamationmark.triangle",
+                isFailure: true
+            )
+        }
+
+        return nil
+    }
+
+    var upgradeAllHelpText: String {
+        if hasRunningJob {
+            return "已有升级任务正在运行，请先查看任务日志。"
+        }
+        if availableUpdates.isEmpty {
+            return "没有可自动升级的项目。"
+        }
+        return "升级 \(availableUpdates.count) 个可管理软件。"
     }
 
     var canInstallMasCLI: Bool {
@@ -94,6 +126,7 @@ final class StewardModel: ObservableObject {
             }
 
             startJob(label: "一键升级可管理软件", steps: steps, rescanAfterSuccess: true)
+            selectedTab = .updates
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -216,16 +249,18 @@ final class StewardModel: ObservableObject {
             let command = step.command
             markRunning(step)
             appendLog(id: id, stream: "command", text: "$ \(command.display)")
-            let code = await CommandRunner.runStreaming(command.executable, arguments: command.arguments) { stream, text in
+            let result = await CommandRunner.runStreamingDetailed(command.executable, arguments: command.arguments) { stream, text in
                 Task { @MainActor in
                     self.appendLog(id: id, stream: stream, text: text)
                     self.updatePackageDetail(for: step, stream: stream, text: text)
                 }
             }
+            let code = result.code
 
             if code != 0 {
-                markFailed(step, detail: "退出码 \(code)")
-                markPendingFailed(Array(steps.dropFirst(index + 1)), detail: "前一步失败，未执行")
+                let detail = failureDetail(command: command.display, code: code, output: result.recentOutput)
+                markFailed(step, detail: detail)
+                markPendingFailed(Array(steps.dropFirst(index + 1)), detail: "未执行：前一步 \(command.display) 失败")
                 updateJob(id) {
                     $0.status = .failed
                     $0.exitCode = code
@@ -320,6 +355,31 @@ final class StewardModel: ObservableObject {
         progress.detail = "[\(stream)] \(text)"
         progress.updatedAt = Date()
         packageProgress[packageID] = progress
+    }
+
+    private func failureDetail(command: String, code: Int32, output: String) -> String {
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return "失败：\(command)，退出码 \(code)。请打开任务日志查看完整输出。"
+        }
+        return "失败：\(command)，退出码 \(code)。\(trimmed)"
+    }
+
+    private func currentCommandText(for job: UpgradeJob) -> String {
+        if let command = job.log.reversed().first(where: { $0.stream == "command" }) {
+            return command.text.replacingOccurrences(of: "$ ", with: "")
+        }
+        return job.commands.first ?? job.label
+    }
+
+    private func failureSummary(for job: UpgradeJob) -> String {
+        if let output = job.log.reversed().first(where: { $0.stream == "stderr" || $0.stream == "stdout" }) {
+            return output.text
+        }
+        if let system = job.log.reversed().first(where: { $0.stream == "system" }) {
+            return system.text
+        }
+        return "请打开任务日志查看完整输出。"
     }
 
     private func prunePackageProgress(keeping result: ScanResult) {

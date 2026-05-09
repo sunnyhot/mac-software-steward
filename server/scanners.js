@@ -16,15 +16,12 @@ export async function scanAll(options = {}) {
   ]);
 
   const appMatches = classifyApplications(applications.items, brew, mas);
-  const summary = {
-    applications: appMatches.length,
-    brewFormulae: brew.formulae?.length ?? 0,
-    brewCasks: brew.casks?.length ?? 0,
-    masApps: mas.apps?.length ?? 0,
-    outdated: (brew.outdatedCount ?? 0) + (mas.outdatedCount ?? 0),
-    actionable: (brew.outdatedCount ?? 0) + (mas.outdatedCount ?? 0),
-    scanMs: Date.now() - startedAt
-  };
+  const summary = buildScanSummary({
+    applications: { ...applications, items: appMatches },
+    brew,
+    mas,
+    elapsedMs: Date.now() - startedAt
+  });
 
   return {
     scannedAt: new Date().toISOString(),
@@ -101,13 +98,15 @@ async function scanApplicationsByFind(reason) {
       id: `app:${appPath}`,
       name: path.basename(appPath, '.app'),
       version: '',
+      availableVersion: '',
       path: appPath,
       source: guessApplicationSource(appPath),
       obtainedFrom: '',
       lastModified: '',
       architecture: '',
       managedBy: 'manual',
-      updateState: 'unknown'
+      updateState: 'unknown',
+      relatedPackageID: ''
     }))
     .sort(sortByName);
 
@@ -127,6 +126,7 @@ function normalizeSystemProfilerApp(item) {
     id: `app:${appPath || name}`,
     name,
     version: item.version || item.short_version || '',
+    availableVersion: '',
     path: appPath,
     source: guessApplicationSource(appPath, item.obtained_from),
     obtainedFrom: item.obtained_from || '',
@@ -134,7 +134,8 @@ function normalizeSystemProfilerApp(item) {
     architecture: item.arch_kind || item.kind || '',
     signedBy: item.signed_by || '',
     managedBy: 'manual',
-    updateState: 'unknown'
+    updateState: 'unknown',
+    relatedPackageID: ''
   };
 }
 
@@ -282,7 +283,7 @@ export async function scanMas() {
     .map(parseMasListLine)
     .filter(Boolean)
     .map((app) => {
-      const pending = outdated.get(app.id);
+      const pending = outdated.get(app.appId);
       return {
         ...app,
         id: `mas:${app.appId}`,
@@ -320,6 +321,18 @@ export function parseMasListLine(line = '') {
 }
 
 export function parseMasOutdatedLine(line = '') {
+  const trimmed = line.trim();
+  const bareArrowMatch = trimmed.match(/^(\d+)\s+(.+?)\s+(\S+)\s*->\s*(\S+)$/);
+  if (bareArrowMatch && !trimmed.includes('(')) {
+    return {
+      id: bareArrowMatch[1],
+      appId: bareArrowMatch[1],
+      name: bareArrowMatch[2].trim(),
+      installedVersion: bareArrowMatch[3].trim(),
+      currentVersion: bareArrowMatch[4].trim()
+    };
+  }
+
   const parsed = parseMasListLine(line);
   if (!parsed) return null;
 
@@ -333,7 +346,24 @@ export function parseMasOutdatedLine(line = '') {
   };
 }
 
-function classifyApplications(applications, brew, mas) {
+export function buildScanSummary({ applications, brew, mas, elapsedMs }) {
+  const formulae = brew.formulae ?? [];
+  const casks = brew.casks ?? [];
+  const apps = mas.apps ?? [];
+  const packages = [...formulae, ...casks, ...apps];
+
+  return {
+    applications: applications.items?.length ?? 0,
+    brewFormulae: formulae.length,
+    brewCasks: casks.length,
+    masApps: apps.length,
+    outdated: packages.filter((item) => item.outdated).length,
+    actionable: packages.filter((item) => item.upgradeable).length,
+    scanMs: elapsedMs
+  };
+}
+
+export function classifyApplications(applications, brew, mas) {
   const casksByToken = new Map((brew.casks ?? []).map((cask) => [normalizeToken(cask.name), cask]));
   const masByName = new Map((mas.apps ?? []).map((app) => [normalizeToken(app.name), app]));
 
@@ -347,6 +377,8 @@ function classifyApplications(applications, brew, mas) {
         ...app,
         managedBy: 'brew-cask',
         updateState: cask.outdated ? 'outdated' : 'current',
+        availableVersion: cask.currentVersion || '',
+        relatedPackageID: cask.id || '',
         relatedPackage: cask
       };
     }
@@ -356,6 +388,8 @@ function classifyApplications(applications, brew, mas) {
         ...app,
         managedBy: 'mas',
         updateState: masApp?.outdated ? 'outdated' : 'current',
+        availableVersion: masApp?.currentVersion || '',
+        relatedPackageID: masApp?.id || '',
         relatedPackage: masApp ?? null
       };
     }

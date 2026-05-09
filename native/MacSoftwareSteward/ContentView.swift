@@ -50,10 +50,11 @@ private struct HeaderView: View {
                 Button {
                     Task { await model.upgradeAll() }
                 } label: {
-                    Label("一键升级", systemImage: "bolt.fill")
+                    Label(model.hasRunningJob ? "升级中" : "一键升级", systemImage: model.hasRunningJob ? "hourglass" : "bolt.fill")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(model.availableUpdates.isEmpty || model.hasRunningJob)
+                .help(model.upgradeAllHelpText)
             }
 
             if !model.errorMessage.isEmpty {
@@ -121,6 +122,10 @@ private struct MainPanel: View {
                 .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
             }
 
+            if let notice = model.jobNotice {
+                JobNoticeView(notice: notice)
+            }
+
             switch model.selectedTab {
             case .updates:
                 UpdatesView()
@@ -139,6 +144,36 @@ private struct MainPanel: View {
             }
         }
         .padding(18)
+    }
+}
+
+private struct JobNoticeView: View {
+    @EnvironmentObject private var model: StewardModel
+    var notice: JobNotice
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: notice.symbol)
+                .symbolEffect(.pulse, options: .repeating, isActive: !notice.isFailure)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(notice.title)
+                    .font(.subheadline.bold())
+                Text(notice.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+            }
+            Spacer()
+            Button {
+                model.selectedTab = .jobs
+            } label: {
+                Label("查看日志", systemImage: "terminal")
+            }
+        }
+        .padding(10)
+        .foregroundStyle(notice.isFailure ? .red : .accentColor)
+        .background((notice.isFailure ? Color.red : Color.accentColor).opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -196,7 +231,7 @@ private struct UpdateRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(package.name)
                         .font(.headline)
-                    Text("\(package.source) · \(package.installedVersion.isEmpty ? "-" : package.installedVersion) → \(package.currentVersion.isEmpty ? "-" : package.currentVersion)")
+                    Text("\(package.source) · 当前 \(versionText(package.installedVersion)) · 可升级版本 \(availableVersionText(for: package))")
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
@@ -213,7 +248,7 @@ private struct UpdateRow: View {
                 if let progress {
                     PackageProgressBadge(progress: progress)
                 } else {
-                    Badge(text: "可升级", color: .orange)
+                    PackageStatusBadge(package: package)
                 }
 
                 Button {
@@ -241,7 +276,7 @@ private struct UpdateRow: View {
         case .running, .queued: return Color.accentColor.opacity(0.08)
         case .succeeded: return Color.green.opacity(0.08)
         case .failed: return Color.red.opacity(0.08)
-        case nil: return Color.orange.opacity(0.08)
+        case nil: return package.outdated ? Color.orange.opacity(0.08) : Color(nsColor: .controlBackgroundColor)
         }
     }
 
@@ -250,8 +285,29 @@ private struct UpdateRow: View {
         case .running, .queued: return Color.accentColor.opacity(0.25)
         case .succeeded: return Color.green.opacity(0.25)
         case .failed: return Color.red.opacity(0.25)
-        case nil: return Color.orange.opacity(0.25)
+        case nil: return package.outdated ? Color.orange.opacity(0.25) : Color.gray.opacity(0.12)
         }
+    }
+}
+
+private struct PackageStatusBadge: View {
+    var package: UpdatablePackage
+
+    var body: some View {
+        Badge(text: text, color: color)
+    }
+
+    private var text: String {
+        if package.upgradeable { return "可升级" }
+        if package.outdated && package.isPinned { return "已固定" }
+        if package.outdated { return "需手动" }
+        return "已最新"
+    }
+
+    private var color: Color {
+        if package.upgradeable { return .orange }
+        if package.outdated { return .secondary }
+        return .green
     }
 }
 
@@ -309,7 +365,7 @@ private struct PackageProgressDetail: View {
             Text(progress.detail)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
+                .lineLimit(4)
                 .truncationMode(.middle)
         }
         .padding(.leading, 46)
@@ -374,36 +430,83 @@ private struct ApplicationsView: View {
             ScrollView {
                 LazyVStack(spacing: 8) {
                     ForEach(apps) { app in
-                        HStack(spacing: 12) {
-                            Image(systemName: "macwindow")
-                                .frame(width: 32, height: 32)
-                                .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(app.name)
-                                    .font(.headline)
-                                Text(app.path)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
-                            Spacer()
-                            Text(app.version.isEmpty ? "-" : app.version)
-                                .foregroundStyle(.secondary)
-                                .frame(width: 130, alignment: .leading)
-                            Badge(text: app.source, color: .secondary)
-                            ManagedBadge(app: app)
-                            Button {
-                                model.reveal(app)
-                            } label: {
-                                Label("Finder", systemImage: "arrow.up.forward.app")
-                            }
-                        }
-                        .padding(10)
-                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                        ApplicationRow(app: app)
                     }
                 }
             }
         }
+    }
+}
+
+private struct ApplicationRow: View {
+    @EnvironmentObject private var model: StewardModel
+    var app: AppItem
+
+    var progress: PackageUpgradeProgress? {
+        app.relatedPackageID.isEmpty ? nil : model.packageProgress[app.relatedPackageID]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Image(systemName: "macwindow")
+                    .frame(width: 32, height: 32)
+                    .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(app.name)
+                        .font(.headline)
+                    Text(app.path)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer()
+                VersionColumn(title: "当前", value: app.version)
+                VersionColumn(title: "可升级", value: app.availableVersion)
+                Badge(text: app.source, color: .secondary)
+                if let progress {
+                    PackageProgressBadge(progress: progress)
+                } else {
+                    ManagedBadge(app: app)
+                }
+                Button {
+                    model.reveal(app)
+                } label: {
+                    Label("Finder", systemImage: "arrow.up.forward.app")
+                }
+            }
+
+            if let progress {
+                PackageProgressDetail(progress: progress)
+            }
+        }
+        .padding(10)
+        .background(rowBackground, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var rowBackground: Color {
+        if progress != nil { return Color.accentColor.opacity(0.08) }
+        if app.updateState == "outdated" { return Color.orange.opacity(0.08) }
+        return Color(nsColor: .controlBackgroundColor)
+    }
+}
+
+private struct VersionColumn: View {
+    var title: String
+    var value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2.bold())
+                .foregroundStyle(.secondary)
+            Text(versionText(value))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .frame(width: 92, alignment: .leading)
     }
 }
 
@@ -617,6 +720,7 @@ private struct DailyInspectionView: View {
 
 private struct AppUpdateView: View {
     @EnvironmentObject private var updater: AppUpdateModel
+    @EnvironmentObject private var launchAtLogin: LaunchAtLoginModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -639,6 +743,28 @@ private struct AppUpdateView: View {
 
             Toggle("启动应用时自动检查更新", isOn: $updater.automaticChecksEnabled)
                 .toggleStyle(.switch)
+
+            HStack(spacing: 12) {
+                Toggle("开机自动启动", isOn: Binding(
+                    get: { launchAtLogin.enabled },
+                    set: { enabled in
+                        Task { await launchAtLogin.setEnabled(enabled) }
+                    }
+                ))
+                .toggleStyle(.switch)
+                .disabled(launchAtLogin.isChanging)
+
+                Text(launchAtLogin.status)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    launchAtLogin.refresh()
+                } label: {
+                    Label("刷新", systemImage: "arrow.clockwise")
+                }
+            }
 
             HStack(spacing: 10) {
                 Button {
@@ -773,6 +899,20 @@ private struct EmptyStateView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 280)
     }
+}
+
+private func versionText(_ value: String) -> String {
+    value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "-" : value
+}
+
+private func availableVersionText(for package: UpdatablePackage) -> String {
+    if !package.currentVersion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return package.currentVersion
+    }
+    if package.outdated && package.source == "Mac App Store" {
+        return "待 App Store 确认"
+    }
+    return "-"
 }
 
 private func filter<T>(_ items: [T], query: String, text: (T) -> String) -> [T] {

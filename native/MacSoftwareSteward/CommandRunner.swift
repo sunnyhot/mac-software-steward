@@ -7,6 +7,11 @@ struct CommandResult {
     var stderr: String
 }
 
+struct StreamingCommandResult {
+    var code: Int32
+    var recentOutput: String
+}
+
 enum CommandRunner {
     static let defaultPath = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
@@ -102,11 +107,21 @@ enum CommandRunner {
         arguments: [String],
         onOutput: @escaping @Sendable (String, String) -> Void
     ) async -> Int32 {
+        let result = await runStreamingDetailed(executable, arguments: arguments, onOutput: onOutput)
+        return result.code
+    }
+
+    static func runStreamingDetailed(
+        _ executable: String,
+        arguments: [String],
+        onOutput: @escaping @Sendable (String, String) -> Void
+    ) async -> StreamingCommandResult {
         await withCheckedContinuation { continuation in
             let process = Process()
             let stdout = Pipe()
             let stderr = Pipe()
             let gate = FinishGate()
+            let recentOutput = LockedRecentOutput()
 
             process.executableURL = URL(fileURLWithPath: executable)
             process.arguments = arguments
@@ -115,26 +130,33 @@ enum CommandRunner {
             process.standardError = stderr
 
             stdout.fileHandleForReading.readabilityHandler = { handle in
-                emit(handle.availableData, stream: "stdout", onOutput: onOutput)
+                emit(handle.availableData, stream: "stdout", recentOutput: recentOutput, onOutput: onOutput)
             }
             stderr.fileHandleForReading.readabilityHandler = { handle in
-                emit(handle.availableData, stream: "stderr", onOutput: onOutput)
+                emit(handle.availableData, stream: "stderr", recentOutput: recentOutput, onOutput: onOutput)
             }
 
             process.terminationHandler = { finishedProcess in
                 guard gate.close() else { return }
                 stdout.fileHandleForReading.readabilityHandler = nil
                 stderr.fileHandleForReading.readabilityHandler = nil
-                emit(stdout.fileHandleForReading.readDataToEndOfFile(), stream: "stdout", onOutput: onOutput)
-                emit(stderr.fileHandleForReading.readDataToEndOfFile(), stream: "stderr", onOutput: onOutput)
-                continuation.resume(returning: finishedProcess.terminationStatus)
+                emit(stdout.fileHandleForReading.readDataToEndOfFile(), stream: "stdout", recentOutput: recentOutput, onOutput: onOutput)
+                emit(stderr.fileHandleForReading.readDataToEndOfFile(), stream: "stderr", recentOutput: recentOutput, onOutput: onOutput)
+                continuation.resume(returning: StreamingCommandResult(
+                    code: finishedProcess.terminationStatus,
+                    recentOutput: recentOutput.text()
+                ))
             }
 
             do {
                 try process.run()
             } catch {
                 onOutput("stderr", error.localizedDescription)
-                continuation.resume(returning: -1)
+                recentOutput.append(stream: "stderr", text: error.localizedDescription)
+                continuation.resume(returning: StreamingCommandResult(
+                    code: -1,
+                    recentOutput: recentOutput.text()
+                ))
             }
         }
     }
@@ -144,9 +166,20 @@ enum CommandRunner {
         stream: String,
         onOutput: @escaping @Sendable (String, String) -> Void
     ) {
+        emit(data, stream: stream, recentOutput: nil, onOutput: onOutput)
+    }
+
+    private static func emit(
+        _ data: Data,
+        stream: String,
+        recentOutput: LockedRecentOutput?,
+        onOutput: @escaping @Sendable (String, String) -> Void
+    ) {
         guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
         for line in text.split(whereSeparator: \.isNewline) {
-            onOutput(stream, String(line))
+            let lineText = String(line)
+            recentOutput?.append(stream: stream, text: lineText)
+            onOutput(stream, lineText)
         }
     }
 
@@ -207,5 +240,28 @@ private final class FinishGate: @unchecked Sendable {
         guard !isClosed else { return false }
         isClosed = true
         return true
+    }
+}
+
+private final class LockedRecentOutput: @unchecked Sendable {
+    private let lock = NSLock()
+    private var lines: [String] = []
+    private let limit = 8
+
+    func append(stream: String, text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        lock.lock()
+        lines.append("[\(stream)] \(trimmed)")
+        if lines.count > limit {
+            lines.removeFirst(lines.count - limit)
+        }
+        lock.unlock()
+    }
+
+    func text() -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        return lines.joined(separator: "\n")
     }
 }

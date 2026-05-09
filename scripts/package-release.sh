@@ -24,13 +24,11 @@ cp "$ZIP_PATH" "$VERSIONED_ZIP_PATH"
 cat > "$RELEASE_DIR/RELEASE_NOTES.md" <<NOTES
 ## Mac 软件管家 v$VERSION
 
-- 新增应用自更新：启动时自动检查、手动检查、从 GitHub Release 下载并安装。
-- 新增每日巡检：通过 LaunchAgent 定时扫描并自动升级可管理软件。
-- 新增菜单栏状态入口：显示可升级数量，并可直接一键升级。
-- 优化升级体验：列表条目显示排队、升级中、完成、失败等实时状态。
-- 新增 macOS 应用图标，并打入 .app 与 release zip。
-- 修复从 App Translocation 临时路径启动时无法自更新的问题；遇到不可写目录时自动安装到 ~/Applications。
-- 支持缺失 mas CLI 时通过 Homebrew 自动安装。
+- 修复“一键升级”看起来没有反应的问题：升级任务会显示全局执行状态，失败时展示最近 stdout/stderr，而不只是退出码。
+- 修复 App Store 版本解析：支持 mas 输出无括号版本格式，拿不到新版号时显示“待 App Store 确认”。
+- 新增开机自动启动开关，可在“应用更新”页启用或停用。
+- 重新设计菜单栏图标，使用更轻量的线性状态图标，并仅在有更新时显示数量。
+- 继续保留 Homebrew、App Store、应用程序列表间的升级状态联动。
 
 安装包资产：\`MacSoftwareSteward.zip\`
 NOTES

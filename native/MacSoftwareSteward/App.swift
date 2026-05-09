@@ -4,12 +4,14 @@ import SwiftUI
 struct MacSoftwareStewardApp: App {
     @StateObject private var model = StewardModel()
     @StateObject private var updater = AppUpdateModel()
+    @StateObject private var launchAtLogin = LaunchAtLoginModel()
 
     var body: some Scene {
         WindowGroup(id: "main") {
             ContentView()
                 .environmentObject(model)
                 .environmentObject(updater)
+                .environmentObject(launchAtLogin)
                 .frame(minWidth: 1120, minHeight: 720)
                 .task {
                     if model.scan == nil {
@@ -59,17 +61,71 @@ private struct MenuBarUpgradeLabel: View {
     var hasRunningJob: Bool
 
     var body: some View {
-        Label {
-            Text("\(count)")
-        } icon: {
-            Image(systemName: symbol)
+        HStack(spacing: 3) {
+            MenuBarGlyph(count: count, isScanning: isScanning, hasRunningJob: hasRunningJob)
+                .frame(width: 16, height: 16)
+            if count > 0 {
+                Text("\(count)")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+            }
         }
     }
+}
 
-    private var symbol: String {
-        if isScanning { return "magnifyingglass" }
-        if hasRunningJob { return "arrow.triangle.2.circlepath" }
-        return count > 0 ? "arrow.down.circle.fill" : "checkmark.circle"
+private struct MenuBarGlyph: View {
+    var count: Int
+    var isScanning: Bool
+    var hasRunningJob: Bool
+
+    var body: some View {
+        Canvas { context, size in
+            let stroke = Color.primary.opacity(0.88)
+            let line = max(1.25, size.width * 0.09)
+            let cube = CGRect(x: size.width * 0.20, y: size.height * 0.19, width: size.width * 0.52, height: size.height * 0.52)
+            var path = Path()
+            path.move(to: CGPoint(x: cube.midX, y: cube.minY))
+            path.addLine(to: CGPoint(x: cube.maxX, y: cube.minY + cube.height * 0.28))
+            path.addLine(to: CGPoint(x: cube.maxX, y: cube.maxY - cube.height * 0.26))
+            path.addLine(to: CGPoint(x: cube.midX, y: cube.maxY))
+            path.addLine(to: CGPoint(x: cube.minX, y: cube.maxY - cube.height * 0.26))
+            path.addLine(to: CGPoint(x: cube.minX, y: cube.minY + cube.height * 0.28))
+            path.closeSubpath()
+            path.move(to: CGPoint(x: cube.minX, y: cube.minY + cube.height * 0.28))
+            path.addLine(to: CGPoint(x: cube.midX, y: cube.midY))
+            path.addLine(to: CGPoint(x: cube.maxX, y: cube.minY + cube.height * 0.28))
+            path.move(to: CGPoint(x: cube.midX, y: cube.midY))
+            path.addLine(to: CGPoint(x: cube.midX, y: cube.maxY))
+            context.stroke(path, with: .color(stroke), style: StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round))
+
+            let badge = Path(ellipseIn: CGRect(x: size.width * 0.61, y: size.height * 0.07, width: size.width * 0.34, height: size.height * 0.34))
+            context.fill(badge, with: .color(Color.primary.opacity(count > 0 || hasRunningJob || isScanning ? 0.88 : 0.16)))
+
+            var mark = Path()
+            if isScanning || hasRunningJob {
+                mark.move(to: CGPoint(x: size.width * 0.70, y: size.height * 0.24))
+                mark.addLine(to: CGPoint(x: size.width * 0.78, y: size.height * 0.13))
+                mark.addLine(to: CGPoint(x: size.width * 0.86, y: size.height * 0.24))
+            } else if count > 0 {
+                mark.move(to: CGPoint(x: size.width * 0.78, y: size.height * 0.12))
+                mark.addLine(to: CGPoint(x: size.width * 0.78, y: size.height * 0.29))
+                mark.move(to: CGPoint(x: size.width * 0.70, y: size.height * 0.22))
+                mark.addLine(to: CGPoint(x: size.width * 0.78, y: size.height * 0.31))
+                mark.addLine(to: CGPoint(x: size.width * 0.86, y: size.height * 0.22))
+            } else {
+                mark.move(to: CGPoint(x: size.width * 0.70, y: size.height * 0.23))
+                mark.addLine(to: CGPoint(x: size.width * 0.76, y: size.height * 0.30))
+                mark.addLine(to: CGPoint(x: size.width * 0.88, y: size.height * 0.14))
+            }
+            context.stroke(mark, with: .color(Color(nsColor: .controlBackgroundColor)), style: StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round))
+        }
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private var accessibilityText: String {
+        if isScanning { return "正在扫描软件更新" }
+        if hasRunningJob { return "正在升级软件" }
+        return count > 0 ? "发现 \(count) 个可升级软件" : "没有可升级软件"
     }
 }
 

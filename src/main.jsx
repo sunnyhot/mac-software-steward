@@ -39,6 +39,7 @@ function App() {
 
   const activeJob = jobs.find((job) => job.id === activeJobId) ?? jobs[0];
   const updates = React.useMemo(() => collectUpdates(scan), [scan]);
+  const packageProgress = React.useMemo(() => collectPackageProgress(jobs), [jobs]);
 
   React.useEffect(() => {
     void refreshJobs();
@@ -84,13 +85,13 @@ function App() {
   async function upgradeOne(item) {
     setError('');
     try {
-      const body = item.manager === 'mas'
-        ? { manager: 'mas', appId: item.appId, name: item.name }
-        : { manager: 'brew', kind: item.kind, name: item.name, greedy: includeGreedy };
+      const body = {
+        ...toUpgradePayload(item),
+        greedy: includeGreedy
+      };
       const job = await api('/api/upgrade', { method: 'POST', body });
       setJobs((current) => upsertJob(current, job));
       setActiveJobId(job.id);
-      setActiveTab('jobs');
     } catch (requestError) {
       setError(requestError.message);
     }
@@ -99,17 +100,19 @@ function App() {
   async function upgradeAll() {
     setError('');
     try {
+      const packages = updates.map(toUpgradePayload);
       const body = {
         brewFormulae: scan?.brew?.formulae?.some((item) => item.upgradeable),
         brewCasks: scan?.brew?.casks?.some((item) => item.upgradeable),
         mas: scan?.mas?.apps?.some((item) => item.upgradeable),
+        packages,
         greedy: includeGreedy,
         runBrewUpdate
       };
       const job = await api('/api/upgrade-all', { method: 'POST', body });
       setJobs((current) => upsertJob(current, job));
       setActiveJobId(job.id);
-      setActiveTab('jobs');
+      setActiveTab('updates');
     } catch (requestError) {
       setError(requestError.message);
     }
@@ -197,21 +200,22 @@ function App() {
           updates={filterRows(updates, query)}
           loading={loading}
           onUpgrade={upgradeOne}
+          packageProgress={packageProgress}
           runBrewUpdate={runBrewUpdate}
           setRunBrewUpdate={setRunBrewUpdate}
         />
       ) : null}
 
       {activeTab === 'brew' ? (
-        <BrewPanel scan={scan} query={query} onUpgrade={upgradeOne} />
+        <BrewPanel scan={scan} query={query} onUpgrade={upgradeOne} packageProgress={packageProgress} />
       ) : null}
 
       {activeTab === 'apps' ? (
-        <ApplicationsPanel scan={scan} query={query} onReveal={revealApp} />
+        <ApplicationsPanel scan={scan} query={query} onReveal={revealApp} packageProgress={packageProgress} />
       ) : null}
 
       {activeTab === 'mas' ? (
-        <MasPanel scan={scan} query={query} onUpgrade={upgradeOne} />
+        <MasPanel scan={scan} query={query} onUpgrade={upgradeOne} packageProgress={packageProgress} />
       ) : null}
 
       {activeTab === 'jobs' ? (
@@ -247,7 +251,7 @@ function Toggle({ checked, onChange, label }) {
   );
 }
 
-function UpdatesPanel({ updates, loading, onUpgrade, runBrewUpdate, setRunBrewUpdate }) {
+function UpdatesPanel({ updates, loading, onUpgrade, packageProgress, runBrewUpdate, setRunBrewUpdate }) {
   return (
     <section className="panel">
       <div className="panel-head">
@@ -261,14 +265,14 @@ function UpdatesPanel({ updates, loading, onUpgrade, runBrewUpdate, setRunBrewUp
       {!loading && updates.length === 0 ? <EmptyState icon={<CheckCircle2 />} title="没有发现可操作升级" text="如果需要包含自动更新类 cask，请打开 greedy cask 后重新扫描。" /> : null}
       <div className="rows">
         {updates.map((item) => (
-          <PackageRow key={item.id} item={item} onUpgrade={() => onUpgrade(item)} />
+          <PackageRow key={item.id} item={item} progress={packageProgress[item.id]} onUpgrade={() => onUpgrade(item)} />
         ))}
       </div>
     </section>
   );
 }
 
-function BrewPanel({ scan, query, onUpgrade }) {
+function BrewPanel({ scan, query, onUpgrade, packageProgress }) {
   const formulae = filterRows(scan?.brew?.formulae ?? [], query);
   const casks = filterRows(scan?.brew?.casks ?? [], query);
 
@@ -283,17 +287,17 @@ function BrewPanel({ scan, query, onUpgrade }) {
       {scan?.brew?.error ? <InlineWarning text={scan.brew.error} /> : null}
       <h3>Formula</h3>
       <div className="rows compact">
-        {formulae.map((item) => <PackageRow key={item.id} item={item} onUpgrade={() => onUpgrade(item)} />)}
+        {formulae.map((item) => <PackageRow key={item.id} item={item} progress={packageProgress[item.id]} onUpgrade={() => onUpgrade(item)} />)}
       </div>
       <h3>Cask</h3>
       <div className="rows compact">
-        {casks.map((item) => <PackageRow key={item.id} item={item} onUpgrade={() => onUpgrade(item)} />)}
+        {casks.map((item) => <PackageRow key={item.id} item={item} progress={packageProgress[item.id]} onUpgrade={() => onUpgrade(item)} />)}
       </div>
     </section>
   );
 }
 
-function ApplicationsPanel({ scan, query, onReveal }) {
+function ApplicationsPanel({ scan, query, onReveal, packageProgress }) {
   const apps = filterRows(scan?.applications?.items ?? [], query);
 
   return (
@@ -308,32 +312,37 @@ function ApplicationsPanel({ scan, query, onReveal }) {
       <div className="app-table" role="table" aria-label="应用程序">
         <div className="app-row header" role="row">
           <span>名称</span>
-          <span>版本</span>
+          <span>当前版本</span>
+          <span>可升级版本</span>
           <span>来源</span>
-          <span>升级能力</span>
+          <span>升级状态</span>
           <span>位置</span>
         </div>
-        {apps.map((app) => (
-          <div className="app-row" role="row" key={app.id}>
-            <span className="strong">{app.name}</span>
-            <span>{app.version || '-'}</span>
-            <span>{app.source || '-'}</span>
-            <span><StatusPill app={app} /></span>
-            <span className="path-cell">
-              <button className="link-button" onClick={() => onReveal(app.path)}>
-                <ExternalLink size={15} />
-                Finder
-              </button>
-              <small title={app.path}>{app.path}</small>
-            </span>
-          </div>
-        ))}
+        {apps.map((app) => {
+          const progress = app.relatedPackageID ? packageProgress[app.relatedPackageID] : null;
+          return (
+            <div className={progress ? 'app-row active-progress' : 'app-row'} role="row" key={app.id}>
+              <span className="strong">{app.name}</span>
+              <span>{versionLabel(app.version)}</span>
+              <span>{versionLabel(app.availableVersion)}</span>
+              <span>{app.source || '-'}</span>
+              <span>{progress ? <ProgressBadge progress={progress} /> : <StatusPill app={app} />}</span>
+              <span className="path-cell">
+                <button className="link-button" onClick={() => onReveal(app.path)}>
+                  <ExternalLink size={15} />
+                  Finder
+                </button>
+                <small title={progress?.detail || app.path}>{progress?.detail || app.path}</small>
+              </span>
+            </div>
+          );
+        })}
       </div>
     </section>
   );
 }
 
-function MasPanel({ scan, query, onUpgrade }) {
+function MasPanel({ scan, query, onUpgrade, packageProgress }) {
   const apps = filterRows(scan?.mas?.apps ?? [], query);
 
   return (
@@ -346,7 +355,7 @@ function MasPanel({ scan, query, onUpgrade }) {
       </div>
       {scan?.mas?.error ? <InlineWarning text={scan.mas.error} /> : null}
       <div className="rows">
-        {apps.map((item) => <PackageRow key={item.id} item={item} onUpgrade={() => onUpgrade(item)} />)}
+        {apps.map((item) => <PackageRow key={item.id} item={item} progress={packageProgress[item.id]} onUpgrade={() => onUpgrade(item)} />)}
       </div>
     </section>
   );
@@ -388,34 +397,56 @@ function JobsPanel({ jobs, activeJob, setActiveJobId, onRefresh }) {
   );
 }
 
-function PackageRow({ item, onUpgrade }) {
+function PackageRow({ item, progress, onUpgrade }) {
   const title = item.manager === 'mas' ? item.name : item.name;
   const subtitle = item.manager === 'brew'
-    ? `${item.kind} · ${item.installedVersion || '-'}${item.currentVersion ? ` → ${item.currentVersion}` : ''}`
-    : `App Store · ${item.installedVersion || '-'}${item.currentVersion ? ` → ${item.currentVersion}` : ''}`;
+    ? `${item.kind} · 当前 ${versionLabel(item.installedVersion)} · 可升级版本 ${versionLabel(item.currentVersion)}`
+    : `App Store · 当前 ${versionLabel(item.installedVersion)} · 可升级版本 ${versionLabel(item.currentVersion)}`;
+  const running = ['queued', 'running'].includes(progress?.status);
 
   return (
-    <article className={item.outdated ? 'package-row outdated' : 'package-row'}>
-      <div className="package-main">
-        <div className="package-icon">
-          {item.manager === 'brew' ? <Package size={20} /> : <AppWindow size={20} />}
+    <article className={[item.outdated ? 'package-row outdated' : 'package-row', progress ? 'active-progress' : ''].filter(Boolean).join(' ')}>
+      <div className="package-row-mainline">
+        <div className="package-main">
+          <div className="package-icon">
+            {item.manager === 'brew' ? <Package size={20} /> : <AppWindow size={20} />}
+          </div>
+          <div>
+            <h3>{title}</h3>
+            <p>{subtitle}</p>
+          </div>
         </div>
-        <div>
-          <h3>{title}</h3>
-          <p>{subtitle}</p>
+        <div className="package-actions">
+          {item.autoUpdates ? <span className="badge neutral">auto_updates</span> : null}
+          {item.pinned ? <span className="badge danger">pinned</span> : null}
+          {progress ? <ProgressBadge progress={progress} /> : <PackageStatusBadge item={item} />}
+          <button className="button row-action" disabled={!item.upgradeable || running} onClick={onUpgrade}>
+            <Play size={16} />
+            升级
+          </button>
         </div>
       </div>
-      <div className="package-actions">
-        {item.autoUpdates ? <span className="badge neutral">auto_updates</span> : null}
-        {item.pinned ? <span className="badge danger">pinned</span> : null}
-        {item.outdated ? <span className="badge warn">可升级</span> : <span className="badge ok">已最新</span>}
-        <button className="button row-action" disabled={!item.upgradeable} onClick={onUpgrade}>
-          <Play size={16} />
-          升级
-        </button>
-      </div>
+      {progress ? <p className="progress-detail">{progress.detail}</p> : null}
     </article>
   );
+}
+
+function PackageStatusBadge({ item }) {
+  if (item.upgradeable) return <span className="badge warn">可升级</span>;
+  if (item.outdated && item.pinned) return <span className="badge neutral">已固定</span>;
+  if (item.outdated) return <span className="badge neutral">需手动</span>;
+  return <span className="badge ok">已最新</span>;
+}
+
+function ProgressBadge({ progress }) {
+  const status = progress?.status || '';
+  const label = {
+    queued: '排队',
+    running: '升级中',
+    succeeded: '完成',
+    failed: '失败'
+  }[status] || status;
+  return <span className={`status ${status}`}>{label}</span>;
 }
 
 function StatusPill({ app }) {
@@ -477,7 +508,44 @@ function collectUpdates(scan) {
     ...(scan.brew?.formulae ?? []),
     ...(scan.brew?.casks ?? []),
     ...(scan.mas?.apps ?? [])
-  ].filter((item) => item.outdated);
+  ].filter((item) => item.upgradeable);
+}
+
+function collectPackageProgress(jobs) {
+  const progress = {};
+  for (const job of jobs.slice().reverse()) {
+    for (const command of job.commands ?? []) {
+      if (!command.packageID) continue;
+      progress[command.packageID] = {
+        packageID: command.packageID,
+        packageName: command.packageName,
+        status: command.status,
+        detail: command.status === 'queued' ? '等待升级' : command.display
+      };
+    }
+  }
+  return progress;
+}
+
+function toUpgradePayload(item) {
+  if (item.manager === 'mas') {
+    return {
+      manager: 'mas',
+      appId: item.appId,
+      name: item.name,
+      packageID: item.id
+    };
+  }
+  return {
+    manager: 'brew',
+    kind: item.kind,
+    name: item.name,
+    packageID: item.id
+  };
+}
+
+function versionLabel(value) {
+  return String(value || '').trim() || '-';
 }
 
 function filterRows(rows, query) {

@@ -20,7 +20,9 @@ enum SoftwareScanner {
             brewCasks: brew.casks.count,
             masApps: mas.apps.count,
             outdated: brew.outdatedCount + mas.outdatedCount,
-            actionable: brew.outdatedCount + mas.outdatedCount,
+            actionable: brew.formulae.filter(\.upgradeable).count
+                + brew.casks.filter(\.upgradeable).count
+                + mas.apps.filter(\.upgradeable).count,
             scanMs: Int(Date().timeIntervalSince(started) * 1000)
         )
 
@@ -178,12 +180,14 @@ enum SoftwareScanner {
                     id: "app:\(appPath)",
                     name: URL(fileURLWithPath: appPath).deletingPathExtension().lastPathComponent,
                     version: "",
+                    availableVersion: "",
                     path: appPath,
                     source: guessSource(path: appPath, obtainedFrom: ""),
                     obtainedFrom: "",
                     architecture: "",
                     managedBy: "manual",
-                    updateState: "unknown"
+                    updateState: "unknown",
+                    relatedPackageID: ""
                 )
             }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
@@ -201,12 +205,14 @@ enum SoftwareScanner {
             id: "app:\(path)",
             name: name,
             version: item.version ?? item.shortVersion ?? "",
+            availableVersion: "",
             path: path,
             source: guessSource(path: path, obtainedFrom: item.obtainedFrom ?? ""),
             obtainedFrom: item.obtainedFrom ?? "",
             architecture: item.architecture ?? item.kind ?? "",
             managedBy: "manual",
-            updateState: "unknown"
+            updateState: "unknown",
+            relatedPackageID: ""
         )
     }
 
@@ -298,6 +304,34 @@ enum SoftwareScanner {
     }
 
     static func parseMasOutdatedLine(_ line: String) -> MasApp? {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.contains("(") {
+            let parts = trimmed.components(separatedBy: "->").map {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            if parts.count == 2,
+               let firstSpace = parts[0].firstIndex(where: \.isWhitespace),
+               let versionStart = parts[0].lastIndex(where: \.isWhitespace),
+               firstSpace < versionStart {
+                let appId = String(parts[0][..<firstSpace])
+                let name = parts[0][parts[0].index(after: firstSpace)..<versionStart]
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let installedVersion = String(parts[0][parts[0].index(after: versionStart)...])
+                let app = MasApp(
+                    id: "mas:\(appId)",
+                    appId: appId,
+                    name: name,
+                    installedVersion: installedVersion,
+                    currentVersion: parts[1],
+                    outdated: true,
+                    upgradeable: true
+                )
+                if app.appId.allSatisfy(\.isNumber), !app.name.isEmpty {
+                    return app
+                }
+            }
+        }
+
         guard var app = parseMasListLine(line) else { return nil }
         let parts = app.installedVersion.components(separatedBy: "->").map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -319,11 +353,16 @@ enum SoftwareScanner {
             var next = app
             let token = normalizeToken(app.name)
             if caskNames.contains(token) {
+                let cask = brew.casks.first(where: { normalizeToken($0.name) == token })
                 next.managedBy = "brew-cask"
-                next.updateState = brew.casks.first(where: { normalizeToken($0.name) == token })?.outdated == true ? "outdated" : "current"
+                next.updateState = cask?.outdated == true ? "outdated" : "current"
+                next.availableVersion = cask?.currentVersion ?? ""
+                next.relatedPackageID = cask?.id ?? ""
             } else if let storeApp = masByName[token] {
                 next.managedBy = "mas"
                 next.updateState = storeApp.outdated ? "outdated" : "current"
+                next.availableVersion = storeApp.currentVersion
+                next.relatedPackageID = storeApp.id
             } else if app.source == "Mac App Store" {
                 next.managedBy = "mas"
                 next.updateState = "unknown"

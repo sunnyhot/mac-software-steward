@@ -42,12 +42,14 @@ struct AppItem: Identifiable, Hashable {
     var id: String
     var name: String
     var version: String
+    var availableVersion: String
     var path: String
     var source: String
     var obtainedFrom: String
     var architecture: String
     var managedBy: String
     var updateState: String
+    var relatedPackageID: String
 }
 
 struct BrewPackage: Identifiable, Hashable {
@@ -170,6 +172,13 @@ enum UpdatablePackage: Identifiable, Hashable {
         }
     }
 
+    var outdated: Bool {
+        switch self {
+        case .brew(let package): return package.outdated
+        case .mas(let app): return app.outdated
+        }
+    }
+
     var isPinned: Bool {
         if case .brew(let package) = self {
             return package.pinned
@@ -222,4 +231,11 @@ struct UpgradeJob: Identifiable, Hashable {
     var exitCode: Int32?
     var commands: [String]
     var log: [LogLine] = []
+}
+
+struct JobNotice: Hashable {
+    var title: String
+    var detail: String
+    var symbol: String
+    var isFailure: Bool
 }
