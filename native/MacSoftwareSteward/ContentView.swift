@@ -182,43 +182,137 @@ private struct UpdateRow: View {
     @EnvironmentObject private var model: StewardModel
     var package: UpdatablePackage
 
+    var progress: PackageUpgradeProgress? {
+        model.packageProgress[package.id]
+    }
+
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: package.source.contains("Brew") ? "shippingbox" : "bag")
-                .frame(width: 34, height: 34)
-                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Image(systemName: package.source.contains("Brew") ? "shippingbox" : "bag")
+                    .frame(width: 34, height: 34)
+                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(package.name)
-                    .font(.headline)
-                Text("\(package.source) · \(package.installedVersion.isEmpty ? "-" : package.installedVersion) → \(package.currentVersion.isEmpty ? "-" : package.currentVersion)")
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(package.name)
+                        .font(.headline)
+                    Text("\(package.source) · \(package.installedVersion.isEmpty ? "-" : package.installedVersion) → \(package.currentVersion.isEmpty ? "-" : package.currentVersion)")
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+
+                if package.isPinned {
+                    Badge(text: "pinned", color: .red)
+                }
+                if package.autoUpdates {
+                    Badge(text: "auto_updates", color: .secondary)
+                }
+
+                if let progress {
+                    PackageProgressBadge(progress: progress)
+                } else {
+                    Badge(text: "可升级", color: .orange)
+                }
+
+                Button {
+                    Task { await model.upgrade(package) }
+                } label: {
+                    Label("升级", systemImage: "play")
+                }
+                .disabled(!package.upgradeable || model.hasRunningJob)
             }
 
-            Spacer()
-
-            if package.isPinned {
-                Badge(text: "pinned", color: .red)
+            if let progress {
+                PackageProgressDetail(progress: progress)
             }
-            if package.autoUpdates {
-                Badge(text: "auto_updates", color: .secondary)
-            }
-            Badge(text: "可升级", color: .orange)
-
-            Button {
-                Task { await model.upgrade(package) }
-            } label: {
-                Label("升级", systemImage: "play")
-            }
-            .disabled(!package.upgradeable || model.hasRunningJob)
         }
         .padding(12)
-        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        .background(rowBackground, in: RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.orange.opacity(0.25))
+                .stroke(rowBorder)
         )
+    }
+
+    private var rowBackground: Color {
+        switch progress?.status {
+        case .running, .queued: return Color.accentColor.opacity(0.08)
+        case .succeeded: return Color.green.opacity(0.08)
+        case .failed: return Color.red.opacity(0.08)
+        case nil: return Color.orange.opacity(0.08)
+        }
+    }
+
+    private var rowBorder: Color {
+        switch progress?.status {
+        case .running, .queued: return Color.accentColor.opacity(0.25)
+        case .succeeded: return Color.green.opacity(0.25)
+        case .failed: return Color.red.opacity(0.25)
+        case nil: return Color.orange.opacity(0.25)
+        }
+    }
+}
+
+private struct PackageProgressBadge: View {
+    var progress: PackageUpgradeProgress
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if progress.status == .running {
+                ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.7)
+            } else {
+                Image(systemName: symbol)
+            }
+            Text(progress.status.rawValue)
+                .font(.caption.bold())
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(color.opacity(0.12), in: Capsule())
+        .foregroundStyle(color)
+    }
+
+    private var symbol: String {
+        switch progress.status {
+        case .queued: return "clock"
+        case .running: return "hourglass"
+        case .succeeded: return "checkmark.circle.fill"
+        case .failed: return "xmark.circle.fill"
+        }
+    }
+
+    private var color: Color {
+        switch progress.status {
+        case .queued, .running: return .accentColor
+        case .succeeded: return .green
+        case .failed: return .red
+        }
+    }
+}
+
+private struct PackageProgressDetail: View {
+    var progress: PackageUpgradeProgress
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if progress.status == .queued {
+                ProgressView(value: 0.15)
+                    .progressViewStyle(.linear)
+            } else if progress.status == .running {
+                ProgressView()
+                    .progressViewStyle(.linear)
+            }
+            Text(progress.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .truncationMode(.middle)
+        }
+        .padding(.leading, 46)
     }
 }
 

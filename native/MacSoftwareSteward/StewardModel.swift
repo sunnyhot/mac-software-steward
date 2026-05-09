@@ -17,6 +17,7 @@ final class StewardModel: ObservableObject {
     @Published var dailyLog = ""
     @Published var dailyLaunchAgentPath = DailyInspectionScheduler.launchAgentURL.path
     @Published var dailyLogPath = DailyInspectionScheduler.logURL.path
+    @Published var packageProgress: [String: PackageUpgradeProgress] = [:]
 
     init() {
         refreshDailyInspectionStatus()
@@ -42,14 +43,16 @@ final class StewardModel: ObservableObject {
         errorMessage = ""
         let result = await SoftwareScanner.scanAll(includeGreedy: includeGreedy)
         scan = result
+        prunePackageProgress(keeping: result)
         isScanning = false
     }
 
     func upgrade(_ package: UpdatablePackage) async {
         do {
             let command = try await command(for: package)
-            startJob(label: "升级 \(package.name)", commands: [command])
-            selectedTab = .jobs
+            startJob(label: "升级 \(package.name)", steps: [
+                UpgradeStep(command: command, packageID: package.id, packageName: package.name)
+            ], rescanAfterSuccess: true)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -57,7 +60,7 @@ final class StewardModel: ObservableObject {
 
     func upgradeAll() async {
         do {
-            var commands: [UpgradeCommand] = []
+            var steps: [UpgradeStep] = []
             let brewUpdates = availableUpdates.compactMap { package -> BrewPackage? in
                 if case .brew(let brewPackage) = package, brewPackage.upgradeable { return brewPackage }
                 return nil
@@ -70,28 +73,27 @@ final class StewardModel: ObservableObject {
             if !brewUpdates.isEmpty {
                 let brew = try await requireCommand("brew")
                 if runBrewUpdate {
-                    commands.append(UpgradeCommand(executable: brew, arguments: ["update"], display: "brew update"))
+                    let update = UpgradeCommand(executable: brew, arguments: ["update"], display: "brew update")
+                    steps.append(UpgradeStep(command: update, packageID: nil, packageName: nil))
                 }
-                if brewUpdates.contains(where: { $0.kind == "formula" }) {
-                    commands.append(UpgradeCommand(executable: brew, arguments: ["upgrade"], display: "brew upgrade"))
-                }
-                if brewUpdates.contains(where: { $0.kind == "cask" }) {
-                    let args = ["upgrade", "--cask"] + (includeGreedy ? ["--greedy"] : [])
-                    commands.append(UpgradeCommand(executable: brew, arguments: args, display: (["brew"] + args).joined(separator: " ")))
+                for package in brewUpdates {
+                    let updatable = UpdatablePackage.brew(package)
+                    let command = try await command(for: updatable)
+                    steps.append(UpgradeStep(command: command, packageID: updatable.id, packageName: updatable.name))
                 }
             }
 
-            if !masUpdates.isEmpty {
-                let mas = try await requireCommand("mas")
-                commands.append(UpgradeCommand(executable: mas, arguments: ["upgrade"], display: "mas upgrade"))
+            for app in masUpdates {
+                let updatable = UpdatablePackage.mas(app)
+                let command = try await command(for: updatable)
+                steps.append(UpgradeStep(command: command, packageID: updatable.id, packageName: updatable.name))
             }
 
-            guard !commands.isEmpty else {
+            guard !steps.isEmpty else {
                 throw StewardError.message("没有可升级的可管理软件。")
             }
 
-            startJob(label: "一键升级可管理软件", commands: commands)
-            selectedTab = .jobs
+            startJob(label: "一键升级可管理软件", steps: steps, rescanAfterSuccess: true)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -188,31 +190,42 @@ final class StewardModel: ObservableObject {
     }
 
     private func startJob(label: String, commands: [UpgradeCommand], rescanAfterSuccess: Bool = false) {
-        let job = UpgradeJob(label: label, commands: commands.map(\.display))
+        let steps = commands.map { UpgradeStep(command: $0, packageID: nil, packageName: nil) }
+        startJob(label: label, steps: steps, rescanAfterSuccess: rescanAfterSuccess)
+    }
+
+    private func startJob(label: String, steps: [UpgradeStep], rescanAfterSuccess: Bool = false) {
+        let job = UpgradeJob(label: label, commands: steps.map(\.command.display))
         jobs.insert(job, at: 0)
         let id = job.id
+        markQueued(steps)
 
         Task {
-            await runJob(id: id, commands: commands, rescanAfterSuccess: rescanAfterSuccess)
+            await runJob(id: id, steps: steps, rescanAfterSuccess: rescanAfterSuccess)
         }
     }
 
-    private func runJob(id: UUID, commands: [UpgradeCommand], rescanAfterSuccess: Bool) async {
+    private func runJob(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool) async {
         updateJob(id) {
             $0.status = .running
             $0.startedAt = Date()
             $0.log.append(LogLine(stream: "system", text: "开始：\($0.label)"))
         }
 
-        for command in commands {
+        for (index, step) in steps.enumerated() {
+            let command = step.command
+            markRunning(step)
             appendLog(id: id, stream: "command", text: "$ \(command.display)")
             let code = await CommandRunner.runStreaming(command.executable, arguments: command.arguments) { stream, text in
                 Task { @MainActor in
                     self.appendLog(id: id, stream: stream, text: text)
+                    self.updatePackageDetail(for: step, stream: stream, text: text)
                 }
             }
 
             if code != 0 {
+                markFailed(step, detail: "退出码 \(code)")
+                markPendingFailed(Array(steps.dropFirst(index + 1)), detail: "前一步失败，未执行")
                 updateJob(id) {
                     $0.status = .failed
                     $0.exitCode = code
@@ -221,6 +234,8 @@ final class StewardModel: ObservableObject {
                 }
                 return
             }
+
+            markSucceeded(step)
         }
 
         updateJob(id) {
@@ -247,6 +262,73 @@ final class StewardModel: ObservableObject {
         updateJob(id) {
             $0.log.append(LogLine(stream: stream, text: text))
         }
+    }
+
+    private func markQueued(_ steps: [UpgradeStep]) {
+        for step in steps {
+            guard let packageID = step.packageID, let packageName = step.packageName else { continue }
+            packageProgress[packageID] = PackageUpgradeProgress(
+                packageID: packageID,
+                packageName: packageName,
+                status: .queued,
+                detail: "等待升级"
+            )
+        }
+    }
+
+    private func markRunning(_ step: UpgradeStep) {
+        guard let packageID = step.packageID, let packageName = step.packageName else { return }
+        packageProgress[packageID] = PackageUpgradeProgress(
+            packageID: packageID,
+            packageName: packageName,
+            status: .running,
+            detail: step.command.display
+        )
+    }
+
+    private func markSucceeded(_ step: UpgradeStep) {
+        guard let packageID = step.packageID, let packageName = step.packageName else { return }
+        packageProgress[packageID] = PackageUpgradeProgress(
+            packageID: packageID,
+            packageName: packageName,
+            status: .succeeded,
+            detail: "升级完成"
+        )
+    }
+
+    private func markFailed(_ step: UpgradeStep, detail: String) {
+        guard let packageID = step.packageID, let packageName = step.packageName else { return }
+        packageProgress[packageID] = PackageUpgradeProgress(
+            packageID: packageID,
+            packageName: packageName,
+            status: .failed,
+            detail: detail
+        )
+    }
+
+    private func markPendingFailed(_ steps: [UpgradeStep], detail: String) {
+        for step in steps {
+            guard let packageID = step.packageID,
+                  packageProgress[packageID]?.status == .queued else { continue }
+            markFailed(step, detail: detail)
+        }
+    }
+
+    private func updatePackageDetail(for step: UpgradeStep, stream: String, text: String) {
+        guard let packageID = step.packageID, var progress = packageProgress[packageID] else { return }
+        guard progress.status == .running else { return }
+        progress.detail = "[\(stream)] \(text)"
+        progress.updatedAt = Date()
+        packageProgress[packageID] = progress
+    }
+
+    private func prunePackageProgress(keeping result: ScanResult) {
+        let ids = Set(
+            result.brew.formulae.map(\.id)
+                + result.brew.casks.map(\.id)
+                + result.mas.apps.map(\.id)
+        )
+        packageProgress = packageProgress.filter { ids.contains($0.key) }
     }
 
     private func requireCommand(_ command: String) async throws -> String {

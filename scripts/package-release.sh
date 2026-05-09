@@ -12,7 +12,7 @@ mkdir -p "$RELEASE_DIR"
 bash "$ROOT_DIR/scripts/build-native.sh" >/dev/null
 
 rm -f "$ZIP_PATH" "$VERSIONED_ZIP_PATH" "$ZIP_PATH.sha256" "$VERSIONED_ZIP_PATH.sha256"
-/usr/bin/ditto -c -k --keepParent "$APP_DIR" "$ZIP_PATH"
+/usr/bin/ditto -c -k --norsrc --noextattr --keepParent "$APP_DIR" "$ZIP_PATH"
 cp "$ZIP_PATH" "$VERSIONED_ZIP_PATH"
 
 (
@@ -26,6 +26,9 @@ cat > "$RELEASE_DIR/RELEASE_NOTES.md" <<NOTES
 
 - 新增应用自更新：启动时自动检查、手动检查、从 GitHub Release 下载并安装。
 - 新增每日巡检：通过 LaunchAgent 定时扫描并自动升级可管理软件。
+- 新增菜单栏状态入口：显示可升级数量，并可直接一键升级。
+- 优化升级体验：列表条目显示排队、升级中、完成、失败等实时状态。
+- 新增 macOS 应用图标，并打入 .app 与 release zip。
 - 支持缺失 mas CLI 时通过 Homebrew 自动安装。
 
 安装包资产：\`MacSoftwareSteward.zip\`

@@ -11,7 +11,9 @@ SDK_PATH="$(xcrun --show-sdk-path)"
 
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
+swift "$ROOT_DIR/scripts/generate-app-icon.swift" >/dev/null
 cp "$ROOT_DIR/native/Info.plist" "$CONTENTS_DIR/Info.plist"
+cp "$ROOT_DIR/native/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 
 xcrun swiftc \
   -O \

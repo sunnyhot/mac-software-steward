@@ -31,6 +31,13 @@ enum JobStatus: String {
     case failed = "失败"
 }
 
+enum PackageUpgradeStatus: String, Hashable {
+    case queued = "排队"
+    case running = "升级中"
+    case succeeded = "完成"
+    case failed = "失败"
+}
+
 struct AppItem: Identifiable, Hashable {
     var id: String
     var name: String
@@ -182,6 +189,20 @@ struct UpgradeCommand: Hashable {
     var executable: String
     var arguments: [String]
     var display: String
+}
+
+struct UpgradeStep: Hashable {
+    var command: UpgradeCommand
+    var packageID: String?
+    var packageName: String?
+}
+
+struct PackageUpgradeProgress: Hashable {
+    var packageID: String
+    var packageName: String
+    var status: PackageUpgradeStatus
+    var detail: String
+    var updatedAt = Date()
 }
 
 struct LogLine: Identifiable, Hashable {
