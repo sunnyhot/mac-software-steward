@@ -1,6 +1,6 @@
 {
   "name": "mac-software-steward",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "type": "module",
   "description": "Local macOS software scanner and updater for Applications, Homebrew, and Mac App Store packages.",

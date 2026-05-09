@@ -86,8 +86,8 @@ final class AppUpdateModel: ObservableObject {
             progress = "正在解压安装包..."
             let extractedApp = try await extractApp(from: downloaded)
             progress = "正在准备重启并安装..."
-            try scheduleInstallAndRestart(newAppURL: extractedApp)
-            status = "安装脚本已启动，应用即将重启。"
+            let destination = try scheduleInstallAndRestart(newAppURL: extractedApp)
+            status = "安装脚本已启动，将安装到 \(destination.path) 并重启。"
         } catch {
             status = "安装更新失败：\(error.localizedDescription)"
             progress = ""
@@ -172,14 +172,17 @@ final class AppUpdateModel: ObservableObject {
         return app
     }
 
-    private func scheduleInstallAndRestart(newAppURL: URL) throws {
+    private func scheduleInstallAndRestart(newAppURL: URL) throws -> URL {
         let currentAppURL = Bundle.main.bundleURL
         guard currentAppURL.pathExtension == "app" else {
             throw AppUpdateError.message("当前不是从 .app bundle 启动，无法自动安装。")
         }
-        let parentDirectory = currentAppURL.deletingLastPathComponent()
-        guard FileManager.default.isWritableFile(atPath: parentDirectory.path) else {
-            throw AppUpdateError.message("应用所在目录不可写，无法自动替换：\(parentDirectory.path)")
+
+        let destinationAppURL = try installDestination(for: currentAppURL)
+        let destinationParent = destinationAppURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: destinationParent, withIntermediateDirectories: true)
+        guard FileManager.default.isWritableFile(atPath: destinationParent.path) else {
+            throw AppUpdateError.message("目标安装目录不可写：\(destinationParent.path)")
         }
 
         let scriptURL = newAppURL.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("install-update.zsh")
@@ -188,19 +191,24 @@ final class AppUpdateModel: ObservableObject {
         let script = """
         #!/bin/zsh
         set -euo pipefail
-        APP_PATH="$1"
-        NEW_APP="$2"
-        WORK_DIR="$3"
-        LOG_PATH="$4"
+        APP_PID="$1"
+        DEST_APP="$2"
+        NEW_APP="$3"
+        WORK_DIR="$4"
+        LOG_PATH="$5"
         {
           echo "[system] $(date -u +%FT%TZ) installing update"
-          sleep 1.5
-          rm -rf "$APP_PATH"
-          /usr/bin/ditto "$NEW_APP" "$APP_PATH"
-          /usr/bin/xattr -dr com.apple.quarantine "$APP_PATH" 2>/dev/null || true
-          /usr/bin/open -n "$APP_PATH"
+          for i in {1..80}; do
+            /bin/kill -0 "$APP_PID" 2>/dev/null || break
+            /bin/sleep 0.25
+          done
+          /bin/mkdir -p "$(/usr/bin/dirname "$DEST_APP")"
+          /bin/rm -rf "$DEST_APP"
+          /usr/bin/ditto "$NEW_APP" "$DEST_APP"
+          /usr/bin/xattr -dr com.apple.quarantine "$DEST_APP" 2>/dev/null || true
+          /usr/bin/open -n "$DEST_APP"
           rm -rf "$WORK_DIR"
-          echo "[system] update installed"
+          echo "[system] update installed to $DEST_APP"
         } >> "$LOG_PATH" 2>&1
         """
         try script.write(to: scriptURL, atomically: true, encoding: .utf8)
@@ -210,7 +218,8 @@ final class AppUpdateModel: ObservableObject {
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = [
             scriptURL.path,
-            currentAppURL.path,
+            String(ProcessInfo.processInfo.processIdentifier),
+            destinationAppURL.path,
             newAppURL.path,
             scriptURL.deletingLastPathComponent().path,
             logURL.path
@@ -220,6 +229,32 @@ final class AppUpdateModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             NSApp.terminate(nil)
         }
+        return destinationAppURL
+    }
+
+    private func installDestination(for currentAppURL: URL) throws -> URL {
+        let currentParent = currentAppURL.deletingLastPathComponent()
+        if !isTranslocated(currentAppURL),
+           FileManager.default.isWritableFile(atPath: currentParent.path) {
+            return currentAppURL
+        }
+
+        let systemApplications = URL(fileURLWithPath: "/Applications", isDirectory: true)
+        if FileManager.default.isWritableFile(atPath: systemApplications.path) {
+            return systemApplications.appendingPathComponent(appBundleName)
+        }
+
+        let userApplications = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Applications", isDirectory: true)
+        try FileManager.default.createDirectory(at: userApplications, withIntermediateDirectories: true)
+        guard FileManager.default.isWritableFile(atPath: userApplications.path) else {
+            throw AppUpdateError.message("无法写入 ~/Applications，请手动移动应用后再更新。")
+        }
+        return userApplications.appendingPathComponent(appBundleName)
+    }
+
+    private func isTranslocated(_ appURL: URL) -> Bool {
+        appURL.path.contains("/AppTranslocation/")
     }
 
     private func makeWorkDirectory() throws -> URL {
