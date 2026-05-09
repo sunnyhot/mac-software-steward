@@ -21,7 +21,7 @@ import './styles.css';
 const tabs = [
   { id: 'updates', label: '可升级' },
   { id: 'brew', label: 'Homebrew' },
-  { id: 'apps', label: '应用程序' },
+  { id: 'apps', label: '本机应用' },
   { id: 'mas', label: 'App Store' },
   { id: 'jobs', label: '任务日志' }
 ];
@@ -136,7 +136,7 @@ function App() {
           <p className="eyebrow">LOCAL MAC SOFTWARE STEWARD</p>
           <h1>Mac 软件管家</h1>
           <p className="intro">
-            扫描本机应用、Homebrew formula/cask 和可选的 Mac App Store 应用，集中处理可升级项。
+            本机应用是实际安装的 .app，总览其来源；Homebrew/App Store 是可执行升级的管理来源。
           </p>
         </div>
         <div className="actions">
@@ -164,7 +164,7 @@ function App() {
       ) : null}
 
       <section className="metrics" aria-label="扫描统计">
-        <Metric icon={<AppWindow size={20} />} label="应用程序" value={scan?.summary?.applications ?? '-'} />
+        <Metric icon={<AppWindow size={20} />} label="本机应用" value={scan?.summary?.applications ?? '-'} />
         <Metric icon={<Package size={20} />} label="Brew Formula" value={scan?.summary?.brewFormulae ?? '-'} />
         <Metric icon={<Settings2 size={20} />} label="Brew Cask" value={scan?.summary?.brewCasks ?? '-'} />
         <Metric icon={<ShieldCheck size={20} />} label="可操作升级" value={scan?.summary?.actionable ?? '-'} tone={updates.length ? 'warn' : 'ok'} />
@@ -257,7 +257,7 @@ function UpdatesPanel({ updates, loading, onUpgrade, packageProgress, runBrewUpd
       <div className="panel-head">
         <div>
           <h2>可升级软件</h2>
-          <p>Homebrew 与 Mac App Store 支持自动执行升级；普通 `.app` 会显示在应用列表中供手动处理。</p>
+          <p>Homebrew 与 Mac App Store 支持自动执行升级；其他 `.app` 会显示在本机应用列表中供手动处理。</p>
         </div>
         <Toggle checked={runBrewUpdate} onChange={setRunBrewUpdate} label="一键升级前先 brew update" />
       </div>
@@ -304,18 +304,18 @@ function ApplicationsPanel({ scan, query, onReveal, packageProgress }) {
     <section className="panel">
       <div className="panel-head">
         <div>
-          <h2>应用程序</h2>
-          <p>来自 system_profiler，覆盖 `/Applications`、用户应用目录与系统应用。</p>
+          <h2>本机应用</h2>
+          <p>本机应用是实际安装的 .app；安装位置说明 App 文件在哪，管理方式说明由 Homebrew、App Store、系统或手动维护。</p>
         </div>
       </div>
       {scan?.applications?.error ? <InlineWarning text={scan.applications.error} /> : null}
-      <div className="app-table" role="table" aria-label="应用程序">
+      <div className="app-table" role="table" aria-label="本机应用">
         <div className="app-row header" role="row">
           <span>名称</span>
           <span>当前版本</span>
           <span>可升级版本</span>
-          <span>来源</span>
-          <span>升级状态</span>
+          <span>安装位置</span>
+          <span>管理方式</span>
           <span>位置</span>
         </div>
         {apps.map((app) => {
@@ -325,8 +325,8 @@ function ApplicationsPanel({ scan, query, onReveal, packageProgress }) {
               <span className="strong">{app.name}</span>
               <span>{versionLabel(app.version)}</span>
               <span>{versionLabel(app.availableVersion)}</span>
-              <span>{app.source || '-'}</span>
-              <span>{progress ? <ProgressBadge progress={progress} /> : <StatusPill app={app} />}</span>
+              <span><LocationPill app={app} /></span>
+              <span>{progress ? <ProgressBadge progress={progress} /> : <ManagementPill app={app} />}</span>
               <span className="path-cell">
                 <button className="link-button" onClick={() => onReveal(app.path)}>
                   <ExternalLink size={15} />
@@ -449,14 +449,21 @@ function ProgressBadge({ progress }) {
   return <span className={`status ${status}`}>{label}</span>;
 }
 
-function StatusPill({ app }) {
+function LocationPill({ app }) {
+  return <span className="badge neutral">{appLocationLabel(app)}</span>;
+}
+
+function ManagementPill({ app }) {
   if (app.managedBy === 'brew-cask') {
-    return <span className={app.updateState === 'outdated' ? 'badge warn' : 'badge ok'}>Brew Cask</span>;
+    return <span className={app.updateState === 'outdated' ? 'badge warn' : 'badge ok'}>管理方式：Homebrew Cask</span>;
   }
   if (app.managedBy === 'mas') {
-    return <span className={app.updateState === 'outdated' ? 'badge warn' : 'badge ok'}>App Store</span>;
+    return <span className={app.updateState === 'outdated' ? 'badge warn' : 'badge ok'}>管理方式：App Store</span>;
   }
-  return <span className="badge neutral">手动</span>;
+  if (app.source === 'Apple' || app.path?.startsWith('/System/')) {
+    return <span className="badge neutral">管理方式：系统</span>;
+  }
+  return <span className="badge neutral">管理方式：手动</span>;
 }
 
 function StatusText({ status }) {
@@ -546,6 +553,14 @@ function toUpgradePayload(item) {
 
 function versionLabel(value) {
   return String(value || '').trim() || '-';
+}
+
+function appLocationLabel(app) {
+  const appPath = String(app.path || '');
+  if (appPath.startsWith('/Applications/')) return '安装位置：/Applications';
+  if (appPath.includes('/Applications/')) return '安装位置：用户应用目录';
+  if (appPath.startsWith('/System/')) return '安装位置：系统目录';
+  return `安装位置：${app.source || '未知'}`;
 }
 
 function filterRows(rows, query) {

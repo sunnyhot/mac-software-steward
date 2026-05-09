@@ -30,7 +30,7 @@ private struct HeaderView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Mac 软件管家")
                         .font(.system(size: 34, weight: .bold))
-                    Text("扫描本机应用、Homebrew 与可选的 Mac App Store 应用，集中处理可升级项。")
+                    Text("本机应用是实际安装的 .app，总览其来源；Homebrew/App Store 是可执行升级的管理来源。")
                         .foregroundStyle(.secondary)
                 }
 
@@ -66,7 +66,7 @@ private struct HeaderView: View {
             }
 
             HStack(spacing: 12) {
-                MetricView(title: "应用程序", value: model.scan?.summary.applications, symbol: "macwindow")
+                MetricView(title: "本机应用", value: model.scan?.summary.applications, symbol: "macwindow")
                 MetricView(title: "Brew Formula", value: model.scan?.summary.brewFormulae, symbol: "cube")
                 MetricView(title: "Brew Cask", value: model.scan?.summary.brewCasks, symbol: "slider.horizontal.3")
                 MetricView(title: "可操作升级", value: model.scan?.summary.actionable, symbol: "checkmark.shield")
@@ -189,7 +189,7 @@ private struct UpdatesView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Homebrew 与 Mac App Store 支持自动执行升级；普通 .app 会在应用程序列表中供手动处理。")
+                Text("Homebrew 与 Mac App Store 支持自动执行升级；其他 .app 会显示在本机应用列表中供手动处理。")
                     .foregroundStyle(.secondary)
                 Spacer()
                 Toggle("一键升级前先 brew update", isOn: $model.runBrewUpdate)
@@ -424,6 +424,8 @@ private struct ApplicationsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Text("本机应用是实际安装的 .app；安装位置说明 App 文件在哪，管理方式说明由 Homebrew、App Store、系统或手动维护。")
+                .foregroundStyle(.secondary)
             if let scan = model.scan?.applications, !scan.error.isEmpty {
                 WarningLine(text: scan.error)
             }
@@ -463,11 +465,11 @@ private struct ApplicationRow: View {
                 Spacer()
                 VersionColumn(title: "当前", value: app.version)
                 VersionColumn(title: "可升级", value: app.availableVersion)
-                Badge(text: app.source, color: .secondary)
+                Badge(text: appLocationText(app), color: .secondary)
                 if let progress {
                     PackageProgressBadge(progress: progress)
                 } else {
-                    ManagedBadge(app: app)
+                    ManagementBadge(app: app)
                 }
                 Button {
                     model.reveal(app)
@@ -822,16 +824,18 @@ private struct Badge: View {
     }
 }
 
-private struct ManagedBadge: View {
+private struct ManagementBadge: View {
     var app: AppItem
 
     var body: some View {
         if app.managedBy == "brew-cask" {
-            Badge(text: "Brew Cask", color: app.updateState == "outdated" ? .orange : .green)
+            Badge(text: "管理方式：Homebrew Cask", color: app.updateState == "outdated" ? .orange : .green)
         } else if app.managedBy == "mas" {
-            Badge(text: "App Store", color: app.updateState == "outdated" ? .orange : .green)
+            Badge(text: "管理方式：App Store", color: app.updateState == "outdated" ? .orange : .green)
+        } else if app.source == "Apple" || app.path.hasPrefix("/System/") {
+            Badge(text: "管理方式：系统", color: .secondary)
         } else {
-            Badge(text: "手动", color: .secondary)
+            Badge(text: "管理方式：手动", color: .secondary)
         }
     }
 }
@@ -913,6 +917,19 @@ private func availableVersionText(for package: UpdatablePackage) -> String {
         return "待 App Store 确认"
     }
     return "-"
+}
+
+private func appLocationText(_ app: AppItem) -> String {
+    if app.path.hasPrefix("/Applications/") {
+        return "安装位置：/Applications"
+    }
+    if app.path.contains("/Applications/") {
+        return "安装位置：用户应用目录"
+    }
+    if app.path.hasPrefix("/System/") {
+        return "安装位置：系统目录"
+    }
+    return app.source.isEmpty ? "安装位置：未知" : "安装位置：\(app.source)"
 }
 
 private func filter<T>(_ items: [T], query: String, text: (T) -> String) -> [T] {

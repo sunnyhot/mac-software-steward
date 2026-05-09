@@ -3,7 +3,7 @@ import Foundation
 enum AppTab: String, CaseIterable, Identifiable {
     case updates = "可升级"
     case brew = "Homebrew"
-    case applications = "应用程序"
+    case applications = "本机应用"
     case mas = "App Store"
     case daily = "每日巡检"
     case appUpdate = "应用更新"
