@@ -12,8 +12,10 @@ struct ContentView: View {
             .navigationSplitViewColumnWidth(min: 180, ideal: 210)
         } detail: {
             VStack(spacing: 0) {
-                HeaderView()
-                Divider()
+                if model.selectedTab != .settings {
+                    HeaderView()
+                    Divider()
+                }
                 MainPanel()
             }
             .background(Color(nsColor: .windowBackgroundColor))
@@ -627,122 +629,295 @@ private struct AppStoreSourceView: View {
 }
 
 private struct SettingsView: View {
+    @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var updater: AppUpdateModel
+    @EnvironmentObject private var launchAtLogin: LaunchAtLoginModel
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                SettingsBlockHeader(
-                    title: "外观",
-                    text: "默认跟随系统，也可以手动固定为浅色或深色。",
-                    symbol: "circle.lefthalf.filled"
-                )
-                AppearanceSettingsView()
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 24) {
+                SettingsGroupBox {
+                    SettingsGroupHeader(title: "通用", symbol: "gearshape")
+                    AppearanceRow()
+                    Divider().padding(.vertical, 2)
+                    LaunchAtLoginRow()
+                }
 
-                SettingsBlockHeader(
-                    title: "扫描与升级",
-                    text: "这些选项影响顶部扫描按钮、一键升级和每日巡检里的自动升级行为。",
-                    symbol: "slider.horizontal.3"
-                )
-                ScanUpgradeSettingsView()
+                SettingsGroupBox {
+                    SettingsGroupHeader(title: "扫描与升级策略", symbol: "slider.horizontal.3")
+                    GreedyCaskRow()
+                    Divider().padding(.vertical, 2)
+                    BrewUpdateRow()
+                }
 
-                SettingsBlockHeader(
-                    title: "每日巡检",
-                    text: "定时扫描可管理来源，并在发现可操作升级时自动执行。",
-                    symbol: "calendar.badge.clock"
-                )
-                DailyInspectionView()
+                SettingsGroupBox {
+                    SettingsGroupHeader(title: "每日巡检", symbol: "calendar.badge.clock")
+                    DailyInspectionToggleRow()
+                    if model.dailyInspectionEnabled {
+                        Divider().padding(.vertical, 2)
+                        DailyInspectionTimeRow()
+                    }
+                }
 
-                SettingsBlockHeader(
-                    title: "应用与启动",
-                    text: "配置 Mac 软件管家本身的更新检查和开机启动。",
-                    symbol: "arrow.down.app"
-                )
-                AppUpdateView()
+                SettingsGroupBox {
+                    SettingsGroupHeader(title: "应用更新", symbol: "arrow.down.app")
+                    AutoCheckUpdateRow()
+                    if updater.automaticChecksEnabled {
+                        Divider().padding(.vertical, 2)
+                        AutoDownloadUpdateRow()
+                    }
+                    Divider().padding(.vertical, 2)
+                    ManualCheckUpdateRow()
+                }
+
+                Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(24)
+            .frame(maxWidth: 640, alignment: .leading)
         }
     }
 }
 
-private struct SettingsBlockHeader: View {
-    var title: String
-    var text: String
-    var symbol: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: symbol)
-                .font(.title3)
-                .frame(width: 40, height: 40)
-                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.headline)
-                Text(text)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-    }
-}
-
-private struct AppearanceSettingsView: View {
-    @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
+private struct SettingsGroupBox<Content: View>: View {
+    @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Picker("外观", selection: $appearanceMode) {
+            content
+        }
+        .padding(16)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+private struct SettingsGroupHeader: View {
+    var title: String
+    var symbol: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbol)
+                .foregroundStyle(.secondary)
+            Text(title)
+                .font(.headline)
+        }
+    }
+}
+
+private struct AppearanceRow: View {
+    @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
+    @EnvironmentObject private var model: StewardModel
+
+    var body: some View {
+        HStack {
+            Text("外观")
+            Spacer()
+            Picker("", selection: $appearanceMode) {
                 ForEach(AppearanceMode.allCases) { mode in
                     Text(mode.title).tag(mode.rawValue)
                 }
             }
             .pickerStyle(.segmented)
-            .frame(width: 360)
-
-            Text("深色模式会使用系统窗口、控件和文本颜色，升级状态仍保留红、绿、橙等语义提示。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            .frame(width: 240)
+            .labelsHidden()
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
-private struct ScanUpgradeSettingsView: View {
+private struct LaunchAtLoginRow: View {
+    @EnvironmentObject private var launchAtLogin: LaunchAtLoginModel
+
+    var body: some View {
+        HStack {
+            Text("开机自动启动")
+            Spacer()
+            Toggle("", isOn: Binding(
+                get: { launchAtLogin.enabled },
+                set: { enabled in
+                    Task { await launchAtLogin.setEnabled(enabled) }
+                }
+            ))
+            .toggleStyle(.switch)
+            .labelsHidden()
+            .disabled(launchAtLogin.isChanging)
+        }
+    }
+}
+
+private struct GreedyCaskRow: View {
     @EnvironmentObject private var model: StewardModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Toggle("扫描 Homebrew 时包含 greedy cask", isOn: $model.includeGreedy)
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("包含 greedy cask")
+                Text("auto_updates 或 :latest 的 Cask 也纳入扫描")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Toggle("", isOn: $model.includeGreedy)
                 .toggleStyle(.switch)
-            Toggle("一键升级和自动升级前先执行 brew update", isOn: $model.runBrewUpdate)
-                .toggleStyle(.switch)
+                .labelsHidden()
+        }
+    }
+}
 
-            HStack(spacing: 10) {
-                Button {
-                    Task { await model.scanSoftware() }
-                } label: {
-                    Label(model.isScanning ? "扫描中" : "立即扫描", systemImage: model.isScanning ? "hourglass" : "arrow.clockwise")
+private struct BrewUpdateRow: View {
+    @EnvironmentObject private var model: StewardModel
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("升级前 brew update")
+                Text("一键升级和自动升级前先执行 brew update")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Toggle("", isOn: $model.runBrewUpdate)
+                .toggleStyle(.switch)
+                .labelsHidden()
+        }
+    }
+}
+
+private struct DailyInspectionToggleRow: View {
+    @EnvironmentObject private var model: StewardModel
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("启用每日巡检")
+                Text("定时扫描可管理来源，发现可升级项后自动执行升级")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Toggle("", isOn: Binding(
+                get: { model.dailyInspectionEnabled },
+                set: { enabled in
+                    Task {
+                        if enabled {
+                            await model.enableDailyInspection()
+                        } else {
+                            await model.disableDailyInspection()
+                        }
+                    }
                 }
-                .disabled(model.isScanning)
+            ))
+            .toggleStyle(.switch)
+            .labelsHidden()
+        }
+    }
+}
 
+private struct DailyInspectionTimeRow: View {
+    @EnvironmentObject private var model: StewardModel
+
+    var body: some View {
+        HStack {
+            Text("巡检时间")
+            Spacer()
+            Picker("时", selection: $model.dailyHour) {
+                ForEach(0..<24) { hour in
+                    Text(String(format: "%02d", hour)).tag(hour)
+                }
+            }
+            .frame(width: 80)
+            .labelsHidden()
+            Text(":")
+            Picker("分", selection: $model.dailyMinute) {
+                ForEach(0..<60) { minute in
+                    Text(String(format: "%02d", minute)).tag(minute)
+                }
+            }
+            .frame(width: 80)
+            .labelsHidden()
+            Button {
+                Task { await model.enableDailyInspection() }
+            } label: {
+                Text("保存")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+    }
+}
+
+private struct AutoCheckUpdateRow: View {
+    @EnvironmentObject private var updater: AppUpdateModel
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("启动时自动检查更新")
+                Text("每次启动应用时从 GitHub Release 检查新版本")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Toggle("", isOn: $updater.automaticChecksEnabled)
+                .toggleStyle(.switch)
+                .labelsHidden()
+        }
+    }
+}
+
+private struct ManualCheckUpdateRow: View {
+    @EnvironmentObject private var updater: AppUpdateModel
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("手动检查更新")
+                if updater.updateAvailable {
+                    Text("发现新版本 \(updater.latestVersion)，可前往下载安装")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                } else {
+                    Text("当前版本 \(updater.currentVersion)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Button {
+                Task { await updater.checkForUpdates() }
+            } label: {
+                Label(updater.isChecking ? "检查中" : "立即检查", systemImage: updater.isChecking ? "hourglass" : "arrow.clockwise")
+            }
+            .disabled(updater.isChecking || updater.isInstalling)
+
+            if updater.updateAvailable {
                 Button {
-                    Task { await model.upgradeAll() }
+                    Task { await updater.downloadInstallAndRestart() }
                 } label: {
-                    Label(model.hasRunningJob ? "升级中" : "一键升级", systemImage: model.hasRunningJob ? "hourglass" : "bolt.fill")
+                    Label(updater.isInstalling ? "安装中" : "下载安装", systemImage: "square.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(model.availableUpdates.isEmpty || model.hasRunningJob)
-                .help(model.upgradeAllHelpText)
+                .disabled(updater.isInstalling)
             }
-
-            Text("Homebrew Cask 的 auto_updates 或 version :latest 软件默认不会进入可操作升级；开启 greedy 后会一起纳入扫描和升级候选。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct AutoDownloadUpdateRow: View {
+    @EnvironmentObject private var updater: AppUpdateModel
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("自动下载并安装更新")
+                Text("发现新版本后自动下载、覆盖安装并重启")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Toggle("", isOn: $updater.automaticDownloadsEnabled)
+                .toggleStyle(.switch)
+                .labelsHidden()
+        }
     }
 }
 
@@ -795,205 +970,6 @@ private struct JobsView: View {
     }
 }
 
-private struct DailyInspectionView: View {
-    @EnvironmentObject private var model: StewardModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
-                Image(systemName: "calendar.badge.clock")
-                    .font(.title2)
-                    .frame(width: 44, height: 44)
-                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(model.dailyInspectionEnabled ? "每日巡检已启用" : "每日巡检未启用")
-                        .font(.headline)
-                    Text("每天按设定时间扫描 Homebrew 与可用的 Mac App Store 软件，发现可升级项后自动执行升级。")
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Badge(text: model.dailyInspectionEnabled ? "ACTIVE" : "OFF", color: model.dailyInspectionEnabled ? .green : .secondary)
-            }
-            .padding(12)
-            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-
-            HStack(spacing: 12) {
-                Picker("小时", selection: $model.dailyHour) {
-                    ForEach(0..<24) { hour in
-                        Text(String(format: "%02d", hour)).tag(hour)
-                    }
-                }
-                .frame(width: 130)
-
-                Picker("分钟", selection: $model.dailyMinute) {
-                    ForEach(0..<60) { minute in
-                        Text(String(format: "%02d", minute)).tag(minute)
-                    }
-                }
-                .frame(width: 130)
-
-                Spacer()
-            }
-
-            InfoLine(text: "每日巡检会使用上方“扫描与升级”的 greedy cask 和 brew update 设置。")
-
-            HStack(spacing: 10) {
-                Button {
-                    Task { await model.enableDailyInspection() }
-                } label: {
-                    Label(model.dailyInspectionEnabled ? "更新巡检计划" : "启用每日巡检", systemImage: "checkmark.circle")
-                }
-                .buttonStyle(.borderedProminent)
-
-                Button {
-                    Task { await model.disableDailyInspection() }
-                } label: {
-                    Label("停用", systemImage: "xmark.circle")
-                }
-                .disabled(!model.dailyInspectionEnabled)
-
-                Button {
-                    model.runDailyInspectionNow()
-                } label: {
-                    Label("立即巡检一次", systemImage: "play.circle")
-                }
-                .disabled(model.hasRunningJob)
-
-                Button {
-                    model.refreshDailyInspectionStatus()
-                } label: {
-                    Label("刷新状态", systemImage: "arrow.clockwise")
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("调度文件")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-                Text(model.dailyLaunchAgentPath)
-                    .font(.system(.caption, design: .monospaced))
-                    .textSelection(.enabled)
-                Text("日志文件")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 4)
-                Text(model.dailyLogPath)
-                    .font(.system(.caption, design: .monospaced))
-                    .textSelection(.enabled)
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("最近巡检日志")
-                    .font(.headline)
-                ScrollView {
-                    Text(model.dailyLog.isEmpty ? "暂无后台巡检日志。" : model.dailyLog)
-                        .font(.system(.body, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                        .padding(12)
-                }
-                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-            }
-        }
-    }
-}
-
-private struct AppUpdateView: View {
-    @EnvironmentObject private var updater: AppUpdateModel
-    @EnvironmentObject private var launchAtLogin: LaunchAtLoginModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
-                Image(systemName: updater.updateAvailable ? "arrow.down.app.fill" : "arrow.down.app")
-                    .font(.title2)
-                    .frame(width: 44, height: 44)
-                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(updater.updateAvailable ? "发现可用更新" : "应用更新")
-                        .font(.headline)
-                    Text("当前版本 \(updater.currentVersion)，更新源 \(updater.repositoryName)。")
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Badge(text: updater.updateAvailable ? "UPDATE" : "CURRENT", color: updater.updateAvailable ? .orange : .green)
-            }
-            .padding(12)
-            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-
-            Toggle("启动应用时自动检查更新", isOn: $updater.automaticChecksEnabled)
-                .toggleStyle(.switch)
-
-            if updater.automaticChecksEnabled {
-                Toggle("自动下载并安装更新", isOn: $updater.automaticDownloadsEnabled)
-                    .toggleStyle(.switch)
-            }
-
-            HStack(spacing: 12) {
-                Toggle("开机自动启动", isOn: Binding(
-                    get: { launchAtLogin.enabled },
-                    set: { enabled in
-                        Task { await launchAtLogin.setEnabled(enabled) }
-                    }
-                ))
-                .toggleStyle(.switch)
-                .disabled(launchAtLogin.isChanging)
-
-                Text(launchAtLogin.status)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Button {
-                    launchAtLogin.refresh()
-                } label: {
-                    Label("刷新", systemImage: "arrow.clockwise")
-                }
-            }
-
-            HStack(spacing: 10) {
-                Button {
-                    Task { await updater.checkForUpdates() }
-                } label: {
-                    Label(updater.isChecking ? "检查中" : "手动检查更新", systemImage: updater.isChecking ? "hourglass" : "arrow.clockwise")
-                }
-                .disabled(updater.isChecking || updater.isInstalling)
-
-                Button {
-                    Task { await updater.downloadInstallAndRestart() }
-                } label: {
-                    Label(updater.isInstalling ? "安装中" : "下载并安装，重启应用", systemImage: "square.and.arrow.down")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!updater.updateAvailable || updater.isInstalling)
-
-                if !updater.releaseURL.isEmpty {
-                    Link("打开 Release", destination: URL(string: updater.releaseURL)!)
-                }
-            }
-
-            InfoLine(text: updater.status)
-            if !updater.progress.isEmpty {
-                InfoLine(text: updater.progress)
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Release Notes")
-                    .font(.headline)
-                ScrollView {
-                    Text(updater.releaseNotes.isEmpty ? "暂无 release notes。" : updater.releaseNotes)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                        .padding(12)
-                }
-                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-            }
-        }
-    }
-}
 
 private struct Badge: View {
     var text: String

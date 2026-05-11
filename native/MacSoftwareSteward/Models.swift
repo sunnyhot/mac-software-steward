@@ -29,8 +29,8 @@ enum AppTab: String, CaseIterable, Identifiable {
     case updates = "可升级"
     case applications = "本机应用"
     case sources = "管理来源"
-    case settings = "设置"
     case jobs = "任务日志"
+    case settings = "设置"
 
     var id: String { rawValue }
 
