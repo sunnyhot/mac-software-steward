@@ -6,6 +6,16 @@ final class AppUpdateModel: ObservableObject {
     @Published var automaticChecksEnabled: Bool {
         didSet {
             UserDefaults.standard.set(automaticChecksEnabled, forKey: Self.automaticChecksKey)
+            if automaticChecksEnabled {
+                startPeriodicCheck()
+            } else {
+                stopPeriodicCheck()
+            }
+        }
+    }
+    @Published var automaticDownloadsEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(automaticDownloadsEnabled, forKey: Self.automaticDownloadsKey)
         }
     }
     @Published var isChecking = false
@@ -19,12 +29,17 @@ final class AppUpdateModel: ObservableObject {
 
     private var latestRelease: GitHubRelease?
     private let session: URLSession
+    private var periodicTask: Task<Void, Never>?
+    private var lastCheckTime: Date?
 
     private static let automaticChecksKey = "AppUpdateAutomaticChecksEnabled"
+    private static let automaticDownloadsKey = "AppUpdateAutomaticDownloadsEnabled"
+    private static let checkInterval: TimeInterval = 4 * 3600
 
     init(session: URLSession = .shared) {
         self.session = session
         self.automaticChecksEnabled = UserDefaults.standard.object(forKey: Self.automaticChecksKey) as? Bool ?? true
+        self.automaticDownloadsEnabled = UserDefaults.standard.object(forKey: Self.automaticDownloadsKey) as? Bool ?? true
     }
 
     var currentVersion: String {
@@ -38,6 +53,10 @@ final class AppUpdateModel: ObservableObject {
     func autoCheckIfNeeded() async {
         guard automaticChecksEnabled else { return }
         await checkForUpdates(automatic: true)
+        if updateAvailable, automaticDownloadsEnabled {
+            await downloadInstallAndRestart()
+        }
+        startPeriodicCheck()
     }
 
     func checkForUpdates(automatic: Bool = false) async {
@@ -55,6 +74,7 @@ final class AppUpdateModel: ObservableObject {
             releaseURL = release.htmlURL
             releaseNotes = release.body ?? ""
             updateAvailable = compareVersions(release.versionString, currentVersion) == .orderedDescending
+            lastCheckTime = Date()
             status = updateAvailable
                 ? "发现新版本 \(release.versionString)。"
                 : "当前已是最新版本 \(currentVersion)。"
@@ -65,6 +85,27 @@ final class AppUpdateModel: ObservableObject {
         }
 
         isChecking = false
+
+        if automatic, updateAvailable, automaticDownloadsEnabled {
+            await downloadInstallAndRestart()
+        }
+    }
+
+    private func startPeriodicCheck() {
+        guard periodicTask == nil else { return }
+        periodicTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(Self.checkInterval))
+                guard !Task.isCancelled, let self else { return }
+                guard self.automaticChecksEnabled else { return }
+                await self.checkForUpdates(automatic: true)
+            }
+        }
+    }
+
+    private func stopPeriodicCheck() {
+        periodicTask?.cancel()
+        periodicTask = nil
     }
 
     func downloadInstallAndRestart() async {

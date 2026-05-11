@@ -927,6 +927,11 @@ private struct AppUpdateView: View {
             Toggle("启动应用时自动检查更新", isOn: $updater.automaticChecksEnabled)
                 .toggleStyle(.switch)
 
+            if updater.automaticChecksEnabled {
+                Toggle("自动下载并安装更新", isOn: $updater.automaticDownloadsEnabled)
+                    .toggleStyle(.switch)
+            }
+
             HStack(spacing: 12) {
                 Toggle("开机自动启动", isOn: Binding(
                     get: { launchAtLogin.enabled },

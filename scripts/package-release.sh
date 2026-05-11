@@ -21,16 +21,15 @@ cp "$ZIP_PATH" "$VERSIONED_ZIP_PATH"
   shasum -a 256 "MacSoftwareSteward-v$VERSION.zip" > "MacSoftwareSteward-v$VERSION.zip.sha256"
 )
 
-cat > "$RELEASE_DIR/RELEASE_NOTES.md" <<NOTES
-## Mac 软件管家 v$VERSION
-
-- 修复“一键升级”看起来没有反应的问题：升级任务会显示全局执行状态，失败时展示最近 stdout/stderr，而不只是退出码。
-- 修复 App Store 版本解析：支持 mas 输出无括号版本格式，拿不到新版号时显示“待 App Store 确认”。
-- 新增开机自动启动开关，可在“应用更新”页启用或停用。
-- 菜单栏直接显示升级数量，例如“7 个更新”；扫描或升级时直接显示“扫描中”“升级中 7”。
-- 继续保留 Homebrew、App Store、应用程序列表间的升级状态联动。
-
-安装包资产：\`MacSoftwareSteward.zip\`
-NOTES
+NOTES_FILE="$RELEASE_DIR/RELEASE_NOTES.md"
+{
+  echo "## Mac 软件管家 v$VERSION"
+  echo ""
+  echo "- 移除 Web 前端，成为纯原生 macOS SwiftUI 应用，不再依赖 Node.js。"
+  echo "- 新增应用自动更新：可设置定期检查并自动下载安装，无需手动操作。"
+  echo "- 设置页新增\"自动下载并安装更新\"开关。"
+  echo ""
+  echo "安装包资产：\`MacSoftwareSteward.zip\`"
+} > "$NOTES_FILE"
 
 echo "$ZIP_PATH"

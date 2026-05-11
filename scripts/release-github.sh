@@ -32,13 +32,7 @@ bash "$ROOT_DIR/scripts/package-release.sh" >/dev/null
 git add \
   .gitignore \
   README.md \
-  index.html \
   package.json \
-  package-lock.json \
-  vite.config.js \
-  server \
-  src \
-  test \
   native \
   scripts
 
