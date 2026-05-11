@@ -256,6 +256,7 @@ enum SoftwareScanner {
                 ?? [item.installedVersion].filter { !$0.isEmpty }
             let currentVersion = stringValue(pending?["current_version"]) ?? stringValue(pending?["newest_version"]) ?? ""
             let pinned = pending?["pinned"] as? Bool ?? false
+            let autoUpdates = pending?["auto_updates"] as? Bool ?? false
 
             return BrewPackage(
                 id: "brew:\(kind):\(item.name)",
@@ -264,9 +265,9 @@ enum SoftwareScanner {
                 installedVersion: installedVersions.joined(separator: ", "),
                 currentVersion: currentVersion,
                 pinned: pinned,
-                autoUpdates: pending?["auto_updates"] as? Bool ?? false,
+                autoUpdates: autoUpdates,
                 outdated: pending != nil,
-                upgradeable: pending != nil && !pinned
+                upgradeable: pending != nil && !pinned && !(kind == "cask" && autoUpdates)
             )
         }
         .sorted {

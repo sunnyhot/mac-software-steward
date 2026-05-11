@@ -299,6 +299,7 @@ private struct PackageStatusBadge: View {
 
     private var text: String {
         if package.upgradeable { return "可升级" }
+        if package.outdated && package.autoUpdates { return "自更新" }
         if package.outdated && package.isPinned { return "已固定" }
         if package.outdated { return "需手动" }
         return "已最新"
@@ -306,6 +307,7 @@ private struct PackageStatusBadge: View {
 
     private var color: Color {
         if package.upgradeable { return .orange }
+        if package.outdated && package.autoUpdates { return .blue }
         if package.outdated { return .secondary }
         return .green
     }
