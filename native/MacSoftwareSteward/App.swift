@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct MacSoftwareStewardApp: App {
     @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
+    @AppStorage("dockIconVisible") private var dockIconVisible = true
     @StateObject private var model = StewardModel()
     @StateObject private var updater = AppUpdateModel()
     @StateObject private var launchAtLogin = LaunchAtLoginModel()
@@ -16,10 +17,14 @@ struct MacSoftwareStewardApp: App {
                 .preferredColorScheme(currentAppearanceMode.colorScheme)
                 .frame(minWidth: 1120, minHeight: 720)
                 .task {
+                    applyDockIconPolicy()
                     if model.scan == nil {
                         await model.scanSoftware()
                     }
                     await updater.autoCheckIfNeeded()
+                }
+                .onChange(of: dockIconVisible) {
+                    applyDockIconPolicy()
                 }
         }
         .windowStyle(.titleBar)
@@ -69,6 +74,10 @@ struct MacSoftwareStewardApp: App {
 
     private var currentAppearanceMode: AppearanceMode {
         AppearanceMode(rawValue: appearanceMode) ?? .system
+    }
+
+    private func applyDockIconPolicy() {
+        NSApp.setActivationPolicy(dockIconVisible ? .regular : .accessory)
     }
 }
 

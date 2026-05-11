@@ -641,6 +641,8 @@ private struct SettingsView: View {
                     AppearanceRow()
                     Divider().padding(.vertical, 2)
                     LaunchAtLoginRow()
+                    Divider().padding(.vertical, 2)
+                    DockIconRow()
                 }
 
                 SettingsGroupBox {
@@ -740,6 +742,25 @@ private struct LaunchAtLoginRow: View {
             .toggleStyle(.switch)
             .labelsHidden()
             .disabled(launchAtLogin.isChanging)
+        }
+    }
+}
+
+private struct DockIconRow: View {
+    @AppStorage("dockIconVisible") private var dockIconVisible = true
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("在 Dock 中显示")
+                Text("关闭后应用只在菜单栏运行，不占用 Dock 位置")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Toggle("", isOn: $dockIconVisible)
+                .toggleStyle(.switch)
+                .labelsHidden()
         }
     }
 }
