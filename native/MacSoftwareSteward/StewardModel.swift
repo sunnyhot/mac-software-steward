@@ -25,9 +25,10 @@ final class StewardModel: ObservableObject {
 
     var availableUpdates: [UpdatablePackage] {
         guard let scan else { return [] }
-        return scan.brew.formulae.filter(\.upgradeable).map(UpdatablePackage.brew)
+        return (scan.brew.formulae.filter(\.upgradeable).map(UpdatablePackage.brew)
             + scan.brew.casks.filter(\.upgradeable).map(UpdatablePackage.brew)
-            + scan.mas.apps.filter(\.upgradeable).map(UpdatablePackage.mas)
+            + scan.mas.apps.filter(\.upgradeable).map(UpdatablePackage.mas))
+            .filter { packageProgress[$0.id]?.status != .succeeded }
     }
 
     var hasRunningJob: Bool {
