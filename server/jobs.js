@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import { commandExists, makeId } from './commands.js';
+import { analyzeFailure } from '../src/failureAnalysis.js';
 
 const jobs = new Map();
 const SAFE_BREW_TOKEN = /^[A-Za-z0-9][A-Za-z0-9@._+-]*$/;
@@ -37,7 +38,11 @@ export function createJob({ label, commands }) {
       status: 'queued',
       startedAt: '',
       finishedAt: '',
-      exitCode: null
+      exitCode: null,
+      failureSummary: '',
+      recoverySuggestion: '',
+      copyText: '',
+      recentOutput: []
     })),
     log: []
   };
@@ -52,7 +57,10 @@ async function runJob(job) {
   job.startedAt = new Date().toISOString();
   appendLog(job, 'system', `开始：${job.label}`);
 
-  for (const [index, command] of job.commands.entries()) {
+  let failedCount = 0;
+  let firstExitCode = null;
+
+  for (const command of job.commands) {
     command.status = 'running';
     command.startedAt = new Date().toISOString();
     appendLog(job, 'command', `$ ${command.display}`);
@@ -63,20 +71,29 @@ async function runJob(job) {
     command.finishedAt = new Date().toISOString();
 
     if (result.code !== 0) {
-      job.status = 'failed';
-      job.exitCode = result.code;
+      failedCount += 1;
+      if (firstExitCode === null) firstExitCode = result.code;
+      const analysis = analyzeFailure({
+        command: command.display,
+        code: result.code,
+        output: result.output
+      });
+      command.failureSummary = analysis.summary;
+      command.recoverySuggestion = analysis.suggestion;
+      command.copyText = analysis.copyText;
       appendLog(job, 'system', `失败：${command.display}，退出码 ${result.code}`);
-      for (const pending of job.commands.slice(index + 1)) {
-        if (pending.status === 'queued') {
-          pending.status = 'failed';
-          pending.finishedAt = new Date().toISOString();
-        }
-      }
-      break;
+    } else {
+      command.failureSummary = '';
+      command.recoverySuggestion = '';
+      command.copyText = '';
     }
   }
 
-  if (job.status !== 'failed') {
+  if (failedCount > 0) {
+    job.status = 'failed';
+    job.exitCode = firstExitCode ?? 1;
+    appendLog(job, 'system', `完成，${failedCount} 个步骤失败`);
+  } else {
     job.status = 'succeeded';
     job.exitCode = 0;
     appendLog(job, 'system', '完成');
@@ -92,14 +109,29 @@ function runStreamingCommand(command, job) {
       env: process.env
     });
 
-    child.stdout.on('data', (chunk) => appendLog(job, 'stdout', chunk.toString()));
-    child.stderr.on('data', (chunk) => appendLog(job, 'stderr', chunk.toString()));
+    child.stdout.on('data', (chunk) => appendCommandOutput(job, command, 'stdout', chunk.toString()));
+    child.stderr.on('data', (chunk) => appendCommandOutput(job, command, 'stderr', chunk.toString()));
     child.on('error', (error) => {
-      appendLog(job, 'stderr', error.message);
-      resolve({ code: -1 });
+      appendCommandOutput(job, command, 'stderr', error.message);
+      resolve({ code: -1, output: command.recentOutput.join('\n') });
     });
-    child.on('close', (code) => resolve({ code: code ?? 0 }));
+    child.on('close', (code) => resolve({
+      code: code ?? 0,
+      output: command.recentOutput.join('\n')
+    }));
   });
+}
+
+function appendCommandOutput(job, command, stream, text) {
+  appendLog(job, stream, text);
+  const lines = String(text)
+    .split(/\r?\n/)
+    .filter((line) => line.length > 0)
+    .map((line) => `[${stream}] ${line}`);
+  command.recentOutput.push(...lines);
+  if (command.recentOutput.length > 40) {
+    command.recentOutput.splice(0, command.recentOutput.length - 40);
+  }
 }
 
 function appendLog(job, stream, text) {

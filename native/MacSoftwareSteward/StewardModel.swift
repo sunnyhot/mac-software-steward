@@ -263,8 +263,8 @@ final class StewardModel: ObservableObject {
             if code != 0 {
                 failedCount += 1
                 if firstErrorCode == nil { firstErrorCode = code }
-                let detail = failureDetail(command: command.display, code: code, output: result.recentOutput)
-                markFailed(step, detail: detail)
+                let analysis = failureAnalysis(command: command.display, code: code, output: result.recentOutput)
+                markFailed(step, analysis: analysis)
                 updateJob(id) {
                     $0.log.append(LogLine(stream: "system", text: "失败：\(command.display)，退出码 \(code)"))
                 }
@@ -337,22 +337,17 @@ final class StewardModel: ObservableObject {
         )
     }
 
-    private func markFailed(_ step: UpgradeStep, detail: String) {
+    private func markFailed(_ step: UpgradeStep, analysis: FailureAnalysis) {
         guard let packageID = step.packageID, let packageName = step.packageName else { return }
         packageProgress[packageID] = PackageUpgradeProgress(
             packageID: packageID,
             packageName: packageName,
             status: .failed,
-            detail: detail
+            detail: analysis.summary,
+            failureSummary: analysis.summary,
+            recoverySuggestion: analysis.suggestion,
+            copyText: analysis.copyText
         )
-    }
-
-    private func markPendingFailed(_ steps: [UpgradeStep], detail: String) {
-        for step in steps {
-            guard let packageID = step.packageID,
-                  packageProgress[packageID]?.status == .queued else { continue }
-            markFailed(step, detail: detail)
-        }
     }
 
     private func updatePackageDetail(for step: UpgradeStep, stream: String, text: String) {
@@ -363,12 +358,83 @@ final class StewardModel: ObservableObject {
         packageProgress[packageID] = progress
     }
 
-    private func failureDetail(command: String, code: Int32, output: String) -> String {
+    private func failureAnalysis(command: String, code: Int32, output: String) -> FailureAnalysis {
         let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            return "失败：\(command)，退出码 \(code)。请打开任务日志查看完整输出。"
+        let summary: String
+        let suggestion: String
+
+        if let hint = knownFailureHint(in: trimmed) {
+            summary = hint.summary
+            suggestion = hint.suggestion
+        } else if let errorLine = firstErrorLine(in: trimmed) {
+            summary = "退出码 \(code)：\(errorLine)"
+            suggestion = "点击“查看日志”查看完整任务日志；也可以在终端手动执行并复制完整输出：\(command)"
+        } else {
+            summary = "退出码 \(code)，但最近输出里没有捕获到明确错误行。"
+            suggestion = "点击“查看日志”查看完整任务日志；也可以在终端手动执行并复制完整输出：\(command)"
         }
-        return "失败：\(command)，退出码 \(code)。\(trimmed)"
+
+        var copyText = """
+        失败原因：\(summary)
+        解决方案：\(suggestion)
+        命令：\(command)
+        """
+        if !trimmed.isEmpty {
+            copyText += "\n最近输出：\n\(trimmed)"
+        }
+
+        return FailureAnalysis(summary: summary, suggestion: suggestion, copyText: copyText)
+    }
+
+    private func knownFailureHint(in output: String) -> FailureHint? {
+        let lowercased = output.lowercased()
+        if lowercased.contains("permission denied") || lowercased.contains("operation not permitted") || lowercased.contains("eacces") {
+            return FailureHint(
+                summary: "权限不足，Homebrew 无法写入目标文件或应用目录。",
+                suggestion: "确认当前用户有权限写入目标路径；必要时修复 Homebrew 权限后重试。"
+            )
+        }
+        if lowercased.contains("already exists") || lowercased.contains("it seems there is already an app") || lowercased.contains("app already exists") {
+            return FailureHint(
+                summary: "目标应用已存在，Homebrew Cask 不想覆盖现有 App。",
+                suggestion: "退出该应用后，先备份或移除现有 App，再重试；也可以在终端中手动执行 brew reinstall --cask --force。"
+            )
+        }
+        if lowercased.contains("checksum mismatch") || lowercased.contains("sha256 mismatch") {
+            return FailureHint(
+                summary: "下载文件校验失败，可能是缓存损坏或上游包已更新。",
+                suggestion: "先运行 brew cleanup，并删除对应下载缓存后重试。"
+            )
+        }
+        if lowercased.contains("is currently running") || lowercased.contains("app is running") || lowercased.contains("application is running") {
+            return FailureHint(
+                summary: "应用仍在运行，升级器无法替换它。",
+                suggestion: "完全退出该应用及后台进程，然后重新升级。"
+            )
+        }
+        if lowercased.contains("no such file or directory") || lowercased.contains("not found") {
+            return FailureHint(
+                summary: "升级命令引用的文件或工具不存在。",
+                suggestion: "重新扫描后再试；如果仍失败，请确认 Homebrew 和相关 cask 仍然安装。"
+            )
+        }
+        return nil
+    }
+
+    private func firstErrorLine(in output: String) -> String? {
+        output
+            .split(whereSeparator: \.isNewline)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { line in
+                let lowercased = line.lowercased()
+                return lowercased.contains("error")
+                    || lowercased.contains("failed")
+                    || lowercased.contains("failure")
+                    || lowercased.contains("permission denied")
+                    || lowercased.contains("already exists")
+                    || lowercased.contains("checksum")
+                    || lowercased.contains("not found")
+            }
     }
 
     private func currentCommandText(for job: UpgradeJob) -> String {
@@ -414,6 +480,17 @@ final class StewardModel: ObservableObject {
     private var dailyAgentPath: String {
         DailyInspectionScheduler.helperPath()
     }
+}
+
+private struct FailureAnalysis {
+    var summary: String
+    var suggestion: String
+    var copyText: String
+}
+
+private struct FailureHint {
+    var summary: String
+    var suggestion: String
 }
 
 enum StewardError: LocalizedError {

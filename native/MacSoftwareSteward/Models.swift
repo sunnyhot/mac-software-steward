@@ -1,12 +1,35 @@
 import Foundation
+import SwiftUI
+
+enum AppearanceMode: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system: return "跟随系统"
+        case .light: return "浅色"
+        case .dark: return "深色"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
 
 enum AppTab: String, CaseIterable, Identifiable {
     case updates = "可升级"
-    case brew = "Homebrew"
     case applications = "本机应用"
-    case mas = "App Store"
-    case daily = "每日巡检"
-    case appUpdate = "应用更新"
+    case sources = "管理来源"
+    case settings = "设置"
     case jobs = "任务日志"
 
     var id: String { rawValue }
@@ -14,12 +37,19 @@ enum AppTab: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .updates: return "arrow.triangle.2.circlepath"
-        case .brew: return "shippingbox"
         case .applications: return "macwindow"
-        case .mas: return "bag"
-        case .daily: return "calendar.badge.clock"
-        case .appUpdate: return "arrow.down.app"
+        case .sources: return "tray.full"
+        case .settings: return "gearshape"
         case .jobs: return "terminal"
+        }
+    }
+
+    var usesSearch: Bool {
+        switch self {
+        case .updates, .applications, .sources:
+            return true
+        case .settings, .jobs:
+            return false
         }
     }
 }
@@ -211,6 +241,9 @@ struct PackageUpgradeProgress: Hashable {
     var packageName: String
     var status: PackageUpgradeStatus
     var detail: String
+    var failureSummary = ""
+    var recoverySuggestion = ""
+    var copyText = ""
     var updatedAt = Date()
 }
 

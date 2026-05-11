@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct MacSoftwareStewardApp: App {
+    @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
     @StateObject private var model = StewardModel()
     @StateObject private var updater = AppUpdateModel()
     @StateObject private var launchAtLogin = LaunchAtLoginModel()
@@ -12,6 +13,7 @@ struct MacSoftwareStewardApp: App {
                 .environmentObject(model)
                 .environmentObject(updater)
                 .environmentObject(launchAtLogin)
+                .preferredColorScheme(currentAppearanceMode.colorScheme)
                 .frame(minWidth: 1120, minHeight: 720)
                 .task {
                     if model.scan == nil {
@@ -63,6 +65,10 @@ struct MacSoftwareStewardApp: App {
         if model.isScanning { return "magnifyingglass" }
         if model.hasRunningJob { return "arrow.triangle.2.circlepath" }
         return model.availableUpdates.isEmpty ? "checkmark.circle" : "arrow.down.circle.fill"
+    }
+
+    private var currentAppearanceMode: AppearanceMode {
+        AppearanceMode(rawValue: appearanceMode) ?? .system
     }
 }
 

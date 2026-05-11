@@ -36,9 +36,6 @@ private struct HeaderView: View {
 
                 Spacer()
 
-                Toggle("包含 greedy cask", isOn: $model.includeGreedy)
-                    .toggleStyle(.switch)
-
                 Button {
                     Task { await model.scanSoftware() }
                 } label: {
@@ -112,14 +109,16 @@ private struct MainPanel: View {
                 Text(model.selectedTab.rawValue)
                     .font(.title2.bold())
                 Spacer()
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                    TextField("搜索名称、版本、路径", text: $model.query)
-                        .textFieldStyle(.plain)
+                if model.selectedTab.usesSearch {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                        TextField("搜索名称、版本、路径", text: $model.query)
+                            .textFieldStyle(.plain)
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(width: 360, height: 36)
+                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
                 }
-                .padding(.horizontal, 12)
-                .frame(width: 360, height: 36)
-                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
             }
 
             if let notice = model.jobNotice {
@@ -129,16 +128,12 @@ private struct MainPanel: View {
             switch model.selectedTab {
             case .updates:
                 UpdatesView()
-            case .brew:
-                BrewView()
             case .applications:
                 ApplicationsView()
-            case .mas:
-                MasView()
-            case .daily:
-                DailyInspectionView()
-            case .appUpdate:
-                AppUpdateView()
+            case .sources:
+                SourcesView()
+            case .settings:
+                SettingsView()
             case .jobs:
                 JobsView()
             }
@@ -189,11 +184,14 @@ private struct UpdatesView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Homebrew 与 Mac App Store 支持自动执行升级；其他 .app 会显示在本机应用列表中供手动处理。")
+                Text("这里汇总 Homebrew 与 Mac App Store 中可直接执行的升级；扫描和升级策略可在设置中调整。")
                     .foregroundStyle(.secondary)
                 Spacer()
-                Toggle("一键升级前先 brew update", isOn: $model.runBrewUpdate)
-                    .toggleStyle(.switch)
+                Button {
+                    model.selectedTab = .settings
+                } label: {
+                    Label("升级设置", systemImage: "gearshape")
+                }
             }
 
             if model.isScanning {
@@ -362,17 +360,84 @@ private struct PackageProgressDetail: View {
                 ProgressView()
                     .progressViewStyle(.linear)
             }
-            Text(progress.detail)
+            if progress.status == .failed && !progress.failureSummary.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("失败原因：\(progress.failureSummary)")
+                        .foregroundStyle(.red)
+                    if !progress.recoverySuggestion.isEmpty {
+                        Text("解决方案：\(progress.recoverySuggestion)")
+                    }
+                    Button {
+                        copyToPasteboard(progress.copyText)
+                    } label: {
+                        Label("复制原因", systemImage: "doc.on.doc")
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(progress.copyText.isEmpty)
+                }
                 .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(4)
-                .truncationMode(.middle)
+                .textSelection(.enabled)
+                .padding(10)
+                .background(Color.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.red.opacity(0.18))
+                )
+            } else {
+                Text(progress.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(4)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
         }
         .padding(.leading, 46)
     }
+
+    private func copyToPasteboard(_ text: String) {
+        guard !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
 }
 
-private struct BrewView: View {
+private enum SourcePane: String, CaseIterable, Identifiable {
+    case homebrew = "Homebrew"
+    case appStore = "App Store"
+
+    var id: String { rawValue }
+}
+
+private struct SourcesView: View {
+    @State private var selectedPane: SourcePane = .homebrew
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 12) {
+                Text("管理来源负责执行升级；本机应用页只展示实际安装的 .app 和来源关系。")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Picker("管理来源", selection: $selectedPane) {
+                    ForEach(SourcePane.allCases) { pane in
+                        Text(pane.rawValue).tag(pane)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 280)
+            }
+
+            switch selectedPane {
+            case .homebrew:
+                BrewSourceView()
+            case .appStore:
+                AppStoreSourceView()
+            }
+        }
+    }
+}
+
+private struct BrewSourceView: View {
     @EnvironmentObject private var model: StewardModel
 
     var body: some View {
@@ -512,7 +577,7 @@ private struct VersionColumn: View {
     }
 }
 
-private struct MasView: View {
+private struct AppStoreSourceView: View {
     @EnvironmentObject private var model: StewardModel
 
     var apps: [MasApp] {
@@ -558,6 +623,126 @@ private struct MasView: View {
                 }
             }
         }
+    }
+}
+
+private struct SettingsView: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                SettingsBlockHeader(
+                    title: "外观",
+                    text: "默认跟随系统，也可以手动固定为浅色或深色。",
+                    symbol: "circle.lefthalf.filled"
+                )
+                AppearanceSettingsView()
+
+                SettingsBlockHeader(
+                    title: "扫描与升级",
+                    text: "这些选项影响顶部扫描按钮、一键升级和每日巡检里的自动升级行为。",
+                    symbol: "slider.horizontal.3"
+                )
+                ScanUpgradeSettingsView()
+
+                SettingsBlockHeader(
+                    title: "每日巡检",
+                    text: "定时扫描可管理来源，并在发现可操作升级时自动执行。",
+                    symbol: "calendar.badge.clock"
+                )
+                DailyInspectionView()
+
+                SettingsBlockHeader(
+                    title: "应用与启动",
+                    text: "配置 Mac 软件管家本身的更新检查和开机启动。",
+                    symbol: "arrow.down.app"
+                )
+                AppUpdateView()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+private struct SettingsBlockHeader: View {
+    var title: String
+    var text: String
+    var symbol: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.title3)
+                .frame(width: 40, height: 40)
+                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.headline)
+                Text(text)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+    }
+}
+
+private struct AppearanceSettingsView: View {
+    @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Picker("外观", selection: $appearanceMode) {
+                ForEach(AppearanceMode.allCases) { mode in
+                    Text(mode.title).tag(mode.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 360)
+
+            Text("深色模式会使用系统窗口、控件和文本颜色，升级状态仍保留红、绿、橙等语义提示。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct ScanUpgradeSettingsView: View {
+    @EnvironmentObject private var model: StewardModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Toggle("扫描 Homebrew 时包含 greedy cask", isOn: $model.includeGreedy)
+                .toggleStyle(.switch)
+            Toggle("一键升级和自动升级前先执行 brew update", isOn: $model.runBrewUpdate)
+                .toggleStyle(.switch)
+
+            HStack(spacing: 10) {
+                Button {
+                    Task { await model.scanSoftware() }
+                } label: {
+                    Label(model.isScanning ? "扫描中" : "立即扫描", systemImage: model.isScanning ? "hourglass" : "arrow.clockwise")
+                }
+                .disabled(model.isScanning)
+
+                Button {
+                    Task { await model.upgradeAll() }
+                } label: {
+                    Label(model.hasRunningJob ? "升级中" : "一键升级", systemImage: model.hasRunningJob ? "hourglass" : "bolt.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.availableUpdates.isEmpty || model.hasRunningJob)
+                .help(model.upgradeAllHelpText)
+            }
+
+            Text("Homebrew Cask 的 auto_updates 或 version :latest 软件默认不会进入可操作升级；开启 greedy 后会一起纳入扫描和升级候选。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -647,14 +832,10 @@ private struct DailyInspectionView: View {
                 }
                 .frame(width: 130)
 
-                Toggle("包含 greedy cask", isOn: $model.includeGreedy)
-                    .toggleStyle(.switch)
-
-                Toggle("自动升级前先 brew update", isOn: $model.runBrewUpdate)
-                    .toggleStyle(.switch)
-
                 Spacer()
             }
+
+            InfoLine(text: "每日巡检会使用上方“扫描与升级”的 greedy cask 和 brew update 设置。")
 
             HStack(spacing: 10) {
                 Button {

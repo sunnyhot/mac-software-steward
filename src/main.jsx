@@ -5,6 +5,7 @@ import {
   AppWindow,
   CheckCircle2,
   ChevronRight,
+  Copy,
   ExternalLink,
   Loader2,
   Package,
@@ -16,15 +17,9 @@ import {
   Terminal,
   Zap
 } from 'lucide-react';
+import { tabs } from './navigation.js';
+import { appearanceModes, applyAppearanceMode, normalizeAppearanceMode } from './theme.js';
 import './styles.css';
-
-const tabs = [
-  { id: 'updates', label: '可升级' },
-  { id: 'brew', label: 'Homebrew' },
-  { id: 'apps', label: '本机应用' },
-  { id: 'mas', label: 'App Store' },
-  { id: 'jobs', label: '任务日志' }
-];
 
 function App() {
   const [activeTab, setActiveTab] = React.useState('updates');
@@ -36,6 +31,9 @@ function App() {
   const [jobs, setJobs] = React.useState([]);
   const [activeJobId, setActiveJobId] = React.useState('');
   const [query, setQuery] = React.useState('');
+  const [appearanceMode, setAppearanceMode] = React.useState(() => (
+    normalizeAppearanceMode(window.localStorage.getItem('appearanceMode'))
+  ));
 
   const activeJob = jobs.find((job) => job.id === activeJobId) ?? jobs[0];
   const updates = React.useMemo(() => collectUpdates(scan), [scan]);
@@ -45,6 +43,11 @@ function App() {
     void refreshJobs();
     void runScan();
   }, []);
+
+  React.useEffect(() => {
+    const normalized = applyAppearanceMode(document.documentElement, appearanceMode);
+    window.localStorage.setItem('appearanceMode', normalized);
+  }, [appearanceMode]);
 
   React.useEffect(() => {
     if (!activeJob || !['queued', 'running'].includes(activeJob.status)) return undefined;
@@ -140,11 +143,6 @@ function App() {
           </p>
         </div>
         <div className="actions">
-          <Toggle
-            checked={includeGreedy}
-            onChange={setIncludeGreedy}
-            label="包含 greedy cask"
-          />
           <button className="button secondary" onClick={runScan} disabled={loading}>
             {loading ? <Loader2 className="spin" size={18} /> : <RefreshCw size={18} />}
             扫描
@@ -184,15 +182,17 @@ function App() {
             </button>
           ))}
         </div>
-        <label className="search">
-          <Search size={17} />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索名称、版本、路径"
-            aria-label="搜索软件"
-          />
-        </label>
+        {['updates', 'apps', 'sources'].includes(activeTab) ? (
+          <label className="search">
+            <Search size={17} />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="搜索名称、版本、路径"
+              aria-label="搜索软件"
+            />
+          </label>
+        ) : null}
       </section>
 
       {activeTab === 'updates' ? (
@@ -201,21 +201,31 @@ function App() {
           loading={loading}
           onUpgrade={upgradeOne}
           packageProgress={packageProgress}
-          runBrewUpdate={runBrewUpdate}
-          setRunBrewUpdate={setRunBrewUpdate}
         />
-      ) : null}
-
-      {activeTab === 'brew' ? (
-        <BrewPanel scan={scan} query={query} onUpgrade={upgradeOne} packageProgress={packageProgress} />
       ) : null}
 
       {activeTab === 'apps' ? (
         <ApplicationsPanel scan={scan} query={query} onReveal={revealApp} packageProgress={packageProgress} />
       ) : null}
 
-      {activeTab === 'mas' ? (
-        <MasPanel scan={scan} query={query} onUpgrade={upgradeOne} packageProgress={packageProgress} />
+      {activeTab === 'sources' ? (
+        <SourcesPanel scan={scan} query={query} onUpgrade={upgradeOne} packageProgress={packageProgress} />
+      ) : null}
+
+      {activeTab === 'settings' ? (
+        <SettingsPanel
+          includeGreedy={includeGreedy}
+          setIncludeGreedy={setIncludeGreedy}
+          runBrewUpdate={runBrewUpdate}
+          setRunBrewUpdate={setRunBrewUpdate}
+          appearanceMode={appearanceMode}
+          setAppearanceMode={setAppearanceMode}
+          loading={loading}
+          onScan={runScan}
+          onUpgradeAll={upgradeAll}
+          updates={updates}
+          jobs={jobs}
+        />
       ) : null}
 
       {activeTab === 'jobs' ? (
@@ -251,15 +261,14 @@ function Toggle({ checked, onChange, label }) {
   );
 }
 
-function UpdatesPanel({ updates, loading, onUpgrade, packageProgress, runBrewUpdate, setRunBrewUpdate }) {
+function UpdatesPanel({ updates, loading, onUpgrade, packageProgress }) {
   return (
     <section className="panel">
       <div className="panel-head">
         <div>
           <h2>可升级软件</h2>
-          <p>Homebrew 与 Mac App Store 支持自动执行升级；其他 `.app` 会显示在本机应用列表中供手动处理。</p>
+          <p>这里汇总 Homebrew 与 Mac App Store 中可直接执行的升级；扫描和升级策略可在设置中调整。</p>
         </div>
-        <Toggle checked={runBrewUpdate} onChange={setRunBrewUpdate} label="一键升级前先 brew update" />
       </div>
       {loading ? <EmptyState icon={<Loader2 className="spin" />} title="正在扫描本机软件" text="system_profiler 与 brew outdated 可能需要一点时间。" /> : null}
       {!loading && updates.length === 0 ? <EmptyState icon={<CheckCircle2 />} title="没有发现可操作升级" text="如果需要包含自动更新类 cask，请打开 greedy cask 后重新扫描。" /> : null}
@@ -272,12 +281,50 @@ function UpdatesPanel({ updates, loading, onUpgrade, packageProgress, runBrewUpd
   );
 }
 
-function BrewPanel({ scan, query, onUpgrade, packageProgress }) {
+function SourcesPanel({ scan, query, onUpgrade, packageProgress }) {
+  const [source, setSource] = React.useState('brew');
+
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <div>
+          <h2>管理来源</h2>
+          <p>管理来源负责执行升级；本机应用页只展示实际安装的 .app 和来源关系。</p>
+        </div>
+        <div className="segmented" role="tablist" aria-label="管理来源">
+          <button
+            className={source === 'brew' ? 'segment active' : 'segment'}
+            onClick={() => setSource('brew')}
+            role="tab"
+            aria-selected={source === 'brew'}
+          >
+            Homebrew
+          </button>
+          <button
+            className={source === 'mas' ? 'segment active' : 'segment'}
+            onClick={() => setSource('mas')}
+            role="tab"
+            aria-selected={source === 'mas'}
+          >
+            App Store
+          </button>
+        </div>
+      </div>
+      {source === 'brew' ? (
+        <BrewSourceContent scan={scan} query={query} onUpgrade={onUpgrade} packageProgress={packageProgress} />
+      ) : (
+        <AppStoreSourceContent scan={scan} query={query} onUpgrade={onUpgrade} packageProgress={packageProgress} />
+      )}
+    </section>
+  );
+}
+
+function BrewSourceContent({ scan, query, onUpgrade, packageProgress }) {
   const formulae = filterRows(scan?.brew?.formulae ?? [], query);
   const casks = filterRows(scan?.brew?.casks ?? [], query);
 
   return (
-    <section className="panel">
+    <div className="source-content">
       <div className="panel-head">
         <div>
           <h2>Homebrew</h2>
@@ -293,7 +340,7 @@ function BrewPanel({ scan, query, onUpgrade, packageProgress }) {
       <div className="rows compact">
         {casks.map((item) => <PackageRow key={item.id} item={item} progress={packageProgress[item.id]} onUpgrade={() => onUpgrade(item)} />)}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -342,11 +389,11 @@ function ApplicationsPanel({ scan, query, onReveal, packageProgress }) {
   );
 }
 
-function MasPanel({ scan, query, onUpgrade, packageProgress }) {
+function AppStoreSourceContent({ scan, query, onUpgrade, packageProgress }) {
   const apps = filterRows(scan?.mas?.apps ?? [], query);
 
   return (
-    <section className="panel">
+    <div className="source-content">
       <div className="panel-head">
         <div>
           <h2>Mac App Store</h2>
@@ -356,6 +403,75 @@ function MasPanel({ scan, query, onUpgrade, packageProgress }) {
       {scan?.mas?.error ? <InlineWarning text={scan.mas.error} /> : null}
       <div className="rows">
         {apps.map((item) => <PackageRow key={item.id} item={item} progress={packageProgress[item.id]} onUpgrade={() => onUpgrade(item)} />)}
+      </div>
+    </div>
+  );
+}
+
+function SettingsPanel({
+  includeGreedy,
+  setIncludeGreedy,
+  runBrewUpdate,
+  setRunBrewUpdate,
+  appearanceMode,
+  setAppearanceMode,
+  loading,
+  onScan,
+  onUpgradeAll,
+  updates,
+  jobs
+}) {
+  const running = hasRunningJob(jobs);
+
+  return (
+    <section className="panel settings-panel">
+      <div className="panel-head">
+        <div>
+          <h2>设置</h2>
+          <p>集中调整扫描范围、升级策略，以及桌面版专属的后台能力。</p>
+        </div>
+      </div>
+
+      <div className="settings-grid">
+        <section className="settings-section">
+          <h3>外观</h3>
+          <p>默认跟随系统，也可以手动固定为浅色或深色。</p>
+          <div className="segmented appearance-picker" role="radiogroup" aria-label="外观">
+            {appearanceModes.map((mode) => (
+              <button
+                key={mode.id}
+                className={appearanceMode === mode.id ? 'segment active' : 'segment'}
+                onClick={() => setAppearanceMode(mode.id)}
+                role="radio"
+                aria-checked={appearanceMode === mode.id}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="settings-section">
+          <h3>扫描与升级</h3>
+          <p>这些选项会影响顶部扫描按钮、一键升级和每日巡检里的自动升级行为。</p>
+          <Toggle checked={includeGreedy} onChange={setIncludeGreedy} label="扫描 Homebrew 时包含 greedy cask" />
+          <Toggle checked={runBrewUpdate} onChange={setRunBrewUpdate} label="一键升级和自动升级前先执行 brew update" />
+          <div className="settings-actions">
+            <button className="button secondary" onClick={onScan} disabled={loading}>
+              {loading ? <Loader2 className="spin" size={18} /> : <RefreshCw size={18} />}
+              立即扫描
+            </button>
+            <button className="button primary" onClick={onUpgradeAll} disabled={!updates.length || running}>
+              <Zap size={18} />
+              一键升级
+            </button>
+          </div>
+        </section>
+
+        <section className="settings-section subdued">
+          <h3>桌面版设置</h3>
+          <p>每日巡检、开机自动启动和 Mac 软件管家自身更新由原生 App 的设置页提供；Web 备用界面只调整扫描与升级参数。</p>
+        </section>
       </div>
     </section>
   );
@@ -426,9 +542,32 @@ function PackageRow({ item, progress, onUpgrade }) {
           </button>
         </div>
       </div>
-      {progress ? <p className="progress-detail">{progress.detail}</p> : null}
+      {progress ? <ProgressDetail progress={progress} /> : null}
     </article>
   );
+}
+
+function ProgressDetail({ progress }) {
+  if (progress.status === 'failed' && progress.failureSummary) {
+    return (
+      <div className="progress-detail failure-detail">
+        <p><strong>失败原因：</strong>{progress.failureSummary}</p>
+        {progress.recoverySuggestion ? <p><strong>解决方案：</strong>{progress.recoverySuggestion}</p> : null}
+        <button className="link-button copy-button" onClick={() => copyFailureText(progress)}>
+          <Copy size={14} />
+          复制原因
+        </button>
+      </div>
+    );
+  }
+
+  return <p className="progress-detail">{progress.detail}</p>;
+}
+
+async function copyFailureText(progress) {
+  const text = progress.copyText || progress.failureSummary || progress.detail || '';
+  if (!text) return;
+  await navigator.clipboard.writeText(text);
 }
 
 function PackageStatusBadge({ item }) {
@@ -523,15 +662,33 @@ function collectPackageProgress(jobs) {
   for (const job of jobs.slice().reverse()) {
     for (const command of job.commands ?? []) {
       if (!command.packageID) continue;
+      const skipped = command.status === 'queued' && ['failed', 'succeeded'].includes(job.status);
+      const fallback = skipped
+        ? analyzeSkippedCommand(command)
+        : null;
       progress[command.packageID] = {
         packageID: command.packageID,
         packageName: command.packageName,
-        status: command.status,
-        detail: command.status === 'queued' ? '等待升级' : command.display
+        status: skipped ? 'queued' : command.status,
+        detail: command.status === 'queued' ? (fallback?.summary ?? '等待升级') : command.display,
+        failureSummary: command.failureSummary || fallback?.summary || '',
+        recoverySuggestion: command.recoverySuggestion || fallback?.suggestion || '',
+        copyText: command.copyText || fallback?.copyText || ''
       };
     }
   }
   return progress;
+}
+
+function analyzeSkippedCommand(command) {
+  const commandText = command.display || command.packageName || '未知命令';
+  const summary = '这个步骤未开始执行。任务可能被取消、应用退出，或旧版本执行器提前结束。';
+  const suggestion = `重新点击该软件的“升级”，或在终端手动执行：${commandText}`;
+  return {
+    summary,
+    suggestion,
+    copyText: `失败原因：${summary}\n解决方案：${suggestion}\n命令：${commandText}`
+  };
 }
 
 function toUpgradePayload(item) {

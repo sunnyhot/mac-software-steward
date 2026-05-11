@@ -246,7 +246,7 @@ private final class FinishGate: @unchecked Sendable {
 private final class LockedRecentOutput: @unchecked Sendable {
     private let lock = NSLock()
     private var lines: [String] = []
-    private let limit = 8
+    private let limit = 40
 
     func append(stream: String, text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
