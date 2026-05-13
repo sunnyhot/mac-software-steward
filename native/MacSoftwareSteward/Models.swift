@@ -272,3 +272,19 @@ struct JobNotice: Hashable {
     var symbol: String
     var isFailure: Bool
 }
+
+struct UpgradeProgress: Hashable {
+    var completed: Int
+    var total: Int
+    var failed: Int
+    var currentPackage: String?
+
+    var fraction: Double {
+        guard total > 0 else { return 0 }
+        return Double(completed) / Double(total)
+    }
+
+    var isRunning: Bool {
+        completed < total
+    }
+}

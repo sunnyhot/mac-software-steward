@@ -64,6 +64,10 @@ private struct HeaderView: View {
                     .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
             }
 
+            if let progress = model.upgradeProgress, progress.total > 0 {
+                UpgradeProgressBar(progress: progress)
+            }
+
             HStack(spacing: 12) {
                 MetricView(title: "本机应用", value: model.scan?.summary.applications, symbol: "macwindow")
                 MetricView(title: "Brew Formula", value: model.scan?.summary.brewFormulae, symbol: "cube")
@@ -363,6 +367,10 @@ private struct PackageProgressDetail: View {
             } else if progress.status == .running {
                 ProgressView()
                     .progressViewStyle(.linear)
+            } else if progress.status == .succeeded {
+                ProgressView(value: 1.0)
+                    .progressViewStyle(.linear)
+                    .tint(.green)
             }
             if progress.status == .failed && !progress.failureSummary.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
@@ -1128,5 +1136,52 @@ private func statusColor(_ status: JobStatus) -> Color {
     case .queued, .running: return .orange
     case .succeeded: return .green
     case .failed: return .red
+    }
+}
+
+private struct UpgradeProgressBar: View {
+    var progress: UpgradeProgress
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .symbolEffect(.pulse, options: .repeating)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("正在升级 \(progress.completed)/\(progress.total)")
+                            .font(.subheadline.bold())
+                        if let current = progress.currentPackage {
+                            Text("·")
+                                .foregroundStyle(.secondary)
+                            Text(current)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    if progress.failed > 0 {
+                        Text("\(progress.failed) 个失败")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                }
+                Spacer()
+                Text("\(Int(progress.fraction * 100))%")
+                    .font(.system(.title3, design: .rounded, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.accentColor)
+            }
+
+            ProgressView(value: progress.fraction)
+                .progressViewStyle(.linear)
+                .tint(progress.failed > 0 && !progress.isRunning ? .orange : .accentColor)
+        }
+        .padding(12)
+        .background(Color.accentColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.accentColor.opacity(0.15))
+        )
     }
 }
