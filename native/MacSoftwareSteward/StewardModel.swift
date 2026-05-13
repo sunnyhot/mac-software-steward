@@ -455,7 +455,8 @@ final class StewardModel: ObservableObject {
             failureSummary: analysis.summary,
             recoverySuggestion: analysis.suggestion,
             copyText: analysis.copyText,
-            recoveryAction: analysis.action
+            recoveryAction: analysis.action,
+            lastFailedCommand: analysis.command
         )
     }
 
@@ -553,7 +554,7 @@ final class StewardModel: ObservableObject {
             if !trimmed.isEmpty {
                 copyText += "\n最近输出：\n\(trimmed)"
             }
-            return FailureAnalysis(summary: summary, suggestion: suggestion, action: action, copyText: copyText)
+            return FailureAnalysis(summary: summary, suggestion: suggestion, action: action, copyText: copyText, command: command)
         }
 
         if let hint = knownFailureHint(in: trimmed) {
@@ -578,7 +579,7 @@ final class StewardModel: ObservableObject {
             copyText += "\n最近输出：\n\(trimmed)"
         }
 
-        return FailureAnalysis(summary: summary, suggestion: suggestion, action: action, copyText: copyText)
+        return FailureAnalysis(summary: summary, suggestion: suggestion, action: action, copyText: copyText, command: command)
     }
 
     private func knownFailureHint(in output: String) -> FailureHint? {
@@ -674,6 +675,15 @@ final class StewardModel: ObservableObject {
             )
         }
 
+        // 11. sudo 密码/终端问题（mas upgrade 调用 sudo）
+        if lowercased.contains("sudo") && (lowercased.contains("password is required") || lowercased.contains("terminal is required") || lowercased.contains("a password is required") || lowercased.contains("read the password")) {
+            return FailureHint(
+                summary: "系统需要管理员密码才能完成安装，但当前环境无法输入密码。",
+                suggestion: "请打开「终端」App，手动运行上方命令并输入密码完成升级。也可以在「系统设置 > App Store」中检查是否已登录，然后点击「重试」。",
+                action: .retryInTerminal
+            )
+        }
+
         return nil
     }
 
@@ -744,6 +754,7 @@ private struct FailureAnalysis {
     var suggestion: String
     var action: FailureActionType?
     var copyText: String
+    var command: String
 }
 
 private struct FailureHint {

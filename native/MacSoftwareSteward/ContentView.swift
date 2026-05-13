@@ -550,6 +550,20 @@ private struct PackageProgressDetail: View {
                 }
                 .font(.caption)
             }
+
+        case .retryInTerminal:
+            Button {
+                // Copy just the command to clipboard, then open Terminal.app
+                let cmd = progress.lastFailedCommand.isEmpty ? progress.copyText : progress.lastFailedCommand
+                copyToPasteboard(cmd)
+                if let terminalURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Terminal") {
+                    NSWorkspace.shared.open(terminalURL)
+                }
+            } label: {
+                Label("在终端运行", systemImage: "terminal")
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
         }
     }
 

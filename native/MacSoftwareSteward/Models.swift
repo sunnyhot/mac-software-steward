@@ -247,6 +247,7 @@ enum FailureActionType: String, Hashable {
     case rescan         /// 重新扫描
     case checkNetwork   /// 检查网络
     case freeDisk       /// 释放磁盘空间
+    case retryInTerminal /// 在终端中手动运行
 }
 
 struct PackageUpgradeProgress: Hashable {
@@ -258,6 +259,7 @@ struct PackageUpgradeProgress: Hashable {
     var recoverySuggestion = ""
     var copyText = ""
     var recoveryAction: FailureActionType? = nil
+    var lastFailedCommand = ""
     var updatedAt = Date()
     /// 下载进度百分比（0.0 ~ 1.0），nil 表示无法获取
     var downloadFraction: Double? = nil
