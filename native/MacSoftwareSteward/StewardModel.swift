@@ -24,6 +24,7 @@ final class StewardModel: ObservableObject {
 
     private var activeJobCount = 0
     private var pendingJobQueue: [(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool)] = []
+    @Published var upgradeProgress: UpgradeProgress?
 
     init() {
         refreshDailyInspectionStatus()
@@ -273,6 +274,14 @@ final class StewardModel: ObservableObject {
         markQueued(steps)
 
         activeJobCount += 1
+        let packageSteps = steps.filter { $0.packageID != nil }
+        upgradeProgress = UpgradeProgress(
+            completed: 0,
+            total: packageSteps.count,
+            failed: 0,
+            currentPackage: nil
+        )
+
         Task {
             await runJob(id: id, steps: steps, rescanAfterSuccess: rescanAfterSuccess)
             activeJobCount -= 1
@@ -322,10 +331,14 @@ final class StewardModel: ObservableObject {
 
         var failedCount = 0
         var firstErrorCode: Int32?
+        var completedSteps = 0
 
         for step in steps {
             let command = step.command
             markRunning(step)
+            if step.packageName != nil {
+                updateUpgradeProgress(currentPackage: step.packageName)
+            }
             appendLog(id: id, stream: "command", text: "$ \(command.display)")
             let result = await CommandRunner.runStreamingDetailed(command.executable, arguments: command.arguments) { stream, text in
                 Task { @MainActor in
@@ -346,6 +359,11 @@ final class StewardModel: ObservableObject {
             } else {
                 markSucceeded(step)
             }
+
+            if step.packageID != nil {
+                completedSteps += 1
+                updateUpgradeProgress(completed: completedSteps, failed: failedCount, currentPackage: nil)
+            }
         }
 
         updateJob(id) {
@@ -360,6 +378,20 @@ final class StewardModel: ObservableObject {
             }
             $0.finishedAt = Date()
         }
+
+        upgradeProgress = nil
+
+        if rescanAfterSuccess {
+            await scanSoftware()
+        }
+    }
+
+    private func updateUpgradeProgress(completed: Int? = nil, failed: Int? = nil, currentPackage: String? = nil) {
+        guard var progress = upgradeProgress else { return }
+        if let completed { progress.completed = completed }
+        if let failed { progress.failed = failed }
+        if let currentPackage { progress.currentPackage = currentPackage }
+        upgradeProgress = progress
     }
 
     private func updateJob(_ id: UUID, mutate: (inout UpgradeJob) -> Void) {
