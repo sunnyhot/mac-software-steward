@@ -89,8 +89,7 @@ private struct MenuBarUpgradeMenu: View {
         Text(summaryText)
 
         Button {
-            openWindow(id: "main")
-            NSApp.activate(ignoringOtherApps: true)
+            openMainWindowOnce()
         } label: {
             Label("打开 Mac 软件管家", systemImage: "macwindow")
         }
@@ -119,6 +118,24 @@ private struct MenuBarUpgradeMenu: View {
 
         Button("退出") {
             NSApplication.shared.terminate(nil)
+        }
+    }
+
+    /// 单例打开主窗口：已有窗口时仅前置，避免重复创建
+    private func openMainWindowOnce() {
+        if let window = NSApp.windows.first(where: {
+            $0.styleMask.contains(.titled) &&
+            $0.styleMask.contains(.resizable) &&
+            ($0.isVisible || $0.isMiniaturized)
+        }) {
+            if window.isMiniaturized {
+                window.deminiaturize(nil)
+            }
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        } else {
+            openWindow(id: "main")
+            NSApp.activate(ignoringOtherApps: true)
         }
     }
 
