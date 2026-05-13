@@ -154,10 +154,10 @@ enum SoftwareScanner {
             }
         }
 
-        let outdatedById = Dictionary(uniqueKeysWithValues: outdated.stdout
+        let outdatedById = Dictionary(outdated.stdout
             .components(separatedBy: .newlines)
             .compactMap(parseMasOutdatedLine)
-            .map { ($0.appId, $0) })
+            .map { ($0.appId, $0) }, uniquingKeysWith: { _, last in last })
 
         let apps: [MasApp] = list.stdout
             .components(separatedBy: .newlines)
@@ -270,10 +270,10 @@ enum SoftwareScanner {
         outdated: [[String: Any]],
         kind: String
     ) -> [BrewPackage] {
-        let outdatedByName = Dictionary(uniqueKeysWithValues: outdated.compactMap { item -> (String, [String: Any])? in
+        let outdatedByName = Dictionary(outdated.compactMap { item -> (String, [String: Any])? in
             guard let name = item["name"] as? String else { return nil }
             return (name, item)
-        })
+        }, uniquingKeysWith: { _, last in last })
 
         return installed.map { item in
             let pending = outdatedByName[item.name]
@@ -374,7 +374,7 @@ enum SoftwareScanner {
 
     private static func classify(_ apps: [AppItem], brew: BrewScan, mas: MasScan) -> [AppItem] {
         let caskNames = Set(brew.casks.map { normalizeToken($0.name) })
-        let masByName = Dictionary(uniqueKeysWithValues: mas.apps.map { (normalizeToken($0.name), $0) })
+        let masByName = Dictionary(mas.apps.map { (normalizeToken($0.name), $0) }, uniquingKeysWith: { _, last in last })
 
         return apps.map { app in
             var next = app
