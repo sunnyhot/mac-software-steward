@@ -229,8 +229,7 @@ private struct UpdateRow: View {
                     .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(package.name)
-                        .font(.headline)
+                    CopyableText(text: package.name)
                     Text("\(package.source) · 当前 \(versionText(package.installedVersion)) · 可升级版本 \(availableVersionText(for: package))")
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
@@ -398,12 +397,6 @@ private struct PackageProgressDetail: View {
         }
         .padding(.leading, 46)
     }
-
-    private func copyToPasteboard(_ text: String) {
-        guard !text.isEmpty else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-    }
 }
 
 private enum SourcePane: String, CaseIterable, Identifiable {
@@ -524,8 +517,7 @@ private struct ApplicationRow: View {
                     .frame(width: 32, height: 32)
                     .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(app.name)
-                        .font(.headline)
+                    CopyableText(text: app.name)
                     Text(app.path)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -1088,6 +1080,43 @@ private struct EmptyStateView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 280)
     }
+}
+
+private struct CopyableText: View {
+    var text: String
+    var font: Font = .headline
+    @State private var didCopy = false
+
+    var body: some View {
+        Text(text)
+            .font(font)
+            .help("点击复制名称")
+            .onTapGesture {
+                copyToPasteboard(text)
+                didCopy = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    didCopy = false
+                }
+            }
+            .overlay(alignment: .top) {
+                if didCopy {
+                    Text("已复制")
+                        .font(.caption2)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 4))
+                        .offset(y: -20)
+                        .transition(.opacity)
+                }
+            }
+    }
+}
+
+private func copyToPasteboard(_ text: String) {
+    guard !text.isEmpty else { return }
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(text, forType: .string)
 }
 
 private func versionText(_ value: String) -> String {
