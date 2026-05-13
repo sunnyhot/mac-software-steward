@@ -6,9 +6,10 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             List(AppTab.allCases, selection: $model.selectedTab) { tab in
-                Label(tab.rawValue, systemImage: tab.symbol)
+                SidebarRow(tab: tab, selectedTab: model.selectedTab)
                     .tag(tab)
             }
+            .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 180, ideal: 210)
         } detail: {
             VStack(spacing: 0) {
@@ -20,6 +21,28 @@ struct ContentView: View {
             }
             .background(Color(nsColor: .windowBackgroundColor))
         }
+    }
+}
+
+private struct SidebarRow: View {
+    let tab: AppTab
+    let selectedTab: AppTab?
+    @State private var isHovered = false
+
+    var body: some View {
+        Label(tab.rawValue, systemImage: tab.symbol)
+            .padding(.vertical, 4)
+            .padding(.horizontal, 8)
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                isHovered = hovering
+            }
+            .background(
+                (isHovered && tab != selectedTab)
+                    ? Color.primary.opacity(0.08)
+                    : Color.clear
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 
