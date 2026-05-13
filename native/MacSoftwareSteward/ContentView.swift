@@ -251,12 +251,21 @@ private struct UpdateRow: View {
                     PackageStatusBadge(package: package)
                 }
 
-                Button {
-                    Task { await model.upgrade(package) }
-                } label: {
-                    Label("升级", systemImage: "play")
+                if progress?.status == .failed {
+                    Button {
+                        Task { await model.retryPackage(package.id) }
+                    } label: {
+                        Label("重试", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(model.hasRunningJob)
+                } else {
+                    Button {
+                        Task { await model.upgrade(package) }
+                    } label: {
+                        Label("升级", systemImage: "play")
+                    }
+                    .disabled(!package.upgradeable || model.hasRunningJob)
                 }
-                .disabled(!package.upgradeable || model.hasRunningJob)
             }
 
             if let progress {
@@ -353,6 +362,7 @@ private struct PackageProgressBadge: View {
 }
 
 private struct PackageProgressDetail: View {
+    @EnvironmentObject private var model: StewardModel
     var progress: PackageUpgradeProgress
 
     var body: some View {
@@ -365,19 +375,41 @@ private struct PackageProgressDetail: View {
                     .progressViewStyle(.linear)
             }
             if progress.status == .failed && !progress.failureSummary.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("失败原因：\(progress.failureSummary)")
-                        .foregroundStyle(.red)
+                VStack(alignment: .leading, spacing: 8) {
+                    // 失败原因
+                    Label {
+                        Text(progress.failureSummary)
+                            .fontWeight(.medium)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                    }
+                    .foregroundStyle(.red)
+
+                    // 恢复建议
                     if !progress.recoverySuggestion.isEmpty {
-                        Text("解决方案：\(progress.recoverySuggestion)")
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "lightbulb.fill")
+                                .foregroundStyle(.yellow)
+                                .font(.caption)
+                            Text(progress.recoverySuggestion)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
-                    Button {
-                        copyToPasteboard(progress.copyText)
-                    } label: {
-                        Label("复制原因", systemImage: "doc.on.doc")
+
+                    // 操作按钮
+                    HStack(spacing: 10) {
+                        if let action = progress.recoveryAction {
+                            actionButton(for: action)
+                        }
+                        Button {
+                            copyToPasteboard(progress.copyText)
+                        } label: {
+                            Label("复制详情", systemImage: "doc.on.doc")
+                        }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                        .disabled(progress.copyText.isEmpty)
                     }
-                    .buttonStyle(.borderless)
-                    .disabled(progress.copyText.isEmpty)
                 }
                 .font(.caption)
                 .textSelection(.enabled)
@@ -397,6 +429,79 @@ private struct PackageProgressDetail: View {
             }
         }
         .padding(.leading, 46)
+    }
+
+    // MARK: - Action Buttons
+
+    @ViewBuilder
+    private func actionButton(for action: FailureActionType) -> some View {
+        switch action {
+        case .retry, .quitAndRetry, .reimport, .cleanup, .repairPerms:
+            Button {
+                Task { await model.retryPackage(progress.packageID) }
+            } label: {
+                Label(actionLabel(for: action), systemImage: actionIcon(for: action))
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+
+        case .rescan:
+            Button {
+                Task { await model.scanSoftware() }
+            } label: {
+                Label("重新扫描", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+
+        case .openLog:
+            Button {
+                model.selectedTab = .jobs
+            } label: {
+                Label("查看日志", systemImage: "terminal")
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+
+        case .checkNetwork:
+            Button {
+                Task { await model.retryPackage(progress.packageID) }
+            } label: {
+                Label("重试", systemImage: "wifi")
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+
+        case .freeDisk:
+            if let url = URL(string: "x-apple.systempreferences:com.apple.settings.Storage") {
+                Link(destination: url) {
+                    Label("清理空间", systemImage: "arrow.forward.circle")
+                }
+                .font(.caption)
+            }
+        }
+    }
+
+    private func actionLabel(for action: FailureActionType) -> String {
+        switch action {
+        case .retry: return "重试"
+        case .quitAndRetry: return "关闭后重试"
+        case .reimport: return "覆盖重装"
+        case .cleanup: return "清理并重试"
+        case .repairPerms: return "重试"
+        default: return "重试"
+        }
+    }
+
+    private func actionIcon(for action: FailureActionType) -> String {
+        switch action {
+        case .retry: return "arrow.clockwise"
+        case .quitAndRetry: return "xmark.circle"
+        case .reimport: return "square.and.arrow.down.on.square"
+        case .cleanup: return "trash.circle"
+        case .repairPerms: return "lock.shield"
+        default: return "arrow.clockwise"
+        }
     }
 
     private func copyToPasteboard(_ text: String) {

@@ -236,6 +236,19 @@ struct UpgradeStep: Hashable {
     var packageName: String?
 }
 
+/// 用户可执行的恢复操作类型
+enum FailureActionType: String, Hashable {
+    case retry          /// 重试升级
+    case openLog        /// 查看完整日志
+    case quitAndRetry   /// 退出应用后重试
+    case reimport       /// 重新导入/覆盖安装
+    case cleanup        /// 清理缓存后重试
+    case repairPerms    /// 修复权限后重试
+    case rescan         /// 重新扫描
+    case checkNetwork   /// 检查网络
+    case freeDisk       /// 释放磁盘空间
+}
+
 struct PackageUpgradeProgress: Hashable {
     var packageID: String
     var packageName: String
@@ -244,6 +257,7 @@ struct PackageUpgradeProgress: Hashable {
     var failureSummary = ""
     var recoverySuggestion = ""
     var copyText = ""
+    var recoveryAction: FailureActionType? = nil
     var updatedAt = Date()
 }
 

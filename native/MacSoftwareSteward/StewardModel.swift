@@ -91,6 +91,28 @@ final class StewardModel: ObservableObject {
         }
     }
 
+    /// 重试升级某个包（清除失败状态后重新执行）
+    func retryPackage(_ packageID: String) async {
+        // 清除旧的失败状态
+        packageProgress.removeValue(forKey: packageID)
+        // 在 availableUpdates 或 scan 中找到对应的包
+        guard let scan else { return }
+        let allPackages = (scan.brew.formulae.filter { $0.upgradeable }.map { UpdatablePackage.brew($0) })
+            + (scan.brew.casks.filter { $0.upgradeable }.map { UpdatablePackage.brew($0) })
+            + (scan.mas.apps.filter { $0.upgradeable }.map { UpdatablePackage.mas($0) })
+        guard let package = allPackages.first(where: { $0.id == packageID }) else {
+            // 包不在可升级列表中了，重新扫描
+            await scanSoftware()
+            return
+        }
+        await upgrade(package)
+    }
+
+    /// 清除某个包的失败状态
+    func clearPackageFailure(_ packageID: String) {
+        packageProgress.removeValue(forKey: packageID)
+    }
+
     func upgradeAll() async {
         do {
             var steps: [UpgradeStep] = []
@@ -347,7 +369,8 @@ final class StewardModel: ObservableObject {
             detail: analysis.summary,
             failureSummary: analysis.summary,
             recoverySuggestion: analysis.suggestion,
-            copyText: analysis.copyText
+            copyText: analysis.copyText,
+            recoveryAction: analysis.action
         )
     }
 
@@ -363,64 +386,120 @@ final class StewardModel: ObservableObject {
         let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
         let summary: String
         let suggestion: String
+        let action: FailureActionType?
 
         if let hint = knownFailureHint(in: trimmed) {
             summary = hint.summary
             suggestion = hint.suggestion
+            action = hint.action
         } else if let errorLine = firstErrorLine(in: trimmed) {
-            summary = "退出码 \(code)：\(errorLine)"
-            suggestion = "点击“查看日志”查看完整任务日志；也可以在终端手动执行并复制完整输出：\(command)"
+            summary = errorLine
+            suggestion = "请点击「查看日志」了解详情，或尝试重新升级。"
+            action = .retry
         } else {
-            summary = "退出码 \(code)，但最近输出里没有捕获到明确错误行。"
-            suggestion = "点击“查看日志”查看完整任务日志；也可以在终端手动执行并复制完整输出：\(command)"
+            summary = "升级过程中遇到未知错误。"
+            suggestion = "请点击「查看日志」查看完整信息，或稍后再试一次。"
+            action = .openLog
         }
 
-        var copyText = """
-        失败原因：\(summary)
-        解决方案：\(suggestion)
-        命令：\(command)
-        """
+        var copyText = ""
+        copyText += "失败原因：\(summary)\n"
+        copyText += "解决方案：\(suggestion)\n"
+        copyText += "命令：\(command)"
         if !trimmed.isEmpty {
             copyText += "\n最近输出：\n\(trimmed)"
         }
 
-        return FailureAnalysis(summary: summary, suggestion: suggestion, copyText: copyText)
+        return FailureAnalysis(summary: summary, suggestion: suggestion, action: action, copyText: copyText)
     }
 
     private func knownFailureHint(in output: String) -> FailureHint? {
         let lowercased = output.lowercased()
-        if lowercased.contains("permission denied") || lowercased.contains("operation not permitted") || lowercased.contains("eacces") {
-            return FailureHint(
-                summary: "权限不足，Homebrew 无法写入目标文件或应用目录。",
-                suggestion: "确认当前用户有权限写入目标路径；必要时修复 Homebrew 权限后重试。"
-            )
-        }
-        if lowercased.contains("already exists") || lowercased.contains("it seems there is already an app") || lowercased.contains("app already exists") {
-            return FailureHint(
-                summary: "目标应用已存在，Homebrew Cask 不想覆盖现有 App。",
-                suggestion: "退出该应用后，先备份或移除现有 App，再重试；也可以在终端中手动执行 brew reinstall --cask --force。"
-            )
-        }
-        if lowercased.contains("checksum mismatch") || lowercased.contains("sha256 mismatch") {
-            return FailureHint(
-                summary: "下载文件校验失败，可能是缓存损坏或上游包已更新。",
-                suggestion: "先运行 brew cleanup，并删除对应下载缓存后重试。"
-            )
-        }
+
+        // 1. 应用正在运行
         if lowercased.contains("is currently running") || lowercased.contains("app is running") || lowercased.contains("application is running") {
             return FailureHint(
-                summary: "应用仍在运行，升级器无法替换它。",
-                suggestion: "完全退出该应用及后台进程，然后重新升级。"
+                summary: "该应用正在运行中，无法被替换。",
+                suggestion: "请先关闭该应用（可在 Dock 栏右键退出，或按 ⌘+Q），然后点击「重试」。",
+                action: .quitAndRetry
             )
         }
+
+        // 2. 应用已存在（Cask 覆盖冲突）
+        if lowercased.contains("already exists") || lowercased.contains("it seems there is already an app") || lowercased.contains("app already exists") {
+            return FailureHint(
+                summary: "目标位置已存在同名应用，无法直接覆盖安装。",
+                suggestion: "请先关闭该应用，然后点击「重试」重新覆盖安装。",
+                action: .reimport
+            )
+        }
+
+        // 3. 权限不足
+        if lowercased.contains("permission denied") || lowercased.contains("operation not permitted") || lowercased.contains("eacces") {
+            return FailureHint(
+                summary: "没有写入权限，无法完成安装。",
+                suggestion: "请尝试点击「重试」。如果仍然失败，可在「系统设置 > 隐私与安全性」中检查 Homebrew 的磁盘访问权限。",
+                action: .repairPerms
+            )
+        }
+
+        // 4. 校验失败（缓存损坏）
+        if lowercased.contains("checksum mismatch") || lowercased.contains("sha256 mismatch") {
+            return FailureHint(
+                summary: "下载的文件校验不通过，可能是缓存损坏。",
+                suggestion: "请点击「重试」，系统会自动清理缓存后重新下载。",
+                action: .cleanup
+            )
+        }
+
+        // 5. 网络/下载超时
+        if lowercased.contains("timeout") || lowercased.contains("timed out") || lowercased.contains("connection refused") || lowercased.contains("could not resolve") || lowercased.contains("network") || (lowercased.contains("curl") && lowercased.contains("error")) {
+            return FailureHint(
+                summary: "网络连接出现问题，下载失败。",
+                suggestion: "请检查网络连接是否正常，然后点击「重试」。如果使用代理，请确认代理配置正确。",
+                action: .checkNetwork
+            )
+        }
+
+        // 6. 磁盘空间不足
+        if lowercased.contains("no space left") || lowercased.contains("disk full") || lowercased.contains("not enough space") || lowercased.contains("enospc") {
+            return FailureHint(
+                summary: "磁盘空间不足，无法完成下载和安装。",
+                suggestion: "请清理磁盘空间后再试。可以在「系统设置 > 通用 > 储存空间」中查看和清理。",
+                action: .freeDisk
+            )
+        }
+
+        // 7. 版本冲突/依赖问题
+        if lowercased.contains("version conflict") || lowercased.contains("conflicting") || (lowercased.contains("depends on") && lowercased.contains("not installed")) || lowercased.contains("broken") || lowercased.contains("dependency") {
+            return FailureHint(
+                summary: "存在依赖关系问题，无法直接升级。",
+                suggestion: "请点击「重试」。如果持续失败，可以先在「管理来源」页面更新 Homebrew 本身，再重新扫描。",
+                action: .rescan
+            )
+        }
+
+        // 8. 文件/工具不存在
         if lowercased.contains("no such file or directory") || lowercased.contains("not found") {
             return FailureHint(
-                summary: "升级命令引用的文件或工具不存在。",
-                suggestion: "重新扫描后再试；如果仍失败，请确认 Homebrew 和相关 cask 仍然安装。"
+                summary: "所需的文件或工具未找到。",
+                suggestion: "请点击「重新扫描」刷新软件列表后再试。如果仍然失败，该软件可能已被卸载。",
+                action: .rescan
             )
         }
+
+        // 9. 下载被中断
+        if lowercased.contains("download") && (lowercased.contains("interrupted") || lowercased.contains("failed") || lowercased.contains("incomplete")) {
+            return FailureHint(
+                summary: "下载过程中被中断，文件不完整。",
+                suggestion: "请点击「重试」重新下载。",
+                action: .retry
+            )
+        }
+
         return nil
     }
+
 
     private func firstErrorLine(in output: String) -> String? {
         output
@@ -486,12 +565,14 @@ final class StewardModel: ObservableObject {
 private struct FailureAnalysis {
     var summary: String
     var suggestion: String
+    var action: FailureActionType?
     var copyText: String
 }
 
 private struct FailureHint {
     var summary: String
     var suggestion: String
+    var action: FailureActionType
 }
 
 enum StewardError: LocalizedError {
