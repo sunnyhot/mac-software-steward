@@ -129,6 +129,31 @@ enum SoftwareScanner {
         let list = await listTask
         let outdated = await outdatedTask
 
+        // Check for mas crashes (signal termination)
+        var masErrors: [String] = []
+        if list.wasSignaled {
+            if let signalDesc = list.signalDescription {
+                masErrors.append("mas list 命令崩溃：\(signalDesc)")
+            } else {
+                masErrors.append("mas list 命令异常退出 (exit code \(list.code))")
+            }
+            // If mas crashed, it's not usable - report as unavailable
+            if list.code == 139 || list.code == 134 {
+                // SIGSEGV or SIGABRT - mas needs App Store sign-in or is incompatible
+                return MasScan(
+                    available: false,
+                    path: masPath,
+                    error: "mas CLI 运行崩溃，可能需要在 App Store 中登录，或当前系统版本不兼容。请尝试在终端手动运行 `mas list` 检查。",
+                    apps: []
+                )
+            }
+        }
+        if outdated.wasSignaled {
+            if let signalDesc = outdated.signalDescription {
+                masErrors.append("mas outdated 命令崩溃：\(signalDesc)")
+            }
+        }
+
         let outdatedById = Dictionary(uniqueKeysWithValues: outdated.stdout
             .components(separatedBy: .newlines)
             .compactMap(parseMasOutdatedLine)
@@ -148,12 +173,13 @@ enum SoftwareScanner {
             }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
-        let errors = [list, outdated]
+        let stdErrors = [list, outdated]
             .filter { !$0.ok && !$0.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .map(\.stderr)
-            .joined(separator: "\n")
+        
+        masErrors.append(contentsOf: stdErrors)
 
-        return MasScan(available: true, path: masPath, error: errors, apps: apps)
+        return MasScan(available: true, path: masPath, error: masErrors.joined(separator: "\n"), apps: apps)
     }
 
     private static func scanApplicationsByFind(reason: String) async -> ApplicationsScan {

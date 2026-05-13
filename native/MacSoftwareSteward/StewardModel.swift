@@ -464,7 +464,69 @@ final class StewardModel: ObservableObject {
         guard progress.status == .running else { return }
         progress.detail = "[\(stream)] \(text)"
         progress.updatedAt = Date()
+
+        // Parse download progress from Homebrew output
+        // brew download patterns:
+        //   "Downloading https://... 12.3%"  or  "Downloading https://... 100.0%"
+        //   "Already downloaded: /path/to/file"
+        //   "curl: ...  12.3%  2.1M  --:-- ETA"
+        let downloadInfo = parseDownloadProgress(from: text)
+        if let fraction = downloadInfo.fraction {
+            progress.downloadFraction = fraction
+        }
+        if let sizeText = downloadInfo.sizeText {
+            progress.downloadSizeText = sizeText
+        }
+        if let speedText = downloadInfo.speedText {
+            progress.downloadSpeedText = speedText
+        }
+        // Reset download progress if we see non-download output
+        if !text.lowercased().contains("download") && !text.contains("%") && !text.contains("curl") {
+            // Keep existing download info - don't reset
+        }
+
         packageProgress[packageID] = progress
+    }
+
+    /// Parse brew/curl download progress from command output
+    private func parseDownloadProgress(from text: String) -> (fraction: Double?, sizeText: String?, speedText: String?) {
+        let lowercased = text.lowercased()
+
+        // Pattern 1: "Downloading https://... 45.6%"
+        if lowercased.contains("downloading") {
+            // Extract percentage
+            if let pctRange = text.range(of: #"(\d+\.?\d*)\s*%"#, options: .regularExpression) {
+                let pctStr = text[pctRange].replacingOccurrences(of: "%", with: "").trimmingCharacters(in: .whitespaces)
+                if let pct = Double(pctStr) {
+                    let fraction = min(max(pct / 100.0, 0), 1.0)
+                    return (fraction, nil, nil)
+                }
+            }
+            // "Downloading" without percentage means download just started
+            return (0.0, nil, nil)
+        }
+
+        // Pattern 2: "Already downloaded" → download complete
+        if lowercased.contains("already downloaded") {
+            return (1.0, nil, nil)
+        }
+
+        // Pattern 3: curl progress "  45.6  12.3M  2.1M/s  0:00:05"
+        // curl -# output: "###  45.6%"
+        if let pctMatch = text.range(of: #"(\d+\.?\d*)\s*%"#, options: .regularExpression) {
+            let pctStr = text[pctMatch].replacingOccurrences(of: "%", with: "").trimmingCharacters(in: .whitespaces)
+            if let pct = Double(pctStr), pct > 0 && pct <= 100 {
+                let fraction = pct / 100.0
+                // Try to extract speed info
+                var speed: String? = nil
+                if let speedMatch = text.range(of: #"(\d+\.?\d*\s*[KMGT]?B/s)"#, options: .regularExpression) {
+                    speed = String(text[speedMatch])
+                }
+                return (fraction, nil, speed)
+            }
+        }
+
+        return (nil, nil, nil)
     }
 
     private func failureAnalysis(command: String, code: Int32, output: String) -> FailureAnalysis {
@@ -472,6 +534,27 @@ final class StewardModel: ObservableObject {
         let summary: String
         let suggestion: String
         let action: FailureActionType?
+
+        // Check for process crash (signal termination)
+        let signalNum = code - 128
+        if code < 0 || (signalNum > 0 && signalNum < 32) {
+            if code < 0 {
+                summary = "升级命令超时被终止。"
+                suggestion = "请点击「重试」，如果持续超时，可能是网络或依赖问题。"
+            } else {
+                summary = "升级命令崩溃（信号 \(signalNum)），进程异常退出。"
+                suggestion = "请尝试在终端手动运行 `\(command)` 检查具体错误，然后点击「重试」。如果持续崩溃，该工具可能与当前系统版本不兼容。"
+            }
+            action = .retry
+            var copyText = ""
+            copyText += "失败原因：\(summary)\n"
+            copyText += "解决方案：\(suggestion)\n"
+            copyText += "命令：\(command)"
+            if !trimmed.isEmpty {
+                copyText += "\n最近输出：\n\(trimmed)"
+            }
+            return FailureAnalysis(summary: summary, suggestion: suggestion, action: action, copyText: copyText)
+        }
 
         if let hint = knownFailureHint(in: trimmed) {
             summary = hint.summary
@@ -573,7 +656,16 @@ final class StewardModel: ObservableObject {
             )
         }
 
-        // 9. 下载被中断
+        // 9. mas CLI 崩溃
+        if lowercased.contains("signal") || lowercased.contains("sigsegv") || lowercased.contains("sigabrt") || lowercased.contains("崩溃") {
+            return FailureHint(
+                summary: "命令进程崩溃，可能是工具与当前系统版本不兼容。",
+                suggestion: "请尝试在终端手动运行该命令检查，然后点击「重试」。如果是 mas CLI 崩溃，可能需要在 App Store 中登录，或更新 mas 到最新版本。",
+                action: .retry
+            )
+        }
+
+        // 10. 下载被中断
         if lowercased.contains("download") && (lowercased.contains("interrupted") || lowercased.contains("failed") || lowercased.contains("incomplete")) {
             return FailureHint(
                 summary: "下载过程中被中断，文件不完整。",

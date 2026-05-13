@@ -284,14 +284,14 @@ private struct UpdateRow: View {
                     } label: {
                         Label("重试", systemImage: "arrow.clockwise")
                     }
-                    .disabled(model.hasRunningJob)
+                    .disabled(model.isPackageActive(package.id))
                 } else {
                     Button {
                         Task { await model.upgrade(package) }
                     } label: {
                         Label("升级", systemImage: "play")
                     }
-                    .disabled(!package.upgradeable || model.hasRunningJob)
+                    .disabled(!package.upgradeable || model.isPackageActive(package.id))
                 }
             }
 
@@ -397,13 +397,53 @@ private struct PackageProgressDetail: View {
             if progress.status == .queued {
                 ProgressView(value: 0.15)
                     .progressViewStyle(.linear)
+                Text("等待升级")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             } else if progress.status == .running {
-                ProgressView()
-                    .progressViewStyle(.linear)
+                if let fraction = progress.downloadFraction, fraction > 0 {
+                    // Determinate progress bar with download info
+                    VStack(alignment: .leading, spacing: 4) {
+                        ProgressView(value: fraction)
+                            .progressViewStyle(.linear)
+                            .tint(.accentColor)
+                        HStack(spacing: 12) {
+                            Text("\(Int(fraction * 100))%")
+                                .font(.caption.bold())
+                                .monospacedDigit()
+                                .foregroundStyle(Color.accentColor)
+                            if let sizeText = progress.downloadSizeText {
+                                Label(sizeText, systemImage: "arrow.down.circle")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if let speedText = progress.downloadSpeedText {
+                                Label(speedText, systemImage: "gauge.with.dots.needle.33percent")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } else {
+                    // Indeterminate progress (no download info yet)
+                    VStack(alignment: .leading, spacing: 4) {
+                        ProgressView()
+                            .progressViewStyle(.linear)
+                        Text(progress.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(3)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                    }
+                }
             } else if progress.status == .succeeded {
                 ProgressView(value: 1.0)
                     .progressViewStyle(.linear)
                     .tint(.green)
+                Text("升级完成")
+                    .font(.caption)
+                    .foregroundStyle(.green)
             }
             if progress.status == .failed && !progress.failureSummary.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {

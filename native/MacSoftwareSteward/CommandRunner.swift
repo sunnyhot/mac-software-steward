@@ -5,11 +5,63 @@ struct CommandResult {
     var code: Int32
     var stdout: String
     var stderr: String
+
+    /// Whether the process was terminated by a signal (crash)
+    var wasSignaled: Bool {
+        code < 0 || code > 128
+    }
+
+    /// Human-readable signal description if the process was killed by a signal
+    var signalDescription: String? {
+        if code < 0 {
+            return "进程超时被终止"
+        }
+        let signalNum = code - 128
+        if signalNum > 0 && signalNum < 32 {
+            switch signalNum {
+            case 1: return "进程被挂起 (SIGHUP)"
+            case 2: return "进程被中断 (SIGINT)"
+            case 6: return "进程异常中止 (SIGABRT)"
+            case 9: return "进程被强杀 (SIGKILL)"
+            case 11: return "进程段错误崩溃 (SIGSEGV)"
+            case 13: return "管道破裂 (SIGPIPE)"
+            case 15: return "进程被终止 (SIGTERM)"
+            default: return "进程被信号终止 (信号 \(signalNum))"
+            }
+        }
+        return nil
+    }
 }
 
 struct StreamingCommandResult {
     var code: Int32
     var recentOutput: String
+    /// Whether the process was terminated by a signal (crash)
+    var wasSignaled: Bool {
+        code < 0 || code > 128
+    }
+    /// Human-readable signal description if the process was killed by a signal
+    var signalDescription: String? {
+        if code < 0 {
+            // Process was terminated by us (timeout)
+            return "进程超时被终止"
+        }
+        // On Unix, exit code 128+signal means killed by signal
+        let signalNum = code - 128
+        if signalNum > 0 && signalNum < 32 {
+            switch signalNum {
+            case 1: return "进程被挂起 (SIGHUP)"
+            case 2: return "进程被中断 (SIGINT)"
+            case 6: return "进程异常中止 (SIGABRT)"
+            case 9: return "进程被强杀 (SIGKILL)"
+            case 11: return "进程段错误崩溃 (SIGSEGV)"
+            case 13: return "管道破裂 (SIGPIPE)"
+            case 15: return "进程被终止 (SIGTERM)"
+            default: return "进程被信号终止 (信号 \(signalNum))"
+            }
+        }
+        return nil
+    }
 }
 
 enum CommandRunner {

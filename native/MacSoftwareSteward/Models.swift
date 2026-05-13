@@ -259,6 +259,12 @@ struct PackageUpgradeProgress: Hashable {
     var copyText = ""
     var recoveryAction: FailureActionType? = nil
     var updatedAt = Date()
+    /// 下载进度百分比（0.0 ~ 1.0），nil 表示无法获取
+    var downloadFraction: Double? = nil
+    /// 下载大小描述（如 "12.3 MB / 45.6 MB"）
+    var downloadSizeText: String? = nil
+    /// 下载速度描述（如 "2.1 MB/s"）
+    var downloadSpeedText: String? = nil
 }
 
 struct LogLine: Identifiable, Hashable {
