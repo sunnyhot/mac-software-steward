@@ -18,6 +18,12 @@ final class StewardModel: ObservableObject {
     @Published var dailyLaunchAgentPath = DailyInspectionScheduler.launchAgentURL.path
     @Published var dailyLogPath = DailyInspectionScheduler.logURL.path
     @Published var packageProgress: [String: PackageUpgradeProgress] = [:]
+    @Published var maxConcurrentUpgrades: Int = UserDefaults.standard.object(forKey: "maxConcurrentUpgrades") as? Int ?? 3 {
+        didSet { UserDefaults.standard.set(maxConcurrentUpgrades, forKey: "maxConcurrentUpgrades") }
+    }
+
+    private var activeJobCount = 0
+    private var pendingJobQueue: [(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool)] = []
 
     init() {
         refreshDailyInspectionStatus()
@@ -28,7 +34,10 @@ final class StewardModel: ObservableObject {
         return (scan.brew.formulae.filter(\.upgradeable).map(UpdatablePackage.brew)
             + scan.brew.casks.filter(\.upgradeable).map(UpdatablePackage.brew)
             + scan.mas.apps.filter(\.upgradeable).map(UpdatablePackage.mas))
-            .filter { packageProgress[$0.id]?.status != .succeeded }
+            .filter { package in
+                let status = packageProgress[package.id]?.status
+                return status != .succeeded && status != .running && status != .queued
+            }
     }
 
     var hasRunningJob: Bool {
@@ -58,17 +67,21 @@ final class StewardModel: ObservableObject {
     }
 
     var upgradeAllHelpText: String {
-        if hasRunningJob {
-            return "已有升级任务正在运行，请先查看任务日志。"
-        }
         if availableUpdates.isEmpty {
             return "没有可自动升级的项目。"
         }
-        return "升级 \(availableUpdates.count) 个可管理软件。"
+        return "升级 \(availableUpdates.count) 个可管理软件（已跳过正在升级的项）。"
     }
 
     var canInstallMasCLI: Bool {
         scan?.brew.available == true && scan?.mas.available == false
+    }
+
+    func isPackageActive(_ id: String) -> Bool {
+        if let status = packageProgress[id]?.status {
+            return status == .queued || status == .running
+        }
+        return false
     }
 
     func scanSoftware() async {
@@ -81,9 +94,10 @@ final class StewardModel: ObservableObject {
     }
 
     func upgrade(_ package: UpdatablePackage) async {
+        guard !isPackageActive(package.id) else { return }
         do {
             let command = try await command(for: package)
-            startJob(label: "升级 \(package.name)", steps: [
+            enqueueJob(label: "升级 \(package.name)", steps: [
                 UpgradeStep(command: command, packageID: package.id, packageName: package.name)
             ], rescanAfterSuccess: true)
         } catch {
@@ -95,10 +109,12 @@ final class StewardModel: ObservableObject {
         do {
             var steps: [UpgradeStep] = []
             let brewUpdates = availableUpdates.compactMap { package -> BrewPackage? in
+                guard !isPackageActive(package.id) else { return nil }
                 if case .brew(let brewPackage) = package, brewPackage.upgradeable { return brewPackage }
                 return nil
             }
             let masUpdates = availableUpdates.compactMap { package -> MasApp? in
+                guard !isPackageActive(package.id) else { return nil }
                 if case .mas(let app) = package, app.upgradeable { return app }
                 return nil
             }
@@ -126,7 +142,7 @@ final class StewardModel: ObservableObject {
                 throw StewardError.message("没有可升级的可管理软件。")
             }
 
-            startJob(label: "一键升级可管理软件", steps: steps, rescanAfterSuccess: true)
+            enqueueJob(label: "一键升级可管理软件", steps: steps, rescanAfterSuccess: true)
             selectedTab = .updates
         } catch {
             errorMessage = error.localizedDescription
@@ -234,9 +250,45 @@ final class StewardModel: ObservableObject {
         let id = job.id
         markQueued(steps)
 
+        activeJobCount += 1
         Task {
             await runJob(id: id, steps: steps, rescanAfterSuccess: rescanAfterSuccess)
+            activeJobCount -= 1
+            scheduleRescanAfterJobCompletion(rescanAfterSuccess: rescanAfterSuccess)
+            dequeueNext()
         }
+    }
+
+    private func enqueueJob(label: String, steps: [UpgradeStep], rescanAfterSuccess: Bool = false) {
+        let maxSlots = maxConcurrentUpgrades <= 0 ? Int.max : maxConcurrentUpgrades
+        if activeJobCount < maxSlots {
+            startJob(label: label, steps: steps, rescanAfterSuccess: rescanAfterSuccess)
+        } else {
+            let job = UpgradeJob(label: label, commands: steps.map(\.command.display))
+            jobs.insert(job, at: 0)
+            markQueued(steps)
+            pendingJobQueue.append((id: job.id, steps: steps, rescanAfterSuccess: rescanAfterSuccess))
+        }
+    }
+
+    private func dequeueNext() {
+        guard !pendingJobQueue.isEmpty else { return }
+        let maxSlots = maxConcurrentUpgrades <= 0 ? Int.max : maxConcurrentUpgrades
+        guard activeJobCount < maxSlots else { return }
+        let next = pendingJobQueue.removeFirst()
+        // Update the queued job's steps — markQueued was already called
+        activeJobCount += 1
+        Task {
+            await runJob(id: next.id, steps: next.steps, rescanAfterSuccess: next.rescanAfterSuccess)
+            activeJobCount -= 1
+            scheduleRescanAfterJobCompletion(rescanAfterSuccess: next.rescanAfterSuccess)
+            dequeueNext()
+        }
+    }
+
+    private func scheduleRescanAfterJobCompletion(rescanAfterSuccess: Bool) {
+        guard rescanAfterSuccess, !hasRunningJob, pendingJobQueue.isEmpty else { return }
+        Task { await scanSoftware() }
     }
 
     private func runJob(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool) async {
@@ -285,10 +337,6 @@ final class StewardModel: ObservableObject {
                 $0.log.append(LogLine(stream: "system", text: "完成"))
             }
             $0.finishedAt = Date()
-        }
-
-        if rescanAfterSuccess {
-            await scanSoftware()
         }
     }
 
