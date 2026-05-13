@@ -52,7 +52,7 @@ private struct HeaderView: View {
                     Label(model.hasRunningJob ? "升级中" : "一键升级", systemImage: model.hasRunningJob ? "hourglass" : "bolt.fill")
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(model.availableUpdates.isEmpty || model.hasRunningJob)
+                .disabled(model.availableUpdates.isEmpty)
                 .help(model.upgradeAllHelpText)
             }
 
@@ -256,7 +256,7 @@ private struct UpdateRow: View {
                 } label: {
                     Label("升级", systemImage: "play")
                 }
-                .disabled(!package.upgradeable || model.hasRunningJob)
+                .disabled(!package.upgradeable || model.isPackageActive(package.id))
             }
 
             if let progress {
@@ -652,6 +652,8 @@ private struct SettingsView: View {
                     GreedyCaskRow()
                     Divider().padding(.vertical, 2)
                     BrewUpdateRow()
+                    Divider().padding(.vertical, 2)
+                    MaxConcurrentUpgradesRow()
                 }
 
                 SettingsGroupBox {
@@ -801,6 +803,30 @@ private struct BrewUpdateRow: View {
             Toggle("", isOn: $model.runBrewUpdate)
                 .toggleStyle(.switch)
                 .labelsHidden()
+        }
+    }
+}
+
+private struct MaxConcurrentUpgradesRow: View {
+    @EnvironmentObject private var model: StewardModel
+    private let options = [1, 2, 3, 5, 10, 0] // 0 = unlimited
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("并行升级数量")
+                Text("同时执行的最大升级任务数，超出自动排队")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Picker("", selection: $model.maxConcurrentUpgrades) {
+                ForEach(options, id: \.self) { value in
+                    Text(value == 0 ? "不限" : "\(value)").tag(value)
+                }
+            }
+            .frame(width: 100)
+            .labelsHidden()
         }
     }
 }
