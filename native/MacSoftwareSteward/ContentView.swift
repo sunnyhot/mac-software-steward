@@ -204,8 +204,9 @@ private struct JobNoticeView: View {
 private struct UpdatesView: View {
     @EnvironmentObject private var model: StewardModel
 
+    /// 显示所有可升级包（包含正在升级中的，以显示进度）
     var updates: [UpdatablePackage] {
-        filter(model.availableUpdates, query: model.query) { package in
+        filter(model.allUpgradeablePackages, query: model.query) { package in
             "\(package.name) \(package.source) \(package.installedVersion) \(package.currentVersion)"
         }
     }

@@ -59,17 +59,17 @@ struct MacSoftwareStewardApp: App {
         if model.isScanning {
             return "扫描中"
         }
+        let totalCount = model.allUpgradeablePackages.count
         if model.hasRunningJob {
-            return "升级中 \(model.availableUpdates.count)"
+            return "升级中 · 剩余 \(model.availableUpdates.count) 待升级"
         }
-        let count = model.availableUpdates.count
-        return count > 0 ? "\(count) 个更新" : "已最新"
+        return totalCount > 0 ? "\(totalCount) 个更新" : "已最新"
     }
 
     private var menuBarSymbol: String {
         if model.isScanning { return "magnifyingglass" }
         if model.hasRunningJob { return "arrow.triangle.2.circlepath" }
-        return model.availableUpdates.isEmpty ? "checkmark.circle" : "arrow.down.circle.fill"
+        return model.allUpgradeablePackages.isEmpty ? "checkmark.circle" : "arrow.down.circle.fill"
     }
 
     private var currentAppearanceMode: AppearanceMode {
@@ -144,10 +144,11 @@ private struct MenuBarUpgradeMenu: View {
             return "正在扫描软件更新"
         }
         if model.hasRunningJob {
-            return "正在升级，剩余可升级 \(model.availableUpdates.count) 项"
+            return "正在升级，剩余 \(model.availableUpdates.count) 项待升级"
         }
-        return model.availableUpdates.isEmpty
+        let totalCount = model.allUpgradeablePackages.count
+        return totalCount == 0
             ? "当前没有可升级软件"
-            : "发现 \(model.availableUpdates.count) 个可升级软件"
+            : "发现 \(totalCount) 个可升级软件"
     }
 }

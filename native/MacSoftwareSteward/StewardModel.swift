@@ -30,15 +30,20 @@ final class StewardModel: ObservableObject {
         refreshDailyInspectionStatus()
     }
 
-    var availableUpdates: [UpdatablePackage] {
+    /// 所有可升级的包（用于 UI 显示，包含正在升级的包以显示进度）
+    var allUpgradeablePackages: [UpdatablePackage] {
         guard let scan else { return [] }
-        return (scan.brew.formulae.filter(\.upgradeable).map(UpdatablePackage.brew)
+        return scan.brew.formulae.filter(\.upgradeable).map(UpdatablePackage.brew)
             + scan.brew.casks.filter(\.upgradeable).map(UpdatablePackage.brew)
-            + scan.mas.apps.filter(\.upgradeable).map(UpdatablePackage.mas))
-            .filter { package in
-                let status = packageProgress[package.id]?.status
-                return status != .succeeded && status != .running && status != .queued
-            }
+            + scan.mas.apps.filter(\.upgradeable).map(UpdatablePackage.mas)
+    }
+
+    /// 未在升级中的可升级包（用于 upgradeAll，排除 queued/running/succeeded）
+    var availableUpdates: [UpdatablePackage] {
+        allUpgradeablePackages.filter { package in
+            let status = packageProgress[package.id]?.status
+            return status != .succeeded && status != .running && status != .queued
+        }
     }
 
     var hasRunningJob: Bool {
