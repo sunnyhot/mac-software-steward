@@ -1109,7 +1109,36 @@ private struct ManualCheckUpdateRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("手动检查更新")
-                if updater.updateAvailable {
+                if updater.isInstalling {
+                    // 下载进度显示
+                    if let fraction = updater.downloadFraction {
+                        ProgressView(value: fraction) {
+                            Text("正在下载 v\(updater.latestVersion)...")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } currentValueLabel: {
+                            HStack(spacing: 4) {
+                                Text("\(Int(fraction * 100))%")
+                                if let size = updater.downloadedSizeText {
+                                    Text("·")
+                                    Text(size)
+                                }
+                                if let speed = updater.downloadSpeedText {
+                                    Text("·")
+                                    Text(speed)
+                                }
+                            }
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        }
+                        .progressViewStyle(.linear)
+                        .frame(maxWidth: 260)
+                    } else {
+                        Text(updater.progress)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else if updater.updateAvailable {
                     Text("发现新版本 \(updater.latestVersion)，可前往下载安装")
                         .font(.caption)
                         .foregroundStyle(.orange)
@@ -1127,14 +1156,20 @@ private struct ManualCheckUpdateRow: View {
             }
             .disabled(updater.isChecking || updater.isInstalling)
 
-            if updater.updateAvailable {
+            if updater.updateAvailable && !updater.isInstalling {
                 Button {
                     Task { await updater.downloadInstallAndRestart() }
                 } label: {
-                    Label(updater.isInstalling ? "安装中" : "下载安装", systemImage: "square.and.arrow.down")
+                    Label("下载安装", systemImage: "square.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(updater.isInstalling)
+            }
+
+            if updater.isInstalling {
+                // 安装中显示取消按钮（实际无法取消下载，但可显示进度）
+                ProgressView()
+                    .controlSize(.small)
             }
         }
     }

@@ -26,11 +26,21 @@ final class AppUpdateModel: ObservableObject {
     @Published var releaseNotes = ""
     @Published var updateAvailable = false
     @Published var progress = ""
+    /// 下载进度百分比（0.0 ~ 1.0），nil 表示未在下载或无法获取
+    @Published var downloadFraction: Double? = nil
+    /// 已下载字节数（人类可读，如 "1.2 MB"）
+    @Published var downloadedSizeText: String? = nil
+    /// 下载速度（人类可读，如 "3.5 MB/s"）
+    @Published var downloadSpeedText: String? = nil
 
     private var latestRelease: GitHubRelease?
     private let session: URLSession
     private var periodicTask: Task<Void, Never>?
     private var lastCheckTime: Date?
+    /// 用于跟踪下载进度
+    private var downloadStartTime: Date?
+    private var lastDownloadedBytes: Int64 = 0
+    private var lastDownloadSpeedTime: Date?
 
     private static let automaticChecksKey = "AppUpdateAutomaticChecksEnabled"
     private static let automaticDownloadsKey = "AppUpdateAutomaticDownloadsEnabled"
@@ -120,10 +130,17 @@ final class AppUpdateModel: ObservableObject {
         }
 
         isInstalling = true
+        downloadFraction = 0
+        downloadedSizeText = nil
+        downloadSpeedText = nil
+        downloadStartTime = Date()
+        lastDownloadedBytes = 0
+        lastDownloadSpeedTime = Date()
         progress = "正在下载 \(asset.name)..."
 
         do {
             let downloaded = try await download(asset: asset)
+            downloadFraction = nil
             progress = "正在解压安装包..."
             let extractedApp = try await extractApp(from: downloaded)
             progress = "正在准备重启并安装..."
@@ -133,6 +150,9 @@ final class AppUpdateModel: ObservableObject {
             status = "安装更新失败：\(error.localizedDescription)"
             progress = ""
             isInstalling = false
+            downloadFraction = nil
+            downloadedSizeText = nil
+            downloadSpeedText = nil
         }
     }
 
@@ -192,7 +212,34 @@ final class AppUpdateModel: ObservableObject {
         }
         let workDirectory = try makeWorkDirectory()
         let destination = workDirectory.appendingPathComponent(asset.name)
-        let (temporaryURL, response) = try await session.download(from: url)
+
+        // 使用 delegate-based URLSession 获取下载进度
+        let delegate = DownloadProgressDelegate { [weak self] bytesWritten, totalWritten, totalExpected in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if totalExpected > 0 {
+                    self.downloadFraction = Double(totalWritten) / Double(totalExpected)
+                }
+                self.downloadedSizeText = ByteCountFormatter.string(fromByteCount: totalWritten, countStyle: .file)
+                // 计算下载速度（每秒采样一次避免抖动）
+                let now = Date()
+                if let lastTime = self.lastDownloadSpeedTime,
+                   now.timeIntervalSince(lastTime) >= 1.0 {
+                    let bytesDelta = totalWritten - self.lastDownloadedBytes
+                    let timeDelta = now.timeIntervalSince(lastTime)
+                    if timeDelta > 0 {
+                        let bytesPerSecond = Double(bytesDelta) / timeDelta
+                        self.downloadSpeedText = ByteCountFormatter.string(fromByteCount: Int64(bytesPerSecond), countStyle: .file) + "/s"
+                    }
+                    self.lastDownloadedBytes = totalWritten
+                    self.lastDownloadSpeedTime = now
+                }
+            }
+        }
+        let downloadSession = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+        defer { downloadSession.finishTasksAndInvalidate() }
+
+        let (temporaryURL, response) = try await downloadSession.download(for: URLRequest(url: url))
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw AppUpdateError.message("下载安装包失败。")
         }
@@ -413,4 +460,52 @@ private func versionParts(_ version: String) -> [Int] {
     version
         .split { !$0.isNumber }
         .map { Int($0) ?? 0 }
+}
+
+/// URLSession 下载进度委托
+private final class DownloadProgressDelegate: NSObject, URLSessionTaskDelegate {
+    private let onProgress: (Int64, Int64, Int64) -> Void
+
+    init(onProgress: @escaping (Int64, Int64, Int64) -> Void) {
+        self.onProgress = onProgress
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: Error?
+    ) {
+        // 错误由 async/await 处理，此处无需额外处理
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didSendBodyData bytesSent: Int64,
+        totalBytesSent: Int64,
+        totalBytesExpectedToSend: Int64
+    ) {
+        // 上传进度，不处理
+    }
+}
+
+// URLSessionDownloadDelegate 的进度回调在 extension 中实现
+extension DownloadProgressDelegate: URLSessionDownloadDelegate {
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        // 文件移动由调用方处理
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        onProgress(bytesWritten, totalBytesWritten, totalBytesExpectedToWrite)
+    }
 }
