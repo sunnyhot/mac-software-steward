@@ -25,6 +25,8 @@ final class StewardModel: ObservableObject {
     private var activeJobCount = 0
     private var pendingJobQueue: [(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool)] = []
     @Published var upgradeProgress: UpgradeProgress?
+    /// 用户关闭过的失败任务 ID，关闭后不再显示失败通知（直到新任务失败）
+    @Published var dismissedFailureJobID: UUID?
 
     init() {
         refreshDailyInspectionStatus()
@@ -60,7 +62,7 @@ final class StewardModel: ObservableObject {
             )
         }
 
-        if let job = jobs.first(where: { $0.status == .failed }) {
+        if let job = jobs.first(where: { $0.status == .failed }), job.id != dismissedFailureJobID {
             return JobNotice(
                 title: "上次升级失败",
                 detail: failureSummary(for: job),
@@ -131,6 +133,13 @@ final class StewardModel: ObservableObject {
     /// 清除某个包的失败状态
     func clearPackageFailure(_ packageID: String) {
         packageProgress.removeValue(forKey: packageID)
+    }
+
+    /// 关闭失败通知面板（不删除任务记录，仅隐藏通知）
+    func dismissFailureNotice() {
+        if let job = jobs.first(where: { $0.status == .failed }) {
+            dismissedFailureJobID = job.id
+        }
     }
 
     func upgradeAll() async {

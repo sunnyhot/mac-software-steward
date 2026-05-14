@@ -194,6 +194,16 @@ private struct JobNoticeView: View {
                     .truncationMode(.middle)
             }
             Spacer()
+            if notice.isFailure {
+                Button {
+                    model.dismissFailureNotice()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            }
             Button {
                 model.selectedTab = .jobs
             } label: {
