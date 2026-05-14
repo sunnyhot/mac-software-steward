@@ -25,6 +25,8 @@ final class AppUpdateModel: ObservableObject {
     @Published var releaseURL = ""
     @Published var releaseNotes = ""
     @Published var updateAvailable = false
+    /// 是否显示应用更新弹框
+    @Published var showUpdateDialog = false
     @Published var progress = ""
     /// 下载进度百分比（0.0 ~ 1.0），nil 表示未在下载或无法获取
     @Published var downloadFraction: Double? = nil
@@ -64,6 +66,7 @@ final class AppUpdateModel: ObservableObject {
         guard automaticChecksEnabled else { return }
         await checkForUpdates(automatic: true)
         if updateAvailable, automaticDownloadsEnabled {
+            showUpdateDialog = false
             await downloadInstallAndRestart()
         }
         startPeriodicCheck()
@@ -88,6 +91,9 @@ final class AppUpdateModel: ObservableObject {
             status = updateAvailable
                 ? "发现新版本 \(release.versionString)。"
                 : "当前已是最新版本 \(currentVersion)。"
+            if updateAvailable {
+                showUpdateDialog = true
+            }
         } catch {
             if !automatic {
                 status = "检查更新失败：\(error.localizedDescription)"
@@ -97,6 +103,7 @@ final class AppUpdateModel: ObservableObject {
         isChecking = false
 
         if automatic, updateAvailable, automaticDownloadsEnabled {
+            showUpdateDialog = false
             await downloadInstallAndRestart()
         }
     }
