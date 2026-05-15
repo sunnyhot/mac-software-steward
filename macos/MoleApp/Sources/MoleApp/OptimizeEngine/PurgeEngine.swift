@@ -60,20 +60,21 @@ actor PurgeEngine {
 
     /// Check if sudo is available without password prompt
     private func checkSudoAvailability() {
-        Task.detached {
+        Task { [weak self = self] in
+            guard let self = self else { return }
             do {
-                let result = try await self.processManager.executeWithSudoOutput(command: "true", arguments: [])
-                await MainActor.run {
-                    self.sudoAvailable = true
-                    self.logger.info("Sudo is available without password")
-                }
+                _ = try await self.processManager.executeWithSudoOutput(command: "true", arguments: [])
+                await self.setSudoAvailable(true)
+                self.logger.info("Sudo is available without password")
             } catch {
-                await MainActor.run {
-                    self.sudoAvailable = false
-                    self.logger.warning("Sudo requires password or is not available")
-                }
+                await self.setSudoAvailable(false)
+                self.logger.warning("Sudo requires password or is not available")
             }
         }
+    }
+
+    private func setSudoAvailable(_ value: Bool) {
+        sudoAvailable = value
     }
 
     /// Request sudo permission from user

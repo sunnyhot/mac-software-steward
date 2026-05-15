@@ -83,6 +83,34 @@ actor SafeRemover {
         return failures
     }
 
+    /// Remove CleanItem artifacts and return results
+    func batchRemove(_ items: [CleanItem]) async -> [CleanResult] {
+        var results: [CleanResult] = []
+
+        for item in items {
+            do {
+                let url = URL(fileURLWithPath: item.path)
+                try await remove(at: url)
+
+                results.append(CleanResult(
+                    item: item,
+                    success: true,
+                    bytesFreed: item.size,
+                    error: nil
+                ))
+            } catch {
+                results.append(CleanResult(
+                    item: item,
+                    success: false,
+                    bytesFreed: 0,
+                    error: error.localizedDescription
+                ))
+            }
+        }
+
+        return results
+    }
+
     /// Check if a path contains sensitive data
     func containsSensitiveData(at url: URL) -> Bool {
         let path = url.path.lowercased()

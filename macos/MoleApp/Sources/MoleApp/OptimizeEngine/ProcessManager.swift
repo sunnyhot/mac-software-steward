@@ -7,7 +7,7 @@ actor ProcessManager {
 
     /// Execute a command without sudo
     func execute(command: String, arguments: [String]) async throws {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             var hasResumed = false
 
             let resumeOnce: (ProcessError?) -> Void = { error in
@@ -59,7 +59,7 @@ actor ProcessManager {
 
     /// Execute a command with sudo privileges
     func executeWithSudo(command: String, arguments: [String]) async throws {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             var hasResumed = false
 
             let resumeOnce: (ProcessError?) -> Void = { error in
@@ -111,7 +111,7 @@ actor ProcessManager {
 
     /// Execute a command and return its output
     func executeWithOutput(command: String, arguments: [String]) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, any Error>) in
             var hasResumed = false
 
             let resumeOnce: (Result<String, ProcessError>) -> Void = { result in
@@ -166,7 +166,7 @@ actor ProcessManager {
 
     /// Execute a command with sudo and return its output
     func executeWithSudoOutput(command: String, arguments: [String]) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, any Error>) in
             var hasResumed = false
 
             let resumeOnce: (Result<String, ProcessError>) -> Void = { result in

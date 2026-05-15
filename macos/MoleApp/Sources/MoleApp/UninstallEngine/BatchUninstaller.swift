@@ -155,7 +155,7 @@ actor BatchUninstaller {
     }
 
     private func unloadLaunchAgent(at url: URL) async throws {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             var hasResumed = false
 
             func resumeOnce() {
@@ -209,7 +209,7 @@ actor BatchUninstaller {
 
     private func removeLoginItemLegacy(for app: AppInfo) async throws {
         // Use LSSharedFileList for older macOS versions
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             var hasResumed = false
 
             func resumeOnce() {
@@ -267,7 +267,7 @@ actor BatchUninstaller {
 
     private func unregisterBundle(for app: AppInfo) async throws {
         // Use lsregister to unregister the app bundle
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             var hasResumed = false
 
             func resumeOnce() {
@@ -299,7 +299,7 @@ actor BatchUninstaller {
     }
 
     private func refreshLaunchServices() async throws {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             var hasResumed = false
 
             func resumeOnce() {

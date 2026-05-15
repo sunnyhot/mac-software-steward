@@ -17,7 +17,10 @@ actor UninstallEngineTests {
                 let firstApp = apps[0]
                 print("✓ Sample app: \(firstApp.name) (\(firstApp.id))")
                 print("  - Path: \(firstApp.path.path)")
-                print("  - Size: \(ByteFormat.string(firstApp.size))")
+                let formatter = ByteCountFormatter()
+                formatter.allowedUnits = [.useMB, .useGB]
+                formatter.countStyle = .file
+                print("  - Size: \(formatter.string(fromByteCount: firstApp.size))")
                 print("  - Version: \(firstApp.version)")
             }
         } catch {
