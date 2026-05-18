@@ -221,7 +221,10 @@ final class AppUpdateModel: ObservableObject {
         let destination = workDirectory.appendingPathComponent(asset.name)
 
         // 使用 delegate-based URLSession 获取下载进度
-        let delegate = DownloadProgressDelegate { [weak self] bytesWritten, totalWritten, totalExpected in
+        // 注意：didFinishDownloadingTo 必须移动文件，否则系统会删除临时文件
+        let stableTempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MacSoftwareSteward-\(UUID().uuidString).zip")
+        let delegate = DownloadProgressDelegate(stableSaveURL: stableTempURL) { [weak self] bytesWritten, totalWritten, totalExpected in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 if totalExpected > 0 {
@@ -246,11 +249,15 @@ final class AppUpdateModel: ObservableObject {
         let downloadSession = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
         defer { downloadSession.finishTasksAndInvalidate() }
 
-        let (temporaryURL, response) = try await downloadSession.download(for: URLRequest(url: url))
+        let (_, response) = try await downloadSession.download(for: URLRequest(url: url))
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw AppUpdateError.message("下载安装包失败。")
         }
-        try FileManager.default.moveItem(at: temporaryURL, to: destination)
+        // 使用 delegate 在 didFinishDownloadingTo 中保存的文件，而非已删除的临时文件
+        guard FileManager.default.fileExists(atPath: stableTempURL.path) else {
+            throw AppUpdateError.message("下载文件保存失败：临时文件不存在。")
+        }
+        try FileManager.default.moveItem(at: stableTempURL, to: destination)
         return destination
     }
 
@@ -470,40 +477,26 @@ private func versionParts(_ version: String) -> [Int] {
 }
 
 /// URLSession 下载进度委托
-private final class DownloadProgressDelegate: NSObject, URLSessionTaskDelegate {
+/// 注意：必须实现 didFinishDownloadingTo 并移动文件到 stableSaveURL，
+/// 否则系统会在 delegate 回调返回后删除临时文件，导致 async download(for:) 返回的 URL 无效。
+private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
     private let onProgress: (Int64, Int64, Int64) -> Void
+    /// didFinishDownloadingTo 中保存文件的稳定位置
+    private let stableSaveURL: URL
 
-    init(onProgress: @escaping (Int64, Int64, Int64) -> Void) {
+    init(stableSaveURL: URL, onProgress: @escaping (Int64, Int64, Int64) -> Void) {
+        self.stableSaveURL = stableSaveURL
         self.onProgress = onProgress
+        super.init()
     }
 
-    func urlSession(
-        _ session: URLSession,
-        task: URLSessionTask,
-        didCompleteWithError error: Error?
-    ) {
-        // 错误由 async/await 处理，此处无需额外处理
-    }
-
-    func urlSession(
-        _ session: URLSession,
-        task: URLSessionTask,
-        didSendBodyData bytesSent: Int64,
-        totalBytesSent: Int64,
-        totalBytesExpectedToSend: Int64
-    ) {
-        // 上传进度，不处理
-    }
-}
-
-// URLSessionDownloadDelegate 的进度回调在 extension 中实现
-extension DownloadProgressDelegate: URLSessionDownloadDelegate {
     func urlSession(
         _ session: URLSession,
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
-        // 文件移动由调用方处理
+        // 必须在方法返回前移动文件，否则系统删除临时文件
+        try? FileManager.default.moveItem(at: location, to: stableSaveURL)
     }
 
     func urlSession(
@@ -514,5 +507,13 @@ extension DownloadProgressDelegate: URLSessionDownloadDelegate {
         totalBytesExpectedToWrite: Int64
     ) {
         onProgress(bytesWritten, totalBytesWritten, totalBytesExpectedToWrite)
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: Error?
+    ) {
+        // 错误由 async/await 处理，此处无需额外处理
     }
 }
