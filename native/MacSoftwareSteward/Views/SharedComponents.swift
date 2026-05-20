@@ -100,6 +100,7 @@ struct CopyableText: View {
     var text: String
     var font: Font = .headline
     @State private var didCopy = false
+    @State private var hideTask: Task<Void, Never>?
 
     var body: some View {
         Text(text)
@@ -107,9 +108,12 @@ struct CopyableText: View {
             .help("点击复制名称")
             .onTapGesture {
                 copyToPasteboard(text)
-                didCopy = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                    didCopy = false
+                hideTask?.cancel()
+                withAnimation { didCopy = true }
+                hideTask = Task {
+                    try? await Task.sleep(nanoseconds: 1_200_000_000)
+                    guard !Task.isCancelled else { return }
+                    withAnimation { didCopy = false }
                 }
             }
             .overlay(alignment: .top) {
