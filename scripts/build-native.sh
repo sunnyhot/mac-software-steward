@@ -20,13 +20,18 @@ while IFS= read -r -d '' f; do
   MoleApp_SwiftFiles+=("$f")
 done < <(find "$ROOT_DIR/macOS/MoleApp/Sources/MoleApp" -name '*.swift' ! -name '*Tests.swift' -print0 2>/dev/null)
 
+App_SwiftFiles=()
+while IFS= read -r -d '' f; do
+  App_SwiftFiles+=("$f")
+done < <(find "$ROOT_DIR/native/MacSoftwareSteward" -name '*.swift' -print0)
+
 xcrun swiftc \
   -O \
   -target arm64-apple-macosx14.0 \
   -sdk "$SDK_PATH" \
   -framework SwiftUI \
   -framework AppKit \
-  "$ROOT_DIR"/native/MacSoftwareSteward/*.swift \
+  "${App_SwiftFiles[@]}" \
   "${MoleApp_SwiftFiles[@]}" \
   -o "$MACOS_DIR/$APP_NAME"
 
