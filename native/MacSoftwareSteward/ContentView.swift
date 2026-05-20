@@ -1212,6 +1212,8 @@ private struct AutoDownloadUpdateRow: View {
 private struct JobsView: View {
     @EnvironmentObject private var model: StewardModel
     @State private var selectedJobId: UUID?
+    @State private var cachedLogLines: [LogLine] = []
+    @State private var cachedJobId: UUID?
 
     var selectedJob: UpgradeJob? {
         let id = selectedJobId ?? model.jobs.first?.id
@@ -1245,15 +1247,46 @@ private struct JobsView: View {
                     }
                 }
 
-                ScrollView {
-                    Text(selectedJob?.log.map { "[\($0.stream)] \($0.text)" }.joined(separator: "\n") ?? "等待任务输出...")
-                        .font(.system(.body, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 2) {
+                            if cachedLogLines.isEmpty {
+                                Text("等待任务输出...")
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                ForEach(cachedLogLines) { line in
+                                    Text("[\(line.stream)] \(line.text)")
+                                        .font(.system(.body, design: .monospaced))
+                                        .textSelection(.enabled)
+                                        .id(line.id)
+                                }
+                            }
+                        }
                         .padding(12)
+                    }
+                    .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                    .onChange(of: cachedLogLines.count) {
+                        if let lastId = cachedLogLines.last?.id {
+                            withAnimation {
+                                proxy.scrollTo(lastId, anchor: .bottom)
+                            }
+                        }
+                    }
                 }
-                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
             }
+        }
+        .onChange(of: selectedJob?.id) { newId in
+            if newId != cachedJobId {
+                cachedJobId = newId
+                cachedLogLines = selectedJob?.log ?? []
+            }
+        }
+        .onChange(of: selectedJob?.log.count) { _ in
+            cachedLogLines = selectedJob?.log ?? []
+        }
+        .onAppear {
+            cachedLogLines = selectedJob?.log ?? []
+            cachedJobId = selectedJob?.id
         }
     }
 }
