@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 
 @MainActor
@@ -28,21 +29,45 @@ final class StewardModel: ObservableObject {
     /// 用户关闭过的失败任务 ID，关闭后不再显示失败通知（直到新任务失败）
     @Published var dismissedFailureJobID: UUID?
 
+    /// 缓存的可升级包列表（数据变化时一次性计算，避免 body 重绘时重复 filter+map）
+    @Published var allUpgradeablePackages: [UpdatablePackage] = []
+    /// 缓存的可用更新列表（排除 queued/running/succeeded）
+    @Published var availableUpdates: [UpdatablePackage] = []
+
+    /// 防抖后的搜索词（300ms 内无新输入才更新）
+    @Published var debouncedQuery = ""
+    private var cancellables = Set<AnyCancellable>()
+
     init() {
         refreshDailyInspectionStatus()
+        setupDebounce()
     }
 
-    /// 所有可升级的包（用于 UI 显示，包含正在升级的包以显示进度）
-    var allUpgradeablePackages: [UpdatablePackage] {
-        guard let scan else { return [] }
-        return scan.brew.formulae.filter(\.upgradeable).map(UpdatablePackage.brew)
+    private func setupDebounce() {
+        $query
+            .removeDuplicates()
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .assign(to: &$debouncedQuery)
+    }
+
+    /// 根据 scan 结果一次性计算 allUpgradeablePackages 和 availableUpdates
+    private func recalculateUpgradeablePackages() {
+        guard let scan else {
+            allUpgradeablePackages = []
+            availableUpdates = []
+            return
+        }
+
+        allUpgradeablePackages = scan.brew.formulae.filter(\.upgradeable).map(UpdatablePackage.brew)
             + scan.brew.casks.filter(\.upgradeable).map(UpdatablePackage.brew)
             + scan.mas.apps.filter(\.upgradeable).map(UpdatablePackage.mas)
+
+        recalculateAvailableUpdates()
     }
 
-    /// 未在升级中的可升级包（用于 upgradeAll，排除 queued/running/succeeded）
-    var availableUpdates: [UpdatablePackage] {
-        allUpgradeablePackages.filter { package in
+    /// 根据 allUpgradeablePackages + packageProgress 重新计算可用更新
+    private func recalculateAvailableUpdates() {
+        availableUpdates = allUpgradeablePackages.filter { package in
             let status = packageProgress[package.id]?.status
             return status != .succeeded && status != .running && status != .queued
         }
@@ -98,6 +123,7 @@ final class StewardModel: ObservableObject {
         let result = await SoftwareScanner.scanAll(includeGreedy: includeGreedy)
         scan = result
         prunePackageProgress(keeping: result)
+        recalculateUpgradeablePackages()
         isScanning = false
     }
 
@@ -117,6 +143,7 @@ final class StewardModel: ObservableObject {
     func retryPackage(_ packageID: String) async {
         // 清除旧的失败状态
         packageProgress.removeValue(forKey: packageID)
+        recalculateAvailableUpdates()
         // 在 availableUpdates 或 scan 中找到对应的包
         guard let scan else { return }
         let allPackages = (scan.brew.formulae.filter { $0.upgradeable }.map { UpdatablePackage.brew($0) })
@@ -133,6 +160,7 @@ final class StewardModel: ObservableObject {
     /// 清除某个包的失败状态
     func clearPackageFailure(_ packageID: String) {
         packageProgress.removeValue(forKey: packageID)
+        recalculateAvailableUpdates()
     }
 
     /// 关闭失败通知面板（不删除任务记录，仅隐藏通知）
@@ -432,6 +460,7 @@ final class StewardModel: ObservableObject {
                 detail: "等待升级"
             )
         }
+        recalculateAvailableUpdates()
     }
 
     private func markRunning(_ step: UpgradeStep) {
@@ -442,6 +471,7 @@ final class StewardModel: ObservableObject {
             status: .running,
             detail: step.command.display
         )
+        recalculateAvailableUpdates()
     }
 
     private func markSucceeded(_ step: UpgradeStep) {
@@ -452,6 +482,7 @@ final class StewardModel: ObservableObject {
             status: .succeeded,
             detail: "升级完成"
         )
+        recalculateAvailableUpdates()
     }
 
     private func markFailed(_ step: UpgradeStep, analysis: FailureAnalysis) {
@@ -467,6 +498,7 @@ final class StewardModel: ObservableObject {
             recoveryAction: analysis.action,
             lastFailedCommand: analysis.command
         )
+        recalculateAvailableUpdates()
     }
 
     private func updatePackageDetail(for step: UpgradeStep, stream: String, text: String) {
