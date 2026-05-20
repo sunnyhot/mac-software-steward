@@ -9,7 +9,17 @@ final class StewardModel: ObservableObject {
     @Published var scanPhase: ScanPhase?
     @Published var includeGreedy = true
     @Published var runBrewUpdate = true
-    @Published var query = ""
+    @Published var debouncedQuery = ""
+    @Published var query = "" {
+        didSet {
+            debounceTask?.cancel()
+            debounceTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                guard !Task.isCancelled else { return }
+                self.debouncedQuery = self.query
+            }
+        }
+    }
     @Published var errorMessage = ""
     @Published var jobs: [UpgradeJob] = []
     @Published var dailyInspectionEnabled = false
@@ -25,6 +35,7 @@ final class StewardModel: ObservableObject {
 
     private var activeJobCount = 0
     private var pendingJobQueue: [(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool)] = []
+    private var debounceTask: Task<Void, Never>?
     @Published var upgradeProgress: UpgradeProgress?
     /// 用户关闭过的失败任务 ID，关闭后不再显示失败通知（直到新任务失败）
     @Published var dismissedFailureJobID: UUID?
@@ -34,16 +45,22 @@ final class StewardModel: ObservableObject {
     }
 
     /// 所有可升级的包（用于 UI 显示，包含正在升级的包以显示进度）
-    var allUpgradeablePackages: [UpdatablePackage] {
-        guard let scan else { return [] }
-        return scan.brew.formulae.filter(\.upgradeable).map(UpdatablePackage.brew)
-            + scan.brew.casks.filter(\.upgradeable).map(UpdatablePackage.brew)
-            + scan.mas.apps.filter(\.upgradeable).map(UpdatablePackage.mas)
-    }
+    @Published var allUpgradeablePackages: [UpdatablePackage] = []
 
     /// 未在升级中的可升级包（用于 upgradeAll，排除 queued/running/succeeded）
-    var availableUpdates: [UpdatablePackage] {
-        allUpgradeablePackages.filter { package in
+    @Published var availableUpdates: [UpdatablePackage] = []
+
+    /// 数据变化时一次性计算并更新 allUpgradeablePackages 和 availableUpdates
+    private func recomputeDerivedData() {
+        guard let scan else {
+            allUpgradeablePackages = []
+            availableUpdates = []
+            return
+        }
+        allUpgradeablePackages = scan.brew.formulae.filter(\.upgradeable).map(UpdatablePackage.brew)
+            + scan.brew.casks.filter(\.upgradeable).map(UpdatablePackage.brew)
+            + scan.mas.apps.filter(\.upgradeable).map(UpdatablePackage.mas)
+        availableUpdates = allUpgradeablePackages.filter { package in
             let status = packageProgress[package.id]?.status
             return status != .succeeded && status != .running && status != .queued
         }
@@ -104,6 +121,7 @@ final class StewardModel: ObservableObject {
         }
         scan = result
         prunePackageProgress(keeping: result)
+        recomputeDerivedData()
         scanPhase = nil
         isScanning = false
     }
@@ -124,6 +142,7 @@ final class StewardModel: ObservableObject {
     func retryPackage(_ packageID: String) async {
         // 清除旧的失败状态
         packageProgress.removeValue(forKey: packageID)
+        recomputeDerivedData()
         // 在 availableUpdates 或 scan 中找到对应的包
         guard let scan else { return }
         let allPackages = (scan.brew.formulae.filter { $0.upgradeable }.map { UpdatablePackage.brew($0) })
@@ -140,6 +159,7 @@ final class StewardModel: ObservableObject {
     /// 清除某个包的失败状态
     func clearPackageFailure(_ packageID: String) {
         packageProgress.removeValue(forKey: packageID)
+        recomputeDerivedData()
     }
 
     /// 关闭失败通知面板（不删除任务记录，仅隐藏通知）
@@ -293,6 +313,7 @@ final class StewardModel: ObservableObject {
         jobs.insert(job, at: 0)
         let id = job.id
         markQueued(steps)
+        recomputeDerivedData()
 
         activeJobCount += 1
         let packageSteps = steps.filter { $0.packageID != nil }
@@ -319,6 +340,7 @@ final class StewardModel: ObservableObject {
             let job = UpgradeJob(label: label, commands: steps.map(\.command.display))
             jobs.insert(job, at: 0)
             markQueued(steps)
+            recomputeDerivedData()
             pendingJobQueue.append((id: job.id, steps: steps, rescanAfterSuccess: rescanAfterSuccess))
         }
     }
@@ -357,6 +379,7 @@ final class StewardModel: ObservableObject {
         for step in steps {
             let command = step.command
             markRunning(step)
+            recomputeDerivedData()
             if step.packageName != nil {
                 updateUpgradeProgress(currentPackage: step.packageName)
             }
@@ -374,11 +397,13 @@ final class StewardModel: ObservableObject {
                 if firstErrorCode == nil { firstErrorCode = code }
                 let analysis = failureAnalysis(command: command.display, code: code, output: result.recentOutput)
                 markFailed(step, analysis: analysis)
+                recomputeDerivedData()
                 updateJob(id) {
                     $0.log.append(LogLine(stream: "system", text: "失败：\(command.display)，退出码 \(code)"))
                 }
             } else {
                 markSucceeded(step)
+                recomputeDerivedData()
             }
 
             if step.packageID != nil {
@@ -744,6 +769,7 @@ final class StewardModel: ObservableObject {
                 + result.mas.apps.map(\.id)
         )
         packageProgress = packageProgress.filter { ids.contains($0.key) }
+        recomputeDerivedData()
     }
 
     private func requireCommand(_ command: String) async throws -> String {

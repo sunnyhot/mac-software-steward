@@ -221,7 +221,7 @@ private struct UpdatesView: View {
 
     /// 显示所有可升级包（包含正在升级中的，以显示进度）
     var updates: [UpdatablePackage] {
-        filter(model.allUpgradeablePackages, query: model.query) { package in
+        filter(model.allUpgradeablePackages, query: model.debouncedQuery) { package in
             "\(package.name) \(package.source) \(package.installedVersion) \(package.currentVersion)"
         }
     }
@@ -684,7 +684,7 @@ private struct BrewSourceView: View {
     }
 
     private func filteredBrew(_ packages: [BrewPackage]) -> [BrewPackage] {
-        filter(packages, query: model.query) { "\($0.name) \($0.kind) \($0.installedVersion) \($0.currentVersion)" }
+        filter(packages, query: model.debouncedQuery) { "\($0.name) \($0.kind) \($0.installedVersion) \($0.currentVersion)" }
     }
 }
 
@@ -708,7 +708,7 @@ private struct ApplicationsView: View {
     @EnvironmentObject private var model: StewardModel
 
     var apps: [AppItem] {
-        filter(model.scan?.applications.items ?? [], query: model.query) {
+        filter(model.scan?.applications.items ?? [], query: model.debouncedQuery) {
             "\($0.name) \($0.version) \($0.source) \($0.managedBy) \($0.path)"
         }
     }
@@ -806,7 +806,7 @@ private struct AppStoreSourceView: View {
     @EnvironmentObject private var model: StewardModel
 
     var apps: [MasApp] {
-        filter(model.scan?.mas.apps ?? [], query: model.query) {
+        filter(model.scan?.mas.apps ?? [], query: model.debouncedQuery) {
             "\($0.name) \($0.appId) \($0.installedVersion) \($0.currentVersion)"
         }
     }
