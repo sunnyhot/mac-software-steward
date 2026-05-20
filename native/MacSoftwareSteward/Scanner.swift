@@ -75,21 +75,35 @@ enum SoftwareScanner {
             )
         }
 
-        async let versionTask = CommandRunner.run(brewPath, arguments: ["--version"], timeout: 15)
-        async let prefixTask = CommandRunner.run(brewPath, arguments: ["--prefix"], timeout: 15)
-        async let formulaListTask = CommandRunner.run(brewPath, arguments: ["list", "--formula", "--versions"], timeout: 60)
-        async let caskListTask = CommandRunner.run(brewPath, arguments: ["list", "--cask", "--versions"], timeout: 60)
-        async let outdatedTask = CommandRunner.run(
-            brewPath,
-            arguments: ["outdated", "--json=v2"] + (includeGreedy ? ["--greedy"] : []),
-            timeout: 120
-        )
+        let brewTimeout: TimeInterval = 30
 
-        let version = await versionTask
-        let prefix = await prefixTask
-        let formulaList = await formulaListTask
-        let caskList = await caskListTask
-        let outdated = await outdatedTask
+        typealias Cmd = (id: String, args: [String])
+        let commands: [Cmd] = [
+            ("version", ["--version"]),
+            ("prefix", ["--prefix"]),
+            ("formulaList", ["list", "--formula", "--versions"]),
+            ("caskList", ["list", "--cask", "--versions"]),
+            ("outdated", ["outdated", "--json=v2"] + (includeGreedy ? ["--greedy"] : [])),
+        ]
+
+        var results: [String: CommandResult] = [:]
+        await withTaskGroup(of: (String, CommandResult).self) { group in
+            for cmd in commands {
+                group.addTask {
+                    let result = await CommandRunner.run(brewPath, arguments: cmd.args, timeout: brewTimeout)
+                    return (cmd.id, result)
+                }
+            }
+            for await (id, result) in group {
+                results[id] = result
+            }
+        }
+
+        let version = results["version"] ?? CommandResult(ok: false, code: -1, stdout: "", stderr: "brew --version 超时或未执行")
+        let prefix = results["prefix"] ?? CommandResult(ok: false, code: -1, stdout: "", stderr: "brew --prefix 超时或未执行")
+        let formulaList = results["formulaList"] ?? CommandResult(ok: false, code: -1, stdout: "", stderr: "brew list --formula 超时或未执行")
+        let caskList = results["caskList"] ?? CommandResult(ok: false, code: -1, stdout: "", stderr: "brew list --cask 超时或未执行")
+        let outdated = results["outdated"] ?? CommandResult(ok: false, code: -1, stdout: "", stderr: "brew outdated 超时或未执行")
 
         let installedFormulae = parseBrewVersionList(formulaList.stdout)
         let installedCasks = parseBrewVersionList(caskList.stdout)
@@ -97,17 +111,22 @@ enum SoftwareScanner {
         let formulae = mergeBrew(installed: installedFormulae, outdated: outdatedPayload.formulae, kind: "formula")
         let casks = mergeBrew(installed: installedCasks, outdated: outdatedPayload.casks, kind: "cask")
 
-        let errors = [formulaList, caskList, outdated]
-            .filter { !$0.ok && !$0.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            .map(\.stderr)
-            .joined(separator: "\n")
+        var errors: [String] = []
+        for (label, result) in [("formulaList", formulaList), ("caskList", caskList), ("outdated", outdated)] {
+            if result.wasSignaled {
+                errors.append("brew \(label) 超时被终止（30s）")
+            }
+            if !result.ok && !result.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                errors.append(result.stderr)
+            }
+        }
 
         return BrewScan(
             available: true,
             path: brewPath,
             prefix: prefix.stdout.trimmingCharacters(in: .whitespacesAndNewlines),
             version: version.stdout.components(separatedBy: .newlines).first ?? "",
-            error: errors,
+            error: errors.joined(separator: "\n"),
             includeGreedy: includeGreedy,
             formulae: formulae,
             casks: casks
