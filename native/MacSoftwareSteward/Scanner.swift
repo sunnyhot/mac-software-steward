@@ -75,29 +75,55 @@ enum SoftwareScanner {
             )
         }
 
-        async let versionTask = CommandRunner.run(brewPath, arguments: ["--version"], timeout: 15)
-        async let prefixTask = CommandRunner.run(brewPath, arguments: ["--prefix"], timeout: 15)
-        async let formulaListTask = CommandRunner.run(brewPath, arguments: ["list", "--formula", "--versions"], timeout: 60)
-        async let caskListTask = CommandRunner.run(brewPath, arguments: ["list", "--cask", "--versions"], timeout: 60)
-        async let outdatedTask = CommandRunner.run(
-            brewPath,
-            arguments: ["outdated", "--json=v2"] + (includeGreedy ? ["--greedy"] : []),
-            timeout: 120
-        )
+        enum BrewSubtask: String, CaseIterable {
+            case version
+            case prefix
+            case formulaList
+            case caskList
+            case outdated
+        }
 
-        let version = await versionTask
-        let prefix = await prefixTask
-        let formulaList = await formulaListTask
-        let caskList = await caskListTask
-        let outdated = await outdatedTask
+        struct BrewResults {
+            var version: CommandResult?
+            var prefix: CommandResult?
+            var formulaList: CommandResult?
+            var caskList: CommandResult?
+            var outdated: CommandResult?
+        }
 
-        let installedFormulae = parseBrewVersionList(formulaList.stdout)
-        let installedCasks = parseBrewVersionList(caskList.stdout)
-        let outdatedPayload = parseBrewOutdated(outdated.stdout)
+        var collected = BrewResults()
+        let timeout: TimeInterval = 30
+
+        await withTaskGroup(of: (BrewSubtask, CommandResult).self) { group in
+            group.addTask { (.version, await CommandRunner.run(brewPath, arguments: ["--version"], timeout: timeout)) }
+            group.addTask { (.prefix, await CommandRunner.run(brewPath, arguments: ["--prefix"], timeout: timeout)) }
+            group.addTask { (.formulaList, await CommandRunner.run(brewPath, arguments: ["list", "--formula", "--versions"], timeout: timeout)) }
+            group.addTask { (.caskList, await CommandRunner.run(brewPath, arguments: ["list", "--cask", "--versions"], timeout: timeout)) }
+            group.addTask { (.outdated, await CommandRunner.run(
+                brewPath,
+                arguments: ["outdated", "--json=v2"] + (includeGreedy ? ["--greedy"] : []),
+                timeout: timeout
+            )) }
+
+            for await (task, result) in group {
+                switch task {
+                case .version: collected.version = result
+                case .prefix: collected.prefix = result
+                case .formulaList: collected.formulaList = result
+                case .caskList: collected.caskList = result
+                case .outdated: collected.outdated = result
+                }
+            }
+        }
+
+        let installedFormulae = parseBrewVersionList(collected.formulaList?.stdout ?? "")
+        let installedCasks = parseBrewVersionList(collected.caskList?.stdout ?? "")
+        let outdatedPayload = parseBrewOutdated(collected.outdated?.stdout ?? "")
         let formulae = mergeBrew(installed: installedFormulae, outdated: outdatedPayload.formulae, kind: "formula")
         let casks = mergeBrew(installed: installedCasks, outdated: outdatedPayload.casks, kind: "cask")
 
-        let errors = [formulaList, caskList, outdated]
+        let errors = [collected.formulaList, collected.caskList, collected.outdated]
+            .compactMap { $0 }
             .filter { !$0.ok && !$0.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .map(\.stderr)
             .joined(separator: "\n")
@@ -105,8 +131,8 @@ enum SoftwareScanner {
         return BrewScan(
             available: true,
             path: brewPath,
-            prefix: prefix.stdout.trimmingCharacters(in: .whitespacesAndNewlines),
-            version: version.stdout.components(separatedBy: .newlines).first ?? "",
+            prefix: collected.prefix?.stdout.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            version: collected.version?.stdout.components(separatedBy: .newlines).first ?? "",
             error: errors,
             includeGreedy: includeGreedy,
             formulae: formulae,
