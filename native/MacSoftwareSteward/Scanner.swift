@@ -413,19 +413,18 @@ enum SoftwareScanner {
     }
 
     private static func classify(_ apps: [AppItem], brew: BrewScan, mas: MasScan) -> [AppItem] {
-        let caskNames = Set(brew.casks.map { normalizeToken($0.name) })
-        let masByName = Dictionary(mas.apps.map { (normalizeToken($0.name), $0) }, uniquingKeysWith: { _, last in last })
+        let caskByToken = Dictionary(brew.casks.map { (normalizeToken($0.name), $0) }, uniquingKeysWith: { _, last in last })
+        let masByToken = Dictionary(mas.apps.map { (normalizeToken($0.name), $0) }, uniquingKeysWith: { _, last in last })
 
         return apps.map { app in
             var next = app
             let token = normalizeToken(app.name)
-            if caskNames.contains(token) {
-                let cask = brew.casks.first(where: { normalizeToken($0.name) == token })
+            if let cask = caskByToken[token] {
                 next.managedBy = "brew-cask"
-                next.updateState = cask?.outdated == true ? "outdated" : "current"
-                next.availableVersion = cask?.currentVersion ?? ""
-                next.relatedPackageID = cask?.id ?? ""
-            } else if let storeApp = masByName[token] {
+                next.updateState = cask.outdated ? "outdated" : "current"
+                next.availableVersion = cask.currentVersion
+                next.relatedPackageID = cask.id
+            } else if let storeApp = masByToken[token] {
                 next.managedBy = "mas"
                 next.updateState = storeApp.outdated ? "outdated" : "current"
                 next.availableVersion = storeApp.currentVersion
@@ -439,12 +438,17 @@ enum SoftwareScanner {
     }
 
     static func normalizeToken(_ value: String) -> String {
-        value
+        if let cached = tokenCache[value] { return cached }
+        let result = value
             .lowercased()
             .replacingOccurrences(of: ".app", with: "")
             .replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
             .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        tokenCache[value] = result
+        return result
     }
+
+    private static var tokenCache: [String: String] = [:]
 
     private static func guessSource(path: String, obtainedFrom: String) -> String {
         let source = obtainedFrom.lowercased()
