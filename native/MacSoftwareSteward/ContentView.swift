@@ -1229,6 +1229,8 @@ private struct AutoDownloadUpdateRow: View {
 private struct JobsView: View {
     @EnvironmentObject private var model: StewardModel
     @State private var selectedJobId: UUID?
+    @State private var cachedLogLines: [LogLine] = []
+    private let bottomId = "scroll-bottom"
 
     var selectedJob: UpgradeJob? {
         let id = selectedJobId ?? model.jobs.first?.id
@@ -1262,15 +1264,38 @@ private struct JobsView: View {
                     }
                 }
 
-                ScrollView {
-                    Text(selectedJob?.log.map { "[\($0.stream)] \($0.text)" }.joined(separator: "\n") ?? "等待任务输出...")
-                        .font(.system(.body, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            if cachedLogLines.isEmpty {
+                                Text("等待任务输出...")
+                                    .font(.system(.body, design: .monospaced))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .textSelection(.enabled)
+                            } else {
+                                ForEach(cachedLogLines) { line in
+                                    Text("[\(line.stream)] \(line.text)")
+                                        .font(.system(.body, design: .monospaced))
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .textSelection(.enabled)
+                                }
+                                Color.clear.frame(height: 1).id(bottomId)
+                            }
+                        }
                         .padding(12)
+                    }
+                    .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                    .onChange(of: cachedLogLines.count) { _, _ in
+                        proxy.scrollTo(bottomId, anchor: .bottom)
+                    }
                 }
-                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
             }
+        }
+        .onChange(of: selectedJob?.id) { _, _ in
+            cachedLogLines = selectedJob?.log ?? []
+        }
+        .onChange(of: selectedJob?.log.count) { _, _ in
+            cachedLogLines = selectedJob?.log ?? []
         }
     }
 }
