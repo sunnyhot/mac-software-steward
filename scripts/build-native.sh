@@ -27,6 +27,7 @@ xcrun swiftc \
   -framework SwiftUI \
   -framework AppKit \
   "$ROOT_DIR"/native/MacSoftwareSteward/*.swift \
+  "$ROOT_DIR"/native/MacSoftwareSteward/Views/*.swift \
   "${MoleApp_SwiftFiles[@]}" \
   -o "$MACOS_DIR/$APP_NAME"
 
