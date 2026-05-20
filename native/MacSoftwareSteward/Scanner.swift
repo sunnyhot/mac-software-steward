@@ -92,17 +92,16 @@ enum SoftwareScanner {
         }
 
         var collected = BrewResults()
-        let timeout: TimeInterval = 30
 
         await withTaskGroup(of: (BrewSubtask, CommandResult).self) { group in
-            group.addTask { (.version, await CommandRunner.run(brewPath, arguments: ["--version"], timeout: timeout)) }
-            group.addTask { (.prefix, await CommandRunner.run(brewPath, arguments: ["--prefix"], timeout: timeout)) }
-            group.addTask { (.formulaList, await CommandRunner.run(brewPath, arguments: ["list", "--formula", "--versions"], timeout: timeout)) }
-            group.addTask { (.caskList, await CommandRunner.run(brewPath, arguments: ["list", "--cask", "--versions"], timeout: timeout)) }
+            group.addTask { (.version, await CommandRunner.run(brewPath, arguments: ["--version"], timeout: 15)) }
+            group.addTask { (.prefix, await CommandRunner.run(brewPath, arguments: ["--prefix"], timeout: 15)) }
+            group.addTask { (.formulaList, await CommandRunner.run(brewPath, arguments: ["list", "--formula", "--versions"], timeout: 60)) }
+            group.addTask { (.caskList, await CommandRunner.run(brewPath, arguments: ["list", "--cask", "--versions"], timeout: 60)) }
             group.addTask { (.outdated, await CommandRunner.run(
                 brewPath,
                 arguments: ["outdated", "--json=v2"] + (includeGreedy ? ["--greedy"] : []),
-                timeout: timeout
+                timeout: 120
             )) }
 
             for await (task, result) in group {
