@@ -240,7 +240,24 @@ private struct UpdatesView: View {
             }
 
             if model.isScanning {
-                EmptyStateView(symbol: "hourglass", title: "正在扫描本机软件", text: "system_profiler 与 brew outdated 可能需要一点时间。")
+                VStack(spacing: 16) {
+                    Image(systemName: "hourglass")
+                        .font(.largeTitle)
+                        .foregroundStyle(.secondary)
+                    Text("正在扫描本机软件")
+                        .font(.headline)
+                    if let phase = model.scanPhase {
+                        Text(phase.rawValue)
+                            .foregroundStyle(.secondary)
+                        ProgressView(value: phase.progress)
+                            .progressViewStyle(.linear)
+                            .frame(maxWidth: 280)
+                    } else {
+                        Text("准备中...")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 280)
             } else if updates.isEmpty {
                 EmptyStateView(symbol: "checkmark.circle", title: "没有发现可操作升级", text: "如果需要包含自动更新类 cask，请打开 greedy cask 后重新扫描。")
             } else {

@@ -1,17 +1,35 @@
 import Foundation
 
+enum ScanPhase: String, CaseIterable {
+    case systemProfiler = "正在扫描本机应用..."
+    case brewInfo = "正在获取 Homebrew 信息..."
+    case appStore = "正在扫描 App Store..."
+    case classifying = "正在关联应用来源..."
+    case finished = "扫描完成"
+
+    var progress: Double {
+        let total = ScanPhase.allCases.count
+        guard let idx = ScanPhase.allCases.firstIndex(of: self) else { return 0 }
+        return Double(idx) / Double(total - 1)
+    }
+}
+
 enum SoftwareScanner {
-    static func scanAll(includeGreedy: Bool) async -> ScanResult {
+    static func scanAll(includeGreedy: Bool, onPhaseChange: ((ScanPhase) -> Void)? = nil) async -> ScanResult {
         let started = Date()
 
+        onPhaseChange?(.systemProfiler)
         async let applicationsTask = scanApplications()
+        onPhaseChange?(.brewInfo)
         async let brewTask = scanBrew(includeGreedy: includeGreedy)
+        onPhaseChange?(.appStore)
         async let masTask = scanMas()
 
         var applications = await applicationsTask
         let brew = await brewTask
         let mas = await masTask
 
+        onPhaseChange?(.classifying)
         applications.items = classify(applications.items, brew: brew, mas: mas)
 
         let summary = ScanSummary(

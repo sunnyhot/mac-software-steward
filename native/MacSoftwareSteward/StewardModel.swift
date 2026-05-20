@@ -6,6 +6,7 @@ final class StewardModel: ObservableObject {
     @Published var selectedTab: AppTab = .updates
     @Published var scan: ScanResult?
     @Published var isScanning = false
+    @Published var scanPhase: ScanPhase?
     @Published var includeGreedy = true
     @Published var runBrewUpdate = true
     @Published var query = ""
@@ -95,9 +96,15 @@ final class StewardModel: ObservableObject {
     func scanSoftware() async {
         isScanning = true
         errorMessage = ""
-        let result = await SoftwareScanner.scanAll(includeGreedy: includeGreedy)
+        scanPhase = .systemProfiler
+        let result = await SoftwareScanner.scanAll(includeGreedy: includeGreedy) { [weak self] phase in
+            Task { @MainActor in
+                self?.scanPhase = phase
+            }
+        }
         scan = result
         prunePackageProgress(keeping: result)
+        scanPhase = nil
         isScanning = false
     }
 
