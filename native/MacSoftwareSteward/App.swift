@@ -1,7 +1,33 @@
 import SwiftUI
 
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // 读取 UserDefaults，注意区分「未设值」和「显式设为 false」
+        let dockIconVisible: Bool
+        if UserDefaults.standard.object(forKey: "dockIconVisible") == nil {
+            dockIconVisible = true  // 首次使用，默认显示
+        } else {
+            dockIconVisible = UserDefaults.standard.bool(forKey: "dockIconVisible")
+        }
+
+        NSApp.setActivationPolicy(dockIconVisible ? .regular : .accessory)
+
+        // 如果 Dock 图标隐藏，延迟隐藏已创建的主窗口
+        if !dockIconVisible {
+            DispatchQueue.main.async {
+                for window in NSApp.windows {
+                    if window.styleMask.contains(.titled) && window.styleMask.contains(.resizable) {
+                        window.orderOut(nil)
+                    }
+                }
+            }
+        }
+    }
+}
+
 @main
 struct MacSoftwareStewardApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
     @AppStorage("dockIconVisible") private var dockIconVisible = true
     @StateObject private var model = StewardModel()
