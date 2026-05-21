@@ -1,0 +1,71 @@
+name: Release macOS App
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Release
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG#v}
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing Mac 软件管家 version: $VERSION"
+
+      - name: Update version in package.json
+        run: |
+          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json')); p.version='${{ steps.version.outputs.version }}'; fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n');"
+
+      - name: Update version in Info.plist
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.version.outputs.version }}" native/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ steps.version.outputs.version }}" native/Info.plist
+
+      - name: Build macOS App
+        run: |
+          chmod +x scripts/build-native.sh
+          bash scripts/build-native.sh
+
+      - name: Verify build
+        run: |
+          test -d "build/MacSoftwareSteward.app" || { echo "Build failed"; exit 1; }
+          test -x "build/MacSoftwareSteward.app/Contents/MacOS/MacSoftwareSteward" || { echo "Executable not found"; exit 1; }
+          echo "Build verified: $(du -sh build/MacSoftwareSteward.app)"
+
+      - name: Package
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p release
+          /usr/bin/ditto -c -k --norsrc --noextattr --keepParent \
+            build/MacSoftwareSteward.app release/MacSoftwareSteward.zip
+          cp release/MacSoftwareSteward.zip "release/MacSoftwareSteward-v${VERSION}.zip"
+          cd release
+          shasum -a 256 MacSoftwareSteward.zip > MacSoftwareSteward.zip.sha256
+          shasum -a 256 "MacSoftwareSteward-v${VERSION}.zip" > "MacSoftwareSteward-v${VERSION}.zip.sha256"
+          echo "Package contents:"
+          ls -lh
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Mac 软件管家 ${{ steps.version.outputs.tag }}
+          files: |
+            release/MacSoftwareSteward.zip
+            release/MacSoftwareSteward.zip.sha256
+            release/MacSoftwareSteward-v${{ steps.version.outputs.version }}.zip
+            release/MacSoftwareSteward-v${{ steps.version.outputs.version }}.zip.sha256
+          draft: false
+          prerelease: false
