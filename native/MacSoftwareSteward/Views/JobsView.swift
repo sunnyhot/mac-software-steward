@@ -29,17 +29,28 @@ struct JobsView: View {
                 .listStyle(.sidebar)
                 .frame(minWidth: 220, idealWidth: 280, maxWidth: 340)
 
-                Divider()
+                Divider().opacity(0.5)
 
                 // 日志详情
                 if let job = selectedJob {
                     LogDetailView(job: job, autoScroll: $autoScroll)
+                        .transition(.opacity)
                 } else {
                     VStack(spacing: 10) {
-                        Image(systemName: "terminal")
-                            .font(.largeTitle)
-                            .foregroundStyle(.secondary)
+                        ZStack {
+                            Circle()
+                                .fill(.regularMaterial)
+                                .frame(width: 56, height: 56)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                                )
+                            Image(systemName: "terminal")
+                                .font(.title2)
+                                .foregroundStyle(.secondary)
+                        }
                         Text("选择一个任务查看日志")
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -57,25 +68,26 @@ private struct JobRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            // Status indicator dot
-            Circle()
-                .fill(statusColor(job.status))
-                .frame(width: 8, height: 8)
-                .overlay(
+            // Status indicator with subtle glow
+            ZStack {
+                if job.status == .running {
                     Circle()
-                        .fill(statusColor(job.status))
-                        .frame(width: 8, height: 8)
-                        .opacity(job.status == .running ? 0.4 : 0)
-                )
+                        .fill(statusColor(job.status).opacity(0.2))
+                        .frame(width: 14, height: 14)
+                }
+                Circle()
+                    .fill(statusColor(job.status))
+                    .frame(width: 8, height: 8)
+            }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(job.label)
-                    .font(.subheadline.bold())
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .lineLimit(1)
 
                 HStack(spacing: 6) {
                     Text(job.status.rawValue)
-                        .font(.caption.bold())
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
                         .foregroundStyle(statusColor(job.status))
 
                     if let finishedAt = job.finishedAt {
@@ -101,7 +113,7 @@ private struct JobRow: View {
 
                 if !job.commands.isEmpty {
                     Text(job.commands.joined(separator: ", "))
-                        .font(.caption2)
+                        .font(.system(.caption2, design: .monospaced))
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -126,7 +138,7 @@ private struct LogDetailView: View {
                     .foregroundStyle(.secondary)
 
                 Text(job.label)
-                    .font(.headline)
+                    .font(.system(.headline, design: .rounded))
                     .lineLimit(1)
 
                 Spacer()
@@ -163,9 +175,9 @@ private struct LogDetailView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(Color(nsColor: .controlBackgroundColor))
+            .background(.regularMaterial)
 
-            Divider()
+            Divider().opacity(0.5)
 
             // Log content
             ScrollViewReader { proxy in
@@ -182,8 +194,11 @@ private struct LogDetailView: View {
                 }
                 .font(.system(.body, design: .monospaced))
                 .background(
-                    Color(nsColor: .textBackgroundColor)
-                        .opacity(0.5)
+                    ZStack {
+                        Color(nsColor: .textBackgroundColor)
+                            .opacity(0.3)
+                        Color.clear
+                    }
                 )
                 .onAppear {
                     scrollToBottom(proxy)
@@ -213,7 +228,7 @@ private struct LogLineRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            // Stream indicator
+            // Stream indicator with styled badge
             Text(streamLabel)
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                 .foregroundStyle(streamColor)
