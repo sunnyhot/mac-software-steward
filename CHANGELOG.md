@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.9.2 (2026-05-22)
+
+### UI 优化
+
+- **整体布局专业化重构**：主窗口视觉基线统一，全应用采用 .regularMaterial 背景、.rounded 字体、12pt/10pt 圆角规范
+- **组件化提取**：HeaderButton、MetricCard、SettingsDivider、JobNoticeIcon 等可复用组件
+- **macOS 版本适配**：symbolEffect(.pulse/.rotate) 等 macOS 15+ API 添加 #available 守卫，兼容 macOS 14
+- **动效细节打磨**：hover 缩放、spring 动画参数优化，克制且有质感
+- **四个页面全部覆盖**：UpdatesView（可升级列表）、ApplicationsView（本机应用）、SourcesView（管理来源）、JobsView（任务日志）+ SettingsView（设置页）+ ContentView（主框架）
+
+### 涉及子 issue
+
+- [LUC-210] 主窗口布局与视觉基线
+- [LUC-211] 可升级与本机应用列表信息架构
+- [LUC-212] 管理来源与设置页面板体验
+- [LUC-213] 任务日志与动效细节
+
 ## v0.9.1 (2026-05-21)
 
 ### 新功能
