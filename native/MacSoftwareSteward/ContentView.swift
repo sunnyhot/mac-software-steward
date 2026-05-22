@@ -7,7 +7,7 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             List(AppTab.allCases, selection: $model.selectedTab) { tab in
-                SidebarRow(tab: tab, selectedTab: model.selectedTab)
+                Label(tab.rawValue, systemImage: tab.symbol)
                     .tag(tab)
             }
             .listStyle(.sidebar)
@@ -20,7 +20,6 @@ struct ContentView: View {
                 }
                 MainPanel()
             }
-            .background(Color(nsColor: .windowBackgroundColor))
         }
         .sheet(isPresented: $updater.showUpdateDialog) {
             AppUpdateDialog()
@@ -29,42 +28,25 @@ struct ContentView: View {
     }
 }
 
-private struct SidebarRow: View {
-    let tab: AppTab
-    let selectedTab: AppTab?
-    @State private var isHovered = false
-
-    var body: some View {
-        Label(tab.rawValue, systemImage: tab.symbol)
-            .padding(.vertical, 4)
-            .padding(.horizontal, 8)
-            .contentShape(Rectangle())
-            .onHover { hovering in
-                isHovered = hovering
-            }
-            .background(
-                (isHovered && tab != selectedTab)
-                    ? Color.primary.opacity(0.08)
-                    : Color.clear
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-    }
-}
+// MARK: - Header View
 
 private struct HeaderView: View {
     @EnvironmentObject private var model: StewardModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 14) {
+            // Title + actions
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("Mac 软件管家")
-                        .font(.system(size: 34, weight: .bold))
+                        .font(.title.bold())
                     Text("本机应用是实际安装的 .app，总览其来源；Homebrew/App Store 是可执行升级的管理来源。")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
 
-                Spacer()
+                Spacer(minLength: 16)
 
                 Button {
                     Task { await model.scanSoftware() }
@@ -72,6 +54,7 @@ private struct HeaderView: View {
                     Label(model.isScanning ? "扫描中" : "扫描", systemImage: model.isScanning ? "hourglass" : "arrow.clockwise")
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.regular)
                 .disabled(model.isScanning)
 
                 Button {
@@ -80,22 +63,35 @@ private struct HeaderView: View {
                     Label(model.hasRunningJob ? "升级中" : "一键升级", systemImage: model.hasRunningJob ? "hourglass" : "bolt.fill")
                 }
                 .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
                 .disabled(model.availableUpdates.isEmpty)
                 .help(model.upgradeAllHelpText)
             }
 
+            // Error banner
             if !model.errorMessage.isEmpty {
-                Label(model.errorMessage, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.red)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                    Text(model.errorMessage)
+                        .font(.subheadline)
+                }
+                .foregroundStyle(.red)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(.red.opacity(0.25), lineWidth: 1)
+                )
             }
 
+            // Upgrade progress
             if let progress = model.upgradeProgress, progress.total > 0 {
                 UpgradeProgressBar(progress: progress)
             }
 
+            // Metrics
             HStack(spacing: 12) {
                 MetricView(title: "本机应用", value: model.scan?.summary.applications, symbol: "macwindow")
                 MetricView(title: "Brew Formula", value: model.scan?.summary.brewFormulae, symbol: "cube")
@@ -103,9 +99,11 @@ private struct HeaderView: View {
                 MetricView(title: "可操作升级", value: model.scan?.summary.actionable, symbol: "checkmark.shield")
             }
         }
-        .padding(22)
+        .padding(20)
     }
 }
+
+// MARK: - Metric View
 
 private struct MetricView: View {
     var title: String
@@ -113,26 +111,29 @@ private struct MetricView: View {
     var symbol: String
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Image(systemName: symbol)
                 .font(.title3)
-                .frame(width: 42, height: 42)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 34, height: 34)
                 .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(title)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(value.map(String.init) ?? "-")
-                    .font(.system(.title, design: .rounded, weight: .bold))
+                    .font(.system(.title3, design: .rounded, weight: .bold))
                     .monospacedDigit()
             }
             Spacer(minLength: 0)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 78)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 66)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
     }
 }
+
+// MARK: - Main Panel
 
 private struct MainPanel: View {
     @EnvironmentObject private var model: StewardModel
@@ -144,14 +145,16 @@ private struct MainPanel: View {
                     .font(.title2.bold())
                 Spacer()
                 if model.selectedTab.usesSearch {
-                    HStack {
+                    HStack(spacing: 6) {
                         Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.secondary)
                         TextField("搜索名称、版本、路径", text: $model.query)
                             .textFieldStyle(.plain)
                     }
-                    .padding(.horizontal, 12)
-                    .frame(width: 360, height: 36)
-                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .frame(minWidth: 200, idealWidth: 320, maxWidth: 400)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
                 }
             }
 
@@ -175,6 +178,8 @@ private struct MainPanel: View {
         .padding(18)
     }
 }
+
+// MARK: - Job Notice View
 
 private struct JobNoticeView: View {
     @EnvironmentObject private var model: StewardModel
@@ -208,10 +213,16 @@ private struct JobNoticeView: View {
                 model.selectedTab = .jobs
             } label: {
                 Label("查看日志", systemImage: "terminal")
+                    .font(.caption)
             }
+            .buttonStyle(.borderless)
         }
         .padding(10)
-        .foregroundStyle(notice.isFailure ? .red : .accentColor)
-        .background((notice.isFailure ? Color.red : Color.accentColor).opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        .foregroundStyle(notice.isFailure ? .red : Color.accentColor)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke((notice.isFailure ? Color.red : Color.accentColor).opacity(0.25), lineWidth: 1)
+        )
     }
 }

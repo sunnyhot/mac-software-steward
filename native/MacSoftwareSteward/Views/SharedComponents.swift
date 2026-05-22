@@ -10,10 +10,34 @@ struct Badge: View {
         Text(text.isEmpty ? "-" : text)
             .font(.caption.bold())
             .lineLimit(1)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
             .background(color.opacity(0.12), in: Capsule())
             .foregroundStyle(color)
+    }
+}
+
+/// 紧凑的版本变化标签：显示 "1.0 → 2.0"，无可用版本时只显示当前版本
+struct VersionChangeLabel: View {
+    var current: String
+    var available: String
+
+    private var displayCurrent: String { versionText(current) }
+    private var displayAvailable: String { versionText(available) }
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Text(displayCurrent)
+            if displayAvailable != "-" {
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 8, weight: .semibold))
+                Text(displayAvailable)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.orange)
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
 }
 
@@ -31,11 +55,17 @@ struct WarningLine: View {
     var text: String
 
     var body: some View {
-        Label(text, systemImage: "exclamationmark.triangle")
+        Label(text, systemImage: "exclamationmark.triangle.fill")
             .foregroundStyle(.red)
-            .padding(10)
+            .font(.subheadline)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(.red.opacity(0.25), lineWidth: 1)
+            )
     }
 }
 
@@ -48,7 +78,7 @@ struct InstallToolPrompt: View {
         HStack(spacing: 12) {
             Image(systemName: symbol)
                 .font(.title3)
-                .frame(width: 40, height: 40)
+                .frame(width: 36, height: 36)
                 .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
@@ -59,7 +89,7 @@ struct InstallToolPrompt: View {
             Spacer()
         }
         .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
     }
 }
 
@@ -120,7 +150,7 @@ struct UpgradeProgressBar: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .symbolEffect(.pulse, options: .repeating)
+                    .foregroundStyle(Color.accentColor)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text("正在升级 \(progress.completed)/\(progress.total)")
@@ -152,10 +182,10 @@ struct UpgradeProgressBar: View {
                 .tint(progress.failed > 0 && !progress.isRunning ? .orange : .accentColor)
         }
         .padding(12)
-        .background(Color.accentColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.accentColor.opacity(0.15))
+                .stroke(Color.accentColor.opacity(0.2), lineWidth: 1)
         )
     }
 }
@@ -317,15 +347,15 @@ func availableVersionText(for package: UpdatablePackage) -> String {
 
 func appLocationText(_ app: AppItem) -> String {
     if app.path.hasPrefix("/Applications/") {
-        return "安装位置：/Applications"
+        return "/Applications"
     }
     if app.path.contains("/Applications/") {
-        return "安装位置：用户应用目录"
+        return "用户应用目录"
     }
     if app.path.hasPrefix("/System/") {
-        return "安装位置：系统目录"
+        return "系统"
     }
-    return app.source.isEmpty ? "安装位置：未知" : "安装位置：\(app.source)"
+    return app.source.isEmpty ? "未知" : app.source
 }
 
 func filter<T>(_ items: [T], query: String, text: (T) -> String) -> [T] {

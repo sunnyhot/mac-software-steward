@@ -27,6 +27,8 @@ struct ApplicationsView: View {
     }
 }
 
+// MARK: - ApplicationRow
+
 struct ApplicationRow: View {
     @EnvironmentObject private var model: StewardModel
     var app: AppItem
@@ -36,80 +38,95 @@ struct ApplicationRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 6) {
+            // 主行：图标 + 名称 + 管理方式 + 操作
+            HStack(spacing: 10) {
                 Image(systemName: "macwindow")
-                    .frame(width: 32, height: 32)
-                    .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
-                VStack(alignment: .leading, spacing: 3) {
-                    CopyableText(text: app.name)
-                    Text(app.path)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
+                    .font(.callout)
+                    .frame(width: 28, height: 28)
+                    .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 7))
+
+                CopyableText(text: app.name)
+
                 Spacer()
-                VersionColumn(title: "当前", value: app.version)
-                VersionColumn(title: "可升级", value: app.availableVersion)
-                Badge(text: appLocationText(app), color: .secondary)
+
                 if let progress {
                     PackageProgressBadge(progress: progress)
-                } else {
-                    ManagementBadge(app: app)
+                } else if app.updateState == "outdated" {
+                    Badge(text: "可升级", color: .orange)
                 }
+
+                ManagementBadge(app: app)
+
                 Button {
                     model.reveal(app)
                 } label: {
-                    Label("Finder", systemImage: "arrow.up.forward.app")
+                    Image(systemName: "arrow.up.forward.app")
                 }
+                .buttonStyle(.borderless)
+                .help("在 Finder 中显示")
             }
+
+            // 次行：路径 + 版本 + 位置
+            HStack(spacing: 6) {
+                Text(app.path)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                if !app.version.isEmpty {
+                    Text("·")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+
+                    VersionChangeLabel(current: app.version, available: app.availableVersion)
+                }
+
+                Spacer()
+
+                Text(appLocationText(app))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.leading, 38)
 
             if let progress {
                 PackageProgressDetail(progress: progress)
             }
         }
-        .padding(10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .background(rowBackground, in: RoundedRectangle(cornerRadius: 8))
     }
 
     private var rowBackground: Color {
-        if progress != nil { return Color.accentColor.opacity(0.08) }
-        if app.updateState == "outdated" { return Color.orange.opacity(0.08) }
+        if progress != nil { return Color.accentColor.opacity(0.06) }
+        if app.updateState == "outdated" { return Color.orange.opacity(0.05) }
         return Color(nsColor: .controlBackgroundColor)
     }
 }
 
-struct VersionColumn: View {
-    var title: String
-    var value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption2.bold())
-                .foregroundStyle(.secondary)
-            Text(versionText(value))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-        }
-        .frame(width: 92, alignment: .leading)
-    }
-}
+// MARK: - ManagementBadge
 
 struct ManagementBadge: View {
     var app: AppItem
 
     var body: some View {
-        if app.managedBy == "brew-cask" {
-            Badge(text: "管理方式：Homebrew Cask", color: app.updateState == "outdated" ? .orange : .green)
-        } else if app.managedBy == "mas" {
-            Badge(text: "管理方式：App Store", color: app.updateState == "outdated" ? .orange : .green)
-        } else if app.source == "Apple" || app.path.hasPrefix("/System/") {
-            Badge(text: "管理方式：系统", color: .secondary)
-        } else {
-            Badge(text: "管理方式：手动", color: .secondary)
-        }
+        let label: String = {
+            if app.managedBy == "brew-cask" { return "Homebrew" }
+            if app.managedBy == "mas" { return "App Store" }
+            if app.source == "Apple" || app.path.hasPrefix("/System/") { return "系统" }
+            return "手动"
+        }()
+
+        let color: Color = {
+            if app.managedBy == "brew-cask" || app.managedBy == "mas" {
+                return app.updateState == "outdated" ? .orange : .green
+            }
+            return .secondary
+        }()
+
+        Badge(text: label, color: color)
     }
 }

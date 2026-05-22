@@ -23,29 +23,12 @@ struct UpdatesView: View {
             }
 
             if model.isScanning {
-                VStack(spacing: 16) {
-                    Image(systemName: "hourglass")
-                        .font(.largeTitle)
-                        .foregroundStyle(.secondary)
-                    Text("正在扫描本机软件")
-                        .font(.headline)
-                    if let phase = model.scanPhase {
-                        Text(phase.rawValue)
-                            .foregroundStyle(.secondary)
-                        ProgressView(value: phase.progress)
-                            .progressViewStyle(.linear)
-                            .frame(maxWidth: 280)
-                    } else {
-                        Text("准备中...")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .frame(maxWidth: .infinity, minHeight: 280)
+                scanningView
             } else if updates.isEmpty {
                 EmptyStateView(symbol: "checkmark.circle", title: "没有发现可操作升级", text: "如果需要包含自动更新类 cask，请打开 greedy cask 后重新扫描。")
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 10) {
+                    LazyVStack(spacing: 8) {
                         ForEach(updates) { package in
                             UpdateRow(package: package)
                         }
@@ -54,7 +37,43 @@ struct UpdatesView: View {
             }
         }
     }
+
+    private var scanningView: some View {
+        VStack(spacing: 16) {
+            scanningIcon
+            Text("正在扫描本机软件")
+                .font(.headline)
+            if let phase = model.scanPhase {
+                Text(phase.rawValue)
+                    .foregroundStyle(.secondary)
+                ProgressView(value: phase.progress)
+                    .progressViewStyle(.linear)
+                    .frame(maxWidth: 280)
+            } else {
+                Text("准备中...")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 280)
+    }
+
+    /// macOS 15+ uses rotate symbolEffect; macOS 14 falls back to static icon.
+    @ViewBuilder
+    private var scanningIcon: some View {
+        if #available(macOS 15.0, *) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+                .symbolEffect(.rotate, options: .repeating)
+        } else {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+        }
+    }
 }
+
+// MARK: - UpdateRow
 
 struct UpdateRow: View {
     @EnvironmentObject private var model: StewardModel
@@ -65,26 +84,23 @@ struct UpdateRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 6) {
+            // 主行：图标 + 名称 + 标签 + 操作
+            HStack(spacing: 10) {
                 Image(systemName: package.source.contains("Brew") ? "shippingbox" : "bag")
-                    .frame(width: 34, height: 34)
-                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                    .font(.callout)
+                    .frame(width: 28, height: 28)
+                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
 
-                VStack(alignment: .leading, spacing: 4) {
-                    CopyableText(text: package.name)
-                    Text("\(package.source) · 当前 \(versionText(package.installedVersion)) · 可升级版本 \(availableVersionText(for: package))")
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
+                CopyableText(text: package.name)
 
                 Spacer()
 
                 if package.isPinned {
-                    Badge(text: "pinned", color: .red)
+                    Badge(text: "固定", color: .red)
                 }
                 if package.autoUpdates {
-                    Badge(text: "auto_updates", color: .secondary)
+                    Badge(text: "自更新", color: .blue)
                 }
 
                 if let progress {
@@ -93,28 +109,31 @@ struct UpdateRow: View {
                     PackageStatusBadge(package: package)
                 }
 
-                if progress?.status == .failed {
-                    Button {
-                        Task { await model.retryPackage(package.id) }
-                    } label: {
-                        Label("重试", systemImage: "arrow.clockwise")
-                    }
-                    .disabled(model.isPackageActive(package.id))
-                } else {
-                    Button {
-                        Task { await model.upgrade(package) }
-                    } label: {
-                        Label("升级", systemImage: "play")
-                    }
-                    .disabled(!package.upgradeable || model.isPackageActive(package.id))
-                }
+                actionButton
             }
+
+            // 次行：来源 + 版本变化
+            HStack(spacing: 8) {
+                Text(package.source)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.08), in: Capsule())
+
+                VersionChangeLabel(
+                    current: package.installedVersion,
+                    available: availableVersionText(for: package)
+                )
+            }
+            .padding(.leading, 38)
 
             if let progress {
                 PackageProgressDetail(progress: progress)
             }
         }
-        .padding(12)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .background(rowBackground, in: RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -122,24 +141,47 @@ struct UpdateRow: View {
         )
     }
 
+    @ViewBuilder
+    private var actionButton: some View {
+        if progress?.status == .failed {
+            Button {
+                Task { await model.retryPackage(package.id) }
+            } label: {
+                Label("重试", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.borderless)
+            .disabled(model.isPackageActive(package.id))
+        } else {
+            Button {
+                Task { await model.upgrade(package) }
+            } label: {
+                Label("升级", systemImage: "play")
+            }
+            .buttonStyle(.borderless)
+            .disabled(!package.upgradeable || model.isPackageActive(package.id))
+        }
+    }
+
     private var rowBackground: Color {
         switch progress?.status {
-        case .running, .queued: return Color.accentColor.opacity(0.08)
-        case .succeeded: return Color.green.opacity(0.08)
-        case .failed: return Color.red.opacity(0.08)
-        case nil: return package.outdated ? Color.orange.opacity(0.08) : Color(nsColor: .controlBackgroundColor)
+        case .running, .queued: return Color.accentColor.opacity(0.06)
+        case .succeeded: return Color.green.opacity(0.06)
+        case .failed: return Color.red.opacity(0.06)
+        case nil: return package.outdated ? Color.orange.opacity(0.05) : Color(nsColor: .controlBackgroundColor)
         }
     }
 
     private var rowBorder: Color {
         switch progress?.status {
-        case .running, .queued: return Color.accentColor.opacity(0.25)
-        case .succeeded: return Color.green.opacity(0.25)
-        case .failed: return Color.red.opacity(0.25)
-        case nil: return package.outdated ? Color.orange.opacity(0.25) : Color.gray.opacity(0.12)
+        case .running, .queued: return Color.accentColor.opacity(0.2)
+        case .succeeded: return Color.green.opacity(0.2)
+        case .failed: return Color.red.opacity(0.2)
+        case nil: return package.outdated ? Color.orange.opacity(0.15) : Color.gray.opacity(0.1)
         }
     }
 }
+
+// MARK: - Status Badges
 
 struct PackageStatusBadge: View {
     var package: UpdatablePackage
@@ -150,15 +192,12 @@ struct PackageStatusBadge: View {
 
     private var text: String {
         if package.upgradeable { return "可升级" }
-        if package.outdated && package.autoUpdates { return "自更新" }
-        if package.outdated && package.isPinned { return "已固定" }
         if package.outdated { return "需手动" }
         return "已最新"
     }
 
     private var color: Color {
         if package.upgradeable { return .orange }
-        if package.outdated && package.autoUpdates { return .blue }
         if package.outdated { return .secondary }
         return .green
     }
@@ -168,19 +207,20 @@ struct PackageProgressBadge: View {
     var progress: PackageUpgradeProgress
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 5) {
             if progress.status == .running {
                 ProgressView()
                     .controlSize(.small)
-                    .scaleEffect(0.7)
+                    .scaleEffect(0.65)
             } else {
                 Image(systemName: symbol)
+                    .font(.caption)
             }
             Text(progress.status.rawValue)
                 .font(.caption.bold())
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
         .background(color.opacity(0.12), in: Capsule())
         .foregroundStyle(color)
     }
@@ -203,6 +243,8 @@ struct PackageProgressBadge: View {
     }
 }
 
+// MARK: - Progress Detail
+
 struct PackageProgressDetail: View {
     @EnvironmentObject private var model: StewardModel
     var progress: PackageUpgradeProgress
@@ -216,40 +258,7 @@ struct PackageProgressDetail: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if progress.status == .running {
-                if let fraction = progress.downloadFraction, fraction > 0 {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ProgressView(value: fraction)
-                            .progressViewStyle(.linear)
-                            .tint(.accentColor)
-                        HStack(spacing: 12) {
-                            Text("\(Int(fraction * 100))%")
-                                .font(.caption.bold())
-                                .monospacedDigit()
-                                .foregroundStyle(Color.accentColor)
-                            if let sizeText = progress.downloadSizeText {
-                                Label(sizeText, systemImage: "arrow.down.circle")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            if let speedText = progress.downloadSpeedText {
-                                Label(speedText, systemImage: "gauge.with.dots.needle.33percent")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                } else {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ProgressView()
-                            .progressViewStyle(.linear)
-                        Text(progress.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(3)
-                            .truncationMode(.middle)
-                            .textSelection(.enabled)
-                    }
-                }
+                runningProgress
             } else if progress.status == .succeeded {
                 ProgressView(value: 1.0)
                     .progressViewStyle(.linear)
@@ -259,48 +268,8 @@ struct PackageProgressDetail: View {
                     .foregroundStyle(.green)
             }
             if progress.status == .failed && !progress.failureSummary.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label {
-                        Text(progress.failureSummary)
-                            .fontWeight(.medium)
-                    } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                    }
-                    .foregroundStyle(.red)
-
-                    if !progress.recoverySuggestion.isEmpty {
-                        HStack(alignment: .top, spacing: 6) {
-                            Image(systemName: "lightbulb.fill")
-                                .foregroundStyle(.yellow)
-                                .font(.caption)
-                            Text(progress.recoverySuggestion)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-
-                    HStack(spacing: 10) {
-                        if let action = progress.recoveryAction {
-                            actionButton(for: action)
-                        }
-                        Button {
-                            copyToPasteboard(progress.copyText)
-                        } label: {
-                            Label("复制详情", systemImage: "doc.on.doc")
-                        }
-                        .buttonStyle(.borderless)
-                        .font(.caption)
-                        .disabled(progress.copyText.isEmpty)
-                    }
-                }
-                .font(.caption)
-                .textSelection(.enabled)
-                .padding(10)
-                .background(Color.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.red.opacity(0.18))
-                )
-            } else {
+                failureDetail
+            } else if progress.status != .queued {
                 Text(progress.detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -309,7 +278,90 @@ struct PackageProgressDetail: View {
                     .textSelection(.enabled)
             }
         }
-        .padding(.leading, 46)
+        .padding(.leading, 38)
+    }
+
+    @ViewBuilder
+    private var runningProgress: some View {
+        if let fraction = progress.downloadFraction, fraction > 0 {
+            VStack(alignment: .leading, spacing: 4) {
+                ProgressView(value: fraction)
+                    .progressViewStyle(.linear)
+                    .tint(.accentColor)
+                HStack(spacing: 12) {
+                    Text("\(Int(fraction * 100))%")
+                        .font(.caption.bold())
+                        .monospacedDigit()
+                        .foregroundStyle(Color.accentColor)
+                    if let sizeText = progress.downloadSizeText {
+                        Label(sizeText, systemImage: "arrow.down.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let speedText = progress.downloadSpeedText {
+                        Label(speedText, systemImage: "gauge.with.dots.needle.33percent")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                ProgressView()
+                    .progressViewStyle(.linear)
+                Text(progress.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var failureDetail: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label {
+                Text(progress.failureSummary)
+                    .fontWeight(.medium)
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill")
+            }
+            .foregroundStyle(.red)
+
+            if !progress.recoverySuggestion.isEmpty {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "lightbulb.fill")
+                        .foregroundStyle(.yellow)
+                        .font(.caption)
+                    Text(progress.recoverySuggestion)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            HStack(spacing: 10) {
+                if let action = progress.recoveryAction {
+                    actionButton(for: action)
+                }
+                Button {
+                    copyToPasteboard(progress.copyText)
+                } label: {
+                    Label("复制详情", systemImage: "doc.on.doc")
+                }
+                .buttonStyle(.borderless)
+                .font(.caption)
+                .disabled(progress.copyText.isEmpty)
+            }
+        }
+        .font(.caption)
+        .textSelection(.enabled)
+        .padding(10)
+        .background(Color.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.red.opacity(0.15))
+        )
     }
 
     @ViewBuilder
