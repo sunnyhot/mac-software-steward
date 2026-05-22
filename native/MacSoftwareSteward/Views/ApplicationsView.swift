@@ -12,6 +12,7 @@ struct ApplicationsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("本机应用是实际安装的 .app；安装位置说明 App 文件在哪，管理方式说明由 Homebrew、App Store、系统或手动维护。")
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
             if let scan = model.scan?.applications, !scan.error.isEmpty {
                 WarningLine(text: scan.error)
@@ -20,6 +21,10 @@ struct ApplicationsView: View {
                 LazyVStack(spacing: 8) {
                     ForEach(apps) { app in
                         ApplicationRow(app: app)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .top)),
+                                removal: .opacity
+                            ))
                     }
                 }
             }
@@ -33,6 +38,8 @@ struct ApplicationRow: View {
     @EnvironmentObject private var model: StewardModel
     var app: AppItem
 
+    @State private var isHovered = false
+
     var progress: PackageUpgradeProgress? {
         app.relatedPackageID.isEmpty ? nil : model.packageProgress[app.relatedPackageID]
     }
@@ -41,10 +48,14 @@ struct ApplicationRow: View {
         VStack(alignment: .leading, spacing: 6) {
             // 主行：图标 + 名称 + 管理方式 + 操作
             HStack(spacing: 10) {
-                Image(systemName: "macwindow")
-                    .font(.callout)
-                    .frame(width: 28, height: 28)
-                    .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 7))
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.accentColor.opacity(0.10))
+                        .frame(width: 30, height: 30)
+                    Image(systemName: "macwindow")
+                        .font(.system(.callout, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                }
 
                 CopyableText(text: app.name)
 
@@ -70,7 +81,7 @@ struct ApplicationRow: View {
             // 次行：路径 + 版本 + 位置
             HStack(spacing: 6) {
                 Text(app.path)
-                    .font(.caption)
+                    .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -86,24 +97,34 @@ struct ApplicationRow: View {
                 Spacer()
 
                 Text(appLocationText(app))
-                    .font(.caption2)
+                    .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(.tertiary)
             }
-            .padding(.leading, 38)
+            .padding(.leading, 40)
 
             if let progress {
                 PackageProgressDetail(progress: progress)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(rowBackground, in: RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(rowTint, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isHovered ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.06), lineWidth: 1)
+        )
+        .scaleEffect(isHovered ? 1.005 : 1.0)
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isHovered)
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 
-    private var rowBackground: Color {
-        if progress != nil { return Color.accentColor.opacity(0.06) }
-        if app.updateState == "outdated" { return Color.orange.opacity(0.05) }
-        return Color(nsColor: .controlBackgroundColor)
+    private var rowTint: Color {
+        if progress != nil { return Color.accentColor.opacity(0.04) }
+        if app.updateState == "outdated" { return Color.orange.opacity(0.03) }
+        return .clear
     }
 }
 

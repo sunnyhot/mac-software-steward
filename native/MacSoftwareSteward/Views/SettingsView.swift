@@ -7,22 +7,22 @@ struct SettingsView: View {
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 20) {
                 SettingsGroupBox {
                     SettingsGroupHeader(title: "通用", symbol: "gearshape")
                     AppearanceRow()
-                    Divider().padding(.vertical, 2)
+                    SettingsDivider()
                     LaunchAtLoginRow()
-                    Divider().padding(.vertical, 2)
+                    SettingsDivider()
                     DockIconRow()
                 }
 
                 SettingsGroupBox {
                     SettingsGroupHeader(title: "扫描与升级策略", symbol: "slider.horizontal.3")
                     GreedyCaskRow()
-                    Divider().padding(.vertical, 2)
+                    SettingsDivider()
                     BrewUpdateRow()
-                    Divider().padding(.vertical, 2)
+                    SettingsDivider()
                     MaxConcurrentUpgradesRow()
                 }
 
@@ -30,7 +30,7 @@ struct SettingsView: View {
                     SettingsGroupHeader(title: "每日巡检", symbol: "calendar.badge.clock")
                     DailyInspectionToggleRow()
                     if model.dailyInspectionEnabled {
-                        Divider().padding(.vertical, 2)
+                        SettingsDivider()
                         DailyInspectionTimeRow()
                     }
                 }
@@ -39,10 +39,10 @@ struct SettingsView: View {
                     SettingsGroupHeader(title: "应用更新", symbol: "arrow.down.app")
                     AutoCheckUpdateRow()
                     if updater.automaticChecksEnabled {
-                        Divider().padding(.vertical, 2)
+                        SettingsDivider()
                         AutoDownloadUpdateRow()
                     }
-                    Divider().padding(.vertical, 2)
+                    SettingsDivider()
                     ManualCheckUpdateRow()
                 }
 
@@ -54,15 +54,29 @@ struct SettingsView: View {
     }
 }
 
+// MARK: - Settings Group Box
+
 struct SettingsGroupBox<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             content
         }
         .padding(16)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+}
+
+struct SettingsDivider: View {
+    var body: some View {
+        Divider()
+            .opacity(0.5)
+            .padding(.vertical, 2)
     }
 }
 
@@ -71,11 +85,20 @@ struct SettingsGroupHeader: View {
     var symbol: String
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: symbol)
-                .foregroundStyle(.secondary)
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(Color.accentColor.opacity(0.1))
+                    .frame(width: 26, height: 26)
+
+                Image(systemName: symbol)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+            }
+
             Text(title)
-                .font(.headline)
+                .font(.system(.headline, design: .rounded))
+                .foregroundStyle(.primary)
         }
     }
 }
@@ -87,6 +110,7 @@ struct AppearanceRow: View {
     var body: some View {
         HStack {
             Text("外观")
+                .font(.body)
             Spacer()
             Picker("", selection: $appearanceMode) {
                 ForEach(AppearanceMode.allCases) { mode in
@@ -106,6 +130,7 @@ struct LaunchAtLoginRow: View {
     var body: some View {
         HStack {
             Text("开机自动启动")
+                .font(.body)
             Spacer()
             Toggle("", isOn: Binding(
                 get: { launchAtLogin.enabled },
@@ -127,6 +152,7 @@ struct DockIconRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("在 Dock 中显示")
+                    .font(.body)
                 Text("关闭后应用只在菜单栏运行，不占用 Dock 位置")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -146,6 +172,7 @@ struct GreedyCaskRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("包含 greedy cask")
+                    .font(.body)
                 Text("auto_updates 或 :latest 的 Cask 也纳入扫描")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -165,6 +192,7 @@ struct BrewUpdateRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("升级前 brew update")
+                    .font(.body)
                 Text("一键升级和自动升级前先执行 brew update")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -185,6 +213,7 @@ struct MaxConcurrentUpgradesRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("并行升级数量")
+                    .font(.body)
                 Text("同时执行的最大升级任务数，超出自动排队")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -208,6 +237,7 @@ struct DailyInspectionToggleRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("启用每日巡检")
+                    .font(.body)
                 Text("定时扫描可管理来源，发现可升级项后自动执行升级")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -237,6 +267,7 @@ struct DailyInspectionTimeRow: View {
     var body: some View {
         HStack {
             Text("巡检时间")
+                .font(.body)
             Spacer()
             Picker("时", selection: $model.dailyHour) {
                 ForEach(0..<24) { hour in
@@ -271,6 +302,7 @@ struct AutoCheckUpdateRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("启动时自动检查更新")
+                    .font(.body)
                 Text("每次启动应用时从 GitHub Release 检查新版本")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -290,6 +322,7 @@ struct ManualCheckUpdateRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("手动检查更新")
+                    .font(.body)
                 if updater.isInstalling {
                     if let fraction = updater.downloadFraction {
                         ProgressView(value: fraction) {
@@ -361,6 +394,7 @@ struct AutoDownloadUpdateRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("自动下载并安装更新")
+                    .font(.body)
                 Text("发现新版本后自动下载、覆盖安装并重启")
                     .font(.caption)
                     .foregroundStyle(.secondary)

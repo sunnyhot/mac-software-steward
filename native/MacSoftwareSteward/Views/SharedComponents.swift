@@ -8,11 +8,18 @@ struct Badge: View {
 
     var body: some View {
         Text(text.isEmpty ? "-" : text)
-            .font(.caption.bold())
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
             .lineLimit(1)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(color.opacity(0.15), in: Capsule())
+            .background(
+                Capsule()
+                    .fill(color.opacity(0.12))
+                    .overlay(
+                        Capsule()
+                            .stroke(color.opacity(0.15), lineWidth: 0.5)
+                    )
+            )
             .foregroundStyle(color)
     }
 }
@@ -31,12 +38,13 @@ struct VersionChangeLabel: View {
             if displayAvailable != "-" {
                 Image(systemName: "arrow.right")
                     .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(.orange.opacity(0.7))
                 Text(displayAvailable)
                     .fontWeight(.medium)
                     .foregroundStyle(.orange)
             }
         }
-        .font(.caption)
+        .font(.system(.caption, design: .monospaced))
         .foregroundStyle(.secondary)
     }
 }
@@ -46,6 +54,7 @@ struct InfoLine: View {
 
     var body: some View {
         Label(text, systemImage: "info.circle")
+            .font(.subheadline)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -55,13 +64,22 @@ struct WarningLine: View {
     var text: String
 
     var body: some View {
-        Label(text, systemImage: "exclamationmark.triangle.fill")
-            .foregroundStyle(.red)
-            .font(.subheadline)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.callout)
+            Text(text)
+                .font(.subheadline)
+            Spacer()
+        }
+        .foregroundStyle(.red)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(.red.opacity(0.2), lineWidth: 1)
+        )
     }
 }
 
@@ -71,22 +89,32 @@ struct InstallToolPrompt: View {
     var symbol: String
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: symbol)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .frame(width: 32, height: 32)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.accentColor.opacity(0.1))
+                    .frame(width: 40, height: 40)
+
+                Image(systemName: symbol)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+            }
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.headline)
+                    .font(.system(.headline, design: .rounded))
                 Text(text)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
             Spacer()
         }
-        .padding(12)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
+        .padding(14)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
     }
 }
 
@@ -96,27 +124,45 @@ struct EmptyStateView: View {
     var text: String
 
     var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: symbol)
-                .font(.largeTitle)
-                .foregroundStyle(.secondary)
-            Text(title)
-                .font(.headline)
-            Text(text)
-                .foregroundStyle(.secondary)
+        VStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(.regularMaterial)
+                    .frame(width: 72, height: 72)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                    )
+
+                Image(systemName: symbol)
+                    .font(.system(size: 28, weight: .light))
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 6) {
+                Text(title)
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(.primary)
+                Text(text)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 360)
+            }
         }
-        .frame(maxWidth: .infinity, minHeight: 280)
+        .frame(maxWidth: .infinity, minHeight: 300)
     }
 }
 
 struct CopyableText: View {
     var text: String
-    var font: Font = .headline
+    var font: Font = .system(.headline, design: .rounded)
     @State private var didCopy = false
 
     var body: some View {
         Text(text)
             .font(font)
+            .foregroundStyle(.primary)
             .help("点击复制名称")
             .onTapGesture {
                 copyToPasteboard(text)
@@ -127,16 +173,21 @@ struct CopyableText: View {
             }
             .overlay(alignment: .top) {
                 if didCopy {
-                    Text("已复制")
-                        .font(.caption2)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 4))
-                        .offset(y: -20)
-                        .transition(.opacity)
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption2)
+                        Text("已复制")
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.green, in: RoundedRectangle(cornerRadius: 6))
+                    .offset(y: -22)
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 }
             }
+            .animation(.spring(response: 0.3), value: didCopy)
     }
 }
 
@@ -144,14 +195,22 @@ struct UpgradeProgressBar: View {
     var progress: UpgradeProgress
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .stroke(Color.accentColor.opacity(0.15), lineWidth: 2.5)
+                        .frame(width: 28, height: 28)
+
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.caption)
+                        .foregroundStyle(Color.accentColor)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text("正在升级 \(progress.completed)/\(progress.total)")
-                            .font(.subheadline.bold())
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
                         if let current = progress.currentPackage {
                             Text("·")
                                 .foregroundStyle(.tertiary)
@@ -167,9 +226,11 @@ struct UpgradeProgressBar: View {
                             .foregroundStyle(.red)
                     }
                 }
+
                 Spacer()
+
                 Text("\(Int(progress.fraction * 100))%")
-                    .font(.system(.callout, design: .rounded, weight: .semibold))
+                    .font(.system(.callout, design: .rounded, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
@@ -178,9 +239,13 @@ struct UpgradeProgressBar: View {
                 .progressViewStyle(.linear)
                 .tint(progress.failed > 0 && !progress.isRunning ? .orange : .accentColor)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.accentColor.opacity(0.15), lineWidth: 1)
+        )
     }
 }
 
@@ -193,14 +258,19 @@ struct AppUpdateDialog: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 16) {
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 48))
-                    .foregroundStyle(Color.accentColor)
+                ZStack {
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.1))
+                        .frame(width: 56, height: 56)
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(Color.accentColor)
+                }
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("发现新版本")
-                        .font(.title2.bold())
-                    HStack(spacing: 4) {
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                    HStack(spacing: 6) {
                         Text("v\(updater.currentVersion)")
                             .foregroundStyle(.secondary)
                         Image(systemName: "arrow.right")
@@ -221,10 +291,10 @@ struct AppUpdateDialog: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("更新内容")
-                            .font(.headline)
+                            .font(.system(.headline, design: .rounded))
                         Spacer()
                         Button {
-                            withAnimation { releaseNotesCollapsed.toggle() }
+                            withAnimation(.spring(response: 0.3)) { releaseNotesCollapsed.toggle() }
                         } label: {
                             Image(systemName: releaseNotesCollapsed ? "chevron.right" : "chevron.down")
                                 .font(.caption)

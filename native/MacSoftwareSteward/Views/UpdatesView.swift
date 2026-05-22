@@ -13,13 +13,16 @@ struct UpdatesView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("这里汇总 Homebrew 与 Mac App Store 中可直接执行的升级；扫描和升级策略可在设置中调整。")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button {
                     model.selectedTab = .settings
                 } label: {
                     Label("升级设置", systemImage: "gearshape")
+                        .font(.caption)
                 }
+                .buttonStyle(.borderless)
             }
 
             if model.isScanning {
@@ -31,6 +34,10 @@ struct UpdatesView: View {
                     LazyVStack(spacing: 8) {
                         ForEach(updates) { package in
                             UpdateRow(package: package)
+                                .transition(.asymmetric(
+                                    insertion: .opacity.combined(with: .move(edge: .top)),
+                                    removal: .opacity
+                                ))
                         }
                     }
                 }
@@ -39,35 +46,49 @@ struct UpdatesView: View {
     }
 
     private var scanningView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             scanningIcon
-            Text("正在扫描本机软件")
-                .font(.headline)
-            if let phase = model.scanPhase {
-                Text(phase.rawValue)
-                    .foregroundStyle(.secondary)
-                ProgressView(value: phase.progress)
-                    .progressViewStyle(.linear)
-                    .frame(maxWidth: 280)
-            } else {
-                Text("准备中...")
-                    .foregroundStyle(.secondary)
+
+            VStack(spacing: 8) {
+                Text("正在扫描本机软件")
+                    .font(.system(.headline, design: .rounded))
+                if let phase = model.scanPhase {
+                    Text(phase.rawValue)
+                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                    ProgressView(value: phase.progress)
+                        .progressViewStyle(.linear)
+                        .frame(maxWidth: 280)
+                } else {
+                    Text("准备中...")
+                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                }
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 280)
+        .frame(maxWidth: .infinity, minHeight: 300)
     }
 
     /// macOS 15+ uses rotate symbolEffect; macOS 14 falls back to static icon.
     @ViewBuilder
     private var scanningIcon: some View {
         if #available(macOS 15.0, *) {
-            Image(systemName: "arrow.triangle.2.circlepath")
-                .font(.largeTitle)
-                .foregroundStyle(.secondary)
-                .symbolEffect(.rotate, options: .repeating)
+            ZStack {
+                Circle()
+                    .fill(.regularMaterial)
+                    .frame(width: 64, height: 64)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.accentColor.opacity(0.15), lineWidth: 1)
+                    )
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .symbolEffect(.rotate, options: .repeating)
+            }
         } else {
             Image(systemName: "arrow.triangle.2.circlepath")
-                .font(.largeTitle)
+                .font(.system(size: 28, weight: .medium))
                 .foregroundStyle(.secondary)
         }
     }
@@ -79,6 +100,8 @@ struct UpdateRow: View {
     @EnvironmentObject private var model: StewardModel
     var package: UpdatablePackage
 
+    @State private var isHovered = false
+
     var progress: PackageUpgradeProgress? {
         model.packageProgress[package.id]
     }
@@ -87,10 +110,16 @@ struct UpdateRow: View {
         VStack(alignment: .leading, spacing: 6) {
             // 主行：图标 + 名称 + 标签 + 操作
             HStack(spacing: 10) {
-                Image(systemName: package.source.contains("Brew") ? "shippingbox" : "bag")
-                    .font(.callout)
-                    .frame(width: 28, height: 28)
-                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
+                // Source icon with styled background
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(sourceIconBackground)
+                        .frame(width: 30, height: 30)
+
+                    Image(systemName: package.source.contains("Brew") ? "shippingbox" : "bag")
+                        .font(.system(.callout, weight: .medium))
+                        .foregroundStyle(sourceIconColor)
+                }
 
                 CopyableText(text: package.name)
 
@@ -115,9 +144,9 @@ struct UpdateRow: View {
             // 次行：来源 + 版本变化
             HStack(spacing: 8) {
                 Text(package.source)
-                    .font(.caption)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 7)
+                    .padding(.horizontal, 8)
                     .padding(.vertical, 2)
                     .background(Color.secondary.opacity(0.08), in: Capsule())
 
@@ -126,20 +155,38 @@ struct UpdateRow: View {
                     available: availableVersionText(for: package)
                 )
             }
-            .padding(.leading, 38)
+            .padding(.leading, 40)
 
             if let progress {
                 PackageProgressDetail(progress: progress)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(rowBackground, in: RoundedRectangle(cornerRadius: 8))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(rowTint, in: RoundedRectangle(cornerRadius: 12))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(rowBorder)
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(rowBorder, lineWidth: 1)
         )
+        .scaleEffect(isHovered && progress == nil ? 1.005 : 1.0)
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isHovered)
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
+
+    // MARK: Source Icon Colors
+
+    private var sourceIconBackground: Color {
+        package.source.contains("Brew") ? Color.orange.opacity(0.12) : Color.blue.opacity(0.12)
+    }
+
+    private var sourceIconColor: Color {
+        package.source.contains("Brew") ? .orange : .blue
+    }
+
+    // MARK: Action Button
 
     @ViewBuilder
     private var actionButton: some View {
@@ -162,12 +209,14 @@ struct UpdateRow: View {
         }
     }
 
-    private var rowBackground: Color {
+    // MARK: Row Style
+
+    private var rowTint: Color {
         switch progress?.status {
-        case .running, .queued: return Color.accentColor.opacity(0.06)
-        case .succeeded: return Color.green.opacity(0.06)
-        case .failed: return Color.red.opacity(0.06)
-        case nil: return package.outdated ? Color.orange.opacity(0.05) : Color(nsColor: .controlBackgroundColor)
+        case .running, .queued: return Color.accentColor.opacity(0.04)
+        case .succeeded: return Color.green.opacity(0.04)
+        case .failed: return Color.red.opacity(0.04)
+        case nil: return package.outdated ? Color.orange.opacity(0.03) : .clear
         }
     }
 
@@ -176,7 +225,7 @@ struct UpdateRow: View {
         case .running, .queued: return Color.accentColor.opacity(0.2)
         case .succeeded: return Color.green.opacity(0.2)
         case .failed: return Color.red.opacity(0.2)
-        case nil: return package.outdated ? Color.orange.opacity(0.15) : Color.gray.opacity(0.1)
+        case nil: return package.outdated ? Color.orange.opacity(0.15) : Color.primary.opacity(0.06)
         }
     }
 }
@@ -211,17 +260,24 @@ struct PackageProgressBadge: View {
             if progress.status == .running {
                 ProgressView()
                     .controlSize(.small)
-                    .scaleEffect(0.65)
+                    .scaleEffect(0.6)
             } else {
                 Image(systemName: symbol)
-                    .font(.caption)
+                    .font(.system(size: 12, weight: .semibold))
             }
             Text(progress.status.rawValue)
-                .font(.caption.bold())
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(color.opacity(0.12), in: Capsule())
+        .background(
+            Capsule()
+                .fill(color.opacity(0.12))
+                .overlay(
+                    Capsule()
+                        .stroke(color.opacity(0.15), lineWidth: 0.5)
+                )
+        )
         .foregroundStyle(color)
     }
 
@@ -278,7 +334,7 @@ struct PackageProgressDetail: View {
                     .textSelection(.enabled)
             }
         }
-        .padding(.leading, 38)
+        .padding(.leading, 40)
     }
 
     @ViewBuilder
@@ -290,7 +346,7 @@ struct PackageProgressDetail: View {
                     .tint(.accentColor)
                 HStack(spacing: 12) {
                     Text("\(Int(fraction * 100))%")
-                        .font(.caption.bold())
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(Color.accentColor)
                     if let sizeText = progress.downloadSizeText {
@@ -356,11 +412,11 @@ struct PackageProgressDetail: View {
         }
         .font(.caption)
         .textSelection(.enabled)
-        .padding(10)
-        .background(Color.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+        .padding(12)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.red.opacity(0.15))
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(.red.opacity(0.15), lineWidth: 1)
         )
     }
 
