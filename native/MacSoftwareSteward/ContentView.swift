@@ -358,9 +358,7 @@ private struct JobNoticeView: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: notice.symbol)
-                .font(.title3)
-                .symbolEffect(.pulse, options: .repeating, isActive: !notice.isFailure)
+            JobNoticeIcon(symbol: notice.symbol, isActive: !notice.isFailure)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(notice.title)
@@ -401,5 +399,23 @@ private struct JobNoticeView: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke((notice.isFailure ? Color.red : Color.accentColor).opacity(0.2), lineWidth: 1)
         )
+    }
+}
+
+// MARK: - Job Notice Icon (macOS 15+ symbol effect guard)
+
+private struct JobNoticeIcon: View {
+    var symbol: String
+    var isActive: Bool
+
+    var body: some View {
+        if #available(macOS 15.0, *) {
+            Image(systemName: symbol)
+                .font(.title3)
+                .symbolEffect(.pulse, options: .repeating, isActive: isActive)
+        } else {
+            Image(systemName: symbol)
+                .font(.title3)
+        }
     }
 }
