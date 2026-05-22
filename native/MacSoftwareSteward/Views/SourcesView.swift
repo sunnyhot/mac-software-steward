@@ -14,6 +14,7 @@ struct SourcesView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 12) {
                 Text("管理来源负责执行升级；本机应用页只展示实际安装的 .app 和来源关系。")
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                 Spacer()
                 Picker("管理来源", selection: $selectedPane) {
@@ -22,7 +23,7 @@ struct SourcesView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 280)
+                .frame(width: 260)
             }
 
             switch selectedPane {
@@ -40,7 +41,7 @@ struct BrewSourceView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 14) {
                 if let brew = model.scan?.brew {
                     InfoLine(text: brew.available ? "\(brew.version) · \(brew.prefix)" : "未检测到 Homebrew")
                     if !brew.error.isEmpty {
@@ -52,6 +53,7 @@ struct BrewSourceView: View {
                     EmptyStateView(symbol: "shippingbox", title: "等待扫描", text: "点击扫描后会显示 Homebrew 软件。")
                 }
             }
+            .padding(16)
         }
     }
 
@@ -86,7 +88,7 @@ struct AppStoreSourceView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             if let mas = model.scan?.mas {
                 HStack(spacing: 12) {
                     InfoLine(text: mas.available ? "通过 mas CLI 扫描与升级" : "未检测到 mas CLI")
@@ -98,6 +100,7 @@ struct AppStoreSourceView: View {
                             Label("安装 mas CLI", systemImage: "arrow.down.circle")
                         }
                         .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
                         .disabled(!model.canInstallMasCLI || model.hasRunningJob)
                     }
                 }
@@ -113,6 +116,8 @@ struct AppStoreSourceView: View {
                         symbol: model.canInstallMasCLI ? "terminal" : "exclamationmark.lock"
                     )
                 }
+            } else {
+                EmptyStateView(symbol: "bag", title: "等待扫描", text: "点击扫描后会显示 App Store 应用。")
             }
             ScrollView {
                 LazyVStack(spacing: 10) {
@@ -122,5 +127,6 @@ struct AppStoreSourceView: View {
                 }
             }
         }
+        .padding(16)
     }
 }

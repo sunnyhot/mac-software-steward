@@ -7,22 +7,22 @@ struct SettingsView: View {
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 18) {
                 SettingsGroupBox {
                     SettingsGroupHeader(title: "通用", symbol: "gearshape")
                     AppearanceRow()
-                    Divider().padding(.vertical, 2)
+                    Divider()
                     LaunchAtLoginRow()
-                    Divider().padding(.vertical, 2)
+                    Divider()
                     DockIconRow()
                 }
 
                 SettingsGroupBox {
                     SettingsGroupHeader(title: "扫描与升级策略", symbol: "slider.horizontal.3")
                     GreedyCaskRow()
-                    Divider().padding(.vertical, 2)
+                    Divider()
                     BrewUpdateRow()
-                    Divider().padding(.vertical, 2)
+                    Divider()
                     MaxConcurrentUpgradesRow()
                 }
 
@@ -30,7 +30,7 @@ struct SettingsView: View {
                     SettingsGroupHeader(title: "每日巡检", symbol: "calendar.badge.clock")
                     DailyInspectionToggleRow()
                     if model.dailyInspectionEnabled {
-                        Divider().padding(.vertical, 2)
+                        Divider()
                         DailyInspectionTimeRow()
                     }
                 }
@@ -39,17 +39,17 @@ struct SettingsView: View {
                     SettingsGroupHeader(title: "应用更新", symbol: "arrow.down.app")
                     AutoCheckUpdateRow()
                     if updater.automaticChecksEnabled {
-                        Divider().padding(.vertical, 2)
+                        Divider()
                         AutoDownloadUpdateRow()
                     }
-                    Divider().padding(.vertical, 2)
+                    Divider()
                     ManualCheckUpdateRow()
                 }
 
                 Spacer(minLength: 0)
             }
-            .padding(24)
-            .frame(maxWidth: 640, alignment: .leading)
+            .padding(20)
+            .frame(maxWidth: 600, alignment: .leading)
         }
     }
 }
@@ -63,6 +63,10 @@ struct SettingsGroupBox<Content: View>: View {
         }
         .padding(16)
         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 1)
+        )
     }
 }
 
