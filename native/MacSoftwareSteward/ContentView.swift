@@ -13,17 +13,24 @@ struct ContentView: View {
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 180, ideal: 210)
         } detail: {
-            VStack(spacing: 0) {
-                if model.selectedTab != .settings {
-                    HeaderView()
-                    Divider()
-                }
-                MainPanel()
-            }
+            detailContent
         }
         .sheet(isPresented: $updater.showUpdateDialog) {
             AppUpdateDialog()
                 .environmentObject(updater)
+        }
+    }
+
+    @ViewBuilder
+    private var detailContent: some View {
+        if model.selectedTab == .settings {
+            MainPanel()
+        } else {
+            VStack(spacing: 0) {
+                HeaderView()
+                Divider()
+                MainPanel()
+            }
         }
     }
 }
@@ -34,72 +41,90 @@ private struct HeaderView: View {
     @EnvironmentObject private var model: StewardModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // Title + actions
-            HStack(alignment: .firstTextBaseline, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Mac 软件管家")
-                        .font(.title.bold())
-                    Text("本机应用是实际安装的 .app，总览其来源；Homebrew/App Store 是可执行升级的管理来源。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+        VStack(alignment: .leading, spacing: 12) {
+            // Toolbar row: subtitle + actions
+            toolbarRow
+
+            // Conditional banners
+            VStack(spacing: 8) {
+                if !model.errorMessage.isEmpty {
+                    errorBanner
                 }
-
-                Spacer(minLength: 16)
-
-                Button {
-                    Task { await model.scanSoftware() }
-                } label: {
-                    Label(model.isScanning ? "扫描中" : "扫描", systemImage: model.isScanning ? "hourglass" : "arrow.clockwise")
+                if let progress = model.upgradeProgress, progress.total > 0 {
+                    UpgradeProgressBar(progress: progress)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-                .disabled(model.isScanning)
-
-                Button {
-                    Task { await model.upgradeAll() }
-                } label: {
-                    Label(model.hasRunningJob ? "升级中" : "一键升级", systemImage: model.hasRunningJob ? "hourglass" : "bolt.fill")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
-                .disabled(model.availableUpdates.isEmpty)
-                .help(model.upgradeAllHelpText)
-            }
-
-            // Error banner
-            if !model.errorMessage.isEmpty {
-                HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                    Text(model.errorMessage)
-                        .font(.subheadline)
-                }
-                .foregroundStyle(.red)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(.red.opacity(0.25), lineWidth: 1)
-                )
-            }
-
-            // Upgrade progress
-            if let progress = model.upgradeProgress, progress.total > 0 {
-                UpgradeProgressBar(progress: progress)
             }
 
             // Metrics
-            HStack(spacing: 12) {
-                MetricView(title: "本机应用", value: model.scan?.summary.applications, symbol: "macwindow")
-                MetricView(title: "Brew Formula", value: model.scan?.summary.brewFormulae, symbol: "cube")
-                MetricView(title: "Brew Cask", value: model.scan?.summary.brewCasks, symbol: "slider.horizontal.3")
-                MetricView(title: "可操作升级", value: model.scan?.summary.actionable, symbol: "checkmark.shield")
-            }
+            metricsRow
         }
-        .padding(20)
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
+    }
+
+    // MARK: Toolbar Row
+
+    private var toolbarRow: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text("Mac 软件管家")
+                .font(.headline)
+                .foregroundStyle(.primary)
+
+            Text("本机应用是实际安装的 .app；Homebrew / App Store 是可执行升级的管理来源。")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .layoutPriority(0)
+
+            Spacer(minLength: 16)
+
+            Button {
+                Task { await model.scanSoftware() }
+            } label: {
+                Label(model.isScanning ? "扫描中" : "扫描", systemImage: model.isScanning ? "hourglass" : "arrow.clockwise")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(model.isScanning)
+
+            Button {
+                Task { await model.upgradeAll() }
+            } label: {
+                Label(model.hasRunningJob ? "升级中" : "一键升级", systemImage: model.hasRunningJob ? "hourglass" : "bolt.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(model.availableUpdates.isEmpty)
+            .help(model.upgradeAllHelpText)
+        }
+    }
+
+    // MARK: Error Banner
+
+    private var errorBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+            Text(model.errorMessage)
+                .font(.subheadline)
+        }
+        .foregroundStyle(.red)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    // MARK: Metrics Row
+
+    private var metricsRow: some View {
+        HStack(spacing: 10) {
+            MetricView(title: "本机应用", value: model.scan?.summary.applications, symbol: "macwindow")
+            MetricView(title: "Brew Formula", value: model.scan?.summary.brewFormulae, symbol: "cube")
+            MetricView(title: "Brew Cask", value: model.scan?.summary.brewCasks, symbol: "slider.horizontal.3")
+            MetricView(title: "可操作升级", value: model.scan?.summary.actionable, symbol: "checkmark.shield")
+        }
     }
 }
 
@@ -113,23 +138,24 @@ private struct MetricView: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: symbol)
-                .font(.title3)
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 34, height: 34)
-                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 28)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
                 Text(value.map(String.init) ?? "-")
-                    .font(.system(.title3, design: .rounded, weight: .bold))
+                    .font(.system(.callout, design: .rounded, weight: .semibold))
                     .monospacedDigit()
             }
             Spacer(minLength: 0)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 66)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, minHeight: 52)
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -145,16 +171,7 @@ private struct MainPanel: View {
                     .font(.title2.bold())
                 Spacer()
                 if model.selectedTab.usesSearch {
-                    HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundStyle(.secondary)
-                        TextField("搜索名称、版本、路径", text: $model.query)
-                            .textFieldStyle(.plain)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .frame(minWidth: 200, idealWidth: 320, maxWidth: 400)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                    searchField
                 }
             }
 
@@ -176,6 +193,19 @@ private struct MainPanel: View {
             }
         }
         .padding(18)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("搜索名称、版本、路径", text: $model.query)
+                .textFieldStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(minWidth: 200, idealWidth: 320, maxWidth: 400)
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

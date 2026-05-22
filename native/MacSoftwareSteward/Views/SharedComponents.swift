@@ -12,7 +12,7 @@ struct Badge: View {
             .lineLimit(1)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(color.opacity(0.12), in: Capsule())
+            .background(color.opacity(0.15), in: Capsule())
             .foregroundStyle(color)
     }
 }
@@ -61,11 +61,7 @@ struct WarningLine: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(.red.opacity(0.25), lineWidth: 1)
-            )
+            .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -77,9 +73,10 @@ struct InstallToolPrompt: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: symbol)
-                .font(.title3)
-                .frame(width: 36, height: 36)
-                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .frame(width: 32, height: 32)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.headline)
@@ -89,7 +86,7 @@ struct InstallToolPrompt: View {
             Spacer()
         }
         .padding(12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -147,17 +144,17 @@ struct UpgradeProgressBar: View {
     var progress: UpgradeProgress
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text("正在升级 \(progress.completed)/\(progress.total)")
                             .font(.subheadline.bold())
                         if let current = progress.currentPackage {
                             Text("·")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.tertiary)
                             Text(current)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
@@ -172,21 +169,18 @@ struct UpgradeProgressBar: View {
                 }
                 Spacer()
                 Text("\(Int(progress.fraction * 100))%")
-                    .font(.system(.title3, design: .rounded, weight: .bold))
+                    .font(.system(.callout, design: .rounded, weight: .semibold))
                     .monospacedDigit()
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(.secondary)
             }
 
             ProgressView(value: progress.fraction)
                 .progressViewStyle(.linear)
                 .tint(progress.failed > 0 && !progress.isRunning ? .orange : .accentColor)
         }
-        .padding(12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.accentColor.opacity(0.2), lineWidth: 1)
-        )
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
