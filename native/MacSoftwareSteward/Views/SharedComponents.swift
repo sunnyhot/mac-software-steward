@@ -443,3 +443,115 @@ func logLineColor(_ stream: String) -> Color {
     default: return .secondary
     }
 }
+
+// MARK: - 管理来源错误恢复卡片
+
+struct ErrorRecoveryCard: View {
+    var diagnosis: SourceDiagnosis
+    var onAction: (SourceRecoveryAction) -> Void
+    var isProcessing: Bool = false
+
+    @State private var showCopied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // 原因
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+                Text(diagnosis.reason)
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(.primary)
+            }
+
+            // 建议
+            Text(diagnosis.suggestion)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // 终端命令提示（如果有）
+            if let cmd = diagnosis.terminalCommand {
+                TerminalCommandHint(command: cmd, hint: diagnosis.terminalHint)
+            }
+
+            // 操作按钮
+            if let action = diagnosis.action, let label = diagnosis.actionLabel {
+                HStack(spacing: 10) {
+                    Button {
+                        onAction(action)
+                    } label: {
+                        HStack(spacing: 6) {
+                            if isProcessing {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text(label)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(isProcessing)
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(.orange.opacity(0.25), lineWidth: 1)
+        )
+    }
+}
+
+/// 可复制的终端命令提示条
+struct TerminalCommandHint: View {
+    var command: String
+    var hint: String?
+
+    @State private var showCopied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let hint {
+                Text(hint)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            HStack(spacing: 8) {
+                Text(command)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                Spacer()
+                Button {
+                    copyToPasteboard(command)
+                    withAnimation(.spring(response: 0.3)) {
+                        showCopied = true
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        withAnimation(.spring(response: 0.3)) {
+                            showCopied = false
+                        }
+                    }
+                } label: {
+                    if showCopied {
+                        Label("已复制", systemImage: "checkmark.circle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.green)
+                    } else {
+                        Label("复制", systemImage: "doc.on.doc")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+        }
+    }
+}
