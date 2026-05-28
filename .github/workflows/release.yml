@@ -46,6 +46,7 @@ jobs:
           echo "Build verified: $(du -sh build/MacSoftwareSteward.app)"
 
       - name: Package
+        id: package
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           mkdir -p release
@@ -53,10 +54,31 @@ jobs:
             build/MacSoftwareSteward.app release/MacSoftwareSteward.zip
           cp release/MacSoftwareSteward.zip "release/MacSoftwareSteward-v${VERSION}.zip"
           cd release
-          shasum -a 256 MacSoftwareSteward.zip > MacSoftwareSteward.zip.sha256
+          SHA256=$(shasum -a 256 MacSoftwareSteward.zip | awk '{print $1}')
+          echo "${SHA256}  MacSoftwareSteward.zip" > MacSoftwareSteward.zip.sha256
           shasum -a 256 "MacSoftwareSteward-v${VERSION}.zip" > "MacSoftwareSteward-v${VERSION}.zip.sha256"
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
           echo "Package contents:"
           ls -lh
+
+      - name: Generate latest.json
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          SHA256="${{ steps.package.outputs.sha256 }}"
+          cat > release/latest.json <<MANIFEST_EOF
+          {
+            "version": "${VERSION}",
+            "tag": "${TAG}",
+            "asset": "MacSoftwareSteward.zip",
+            "sha256": "${SHA256}",
+            "notes": "Mac 软件管家 ${TAG}",
+            "download_url": "https://github.com/sunnyhot/mac-software-steward/releases/download/${TAG}/MacSoftwareSteward.zip",
+            "html_url": "https://github.com/sunnyhot/mac-software-steward/releases/tag/${TAG}"
+          }
+          MANIFEST_EOF
+          echo "Generated latest.json:"
+          cat release/latest.json
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -67,5 +89,6 @@ jobs:
             release/MacSoftwareSteward.zip.sha256
             release/MacSoftwareSteward-v${{ steps.version.outputs.version }}.zip
             release/MacSoftwareSteward-v${{ steps.version.outputs.version }}.zip.sha256
+            release/latest.json
           draft: false
           prerelease: false

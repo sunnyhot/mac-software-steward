@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import CryptoKit
 
 @MainActor
 final class AppUpdateModel: ObservableObject {
@@ -48,6 +49,11 @@ final class AppUpdateModel: ObservableObject {
     private static let automaticDownloadsKey = "AppUpdateAutomaticDownloadsEnabled"
     private static let checkInterval: TimeInterval = 4 * 3600
 
+    /// 静态 manifest 下载地址（latest.json）
+    private var manifestURL: String {
+        "https://github.com/\(owner)/\(repo)/releases/latest/download/latest.json"
+    }
+
     init(session: URLSession = .shared) {
         self.session = session
         self.automaticChecksEnabled = UserDefaults.standard.object(forKey: Self.automaticChecksKey) as? Bool ?? true
@@ -77,7 +83,7 @@ final class AppUpdateModel: ObservableObject {
         isChecking = true
         progress = ""
         if !automatic {
-            status = "正在检查 GitHub Release..."
+            status = "正在检查更新..."
         }
 
         do {
@@ -163,50 +169,39 @@ final class AppUpdateModel: ObservableObject {
         }
     }
 
+    // MARK: - 静态 manifest 获取
+
+    /// 从 latest.json 静态 manifest 读取最新版本信息。
+    /// 不再调用 GitHub REST API，不受 API 速率限制。
     private func fetchLatestRelease() async throws -> GitHubRelease {
-        guard let url = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases/latest") else {
-            throw AppUpdateError.message("GitHub Release URL 无效。")
+        guard let url = URL(string: manifestURL) else {
+            throw AppUpdateError.message("Manifest URL 无效。")
         }
         var request = URLRequest(url: url)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("MacSoftwareSteward/\(currentVersion)", forHTTPHeaderField: "User-Agent")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        // 禁用缓存，确保每次拿到最新 manifest
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            return try await fetchLatestReleaseByRedirect()
-        }
-        do {
-            return try JSONDecoder().decode(GitHubRelease.self, from: data)
-        } catch {
-            return try await fetchLatestReleaseByRedirect()
-        }
-    }
-
-    private func fetchLatestReleaseByRedirect() async throws -> GitHubRelease {
-        guard let url = URL(string: "https://github.com/\(owner)/\(repo)/releases/latest") else {
-            throw AppUpdateError.message("GitHub Release URL 无效。")
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            throw AppUpdateError.message("获取 latest.json 失败（HTTP \(statusCode)）。")
         }
 
-        let (_, response) = try await session.data(from: url)
-        guard let finalURL = response.url?.absoluteString,
-              let tag = finalURL.components(separatedBy: "/releases/tag/").last,
-              !tag.isEmpty,
-              tag != finalURL else {
-            throw AppUpdateError.message("无法解析 GitHub 最新版本。请稍后再试。")
-        }
+        let manifest = try JSONDecoder().decode(LatestManifest.self, from: data)
 
-        let downloadURL = "https://github.com/\(owner)/\(repo)/releases/download/\(tag)/\(assetName)"
+        // 转换为 GitHubRelease 以保持下游逻辑不变
         return GitHubRelease(
-            tagName: tag,
-            name: tag,
-            htmlURL: "https://github.com/\(owner)/\(repo)/releases/tag/\(tag)",
-            body: "GitHub API 暂不可用，已通过 Release 重定向检测到最新版本。",
+            tagName: manifest.tag,
+            name: manifest.tag,
+            htmlURL: manifest.htmlURL,
+            body: manifest.notes,
             draft: false,
             prerelease: false,
             assets: [
                 GitHubRelease.Asset(
-                    name: assetName,
-                    browserDownloadURL: downloadURL,
+                    name: manifest.asset,
+                    browserDownloadURL: manifest.downloadURL,
                     size: 0
                 )
             ]
@@ -402,6 +397,28 @@ final class AppUpdateModel: ObservableObject {
         Bundle.main.object(forInfoDictionaryKey: "GitHubReleaseAppBundleName") as? String ?? "MacSoftwareSteward.app"
     }
 }
+
+// MARK: - 静态 Manifest 模型
+
+/// latest.json 的数据结构，由 Release workflow 自动生成。
+/// 包含：version, tag, asset, sha256, notes, download_url, html_url
+private struct LatestManifest: Decodable {
+    var version: String
+    var tag: String
+    var asset: String
+    var sha256: String
+    var notes: String
+    var downloadURL: String
+    var htmlURL: String
+
+    enum CodingKeys: String, CodingKey {
+        case version, tag, asset, sha256, notes
+        case downloadURL = "download_url"
+        case htmlURL = "html_url"
+    }
+}
+
+// MARK: - GitHub Release 模型（保留，供内部使用）
 
 private struct GitHubRelease: Decodable {
     struct Asset: Decodable {
