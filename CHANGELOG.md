@@ -65,3 +65,12 @@
 - [LUC-149] Brew 扫描超时独立处理
 - [LUC-150] JobsView 日志 LazyVStack 优化
 - [LUC-151] classify 算法优化 + normalizeToken 缓存
+
+## [0.12.1] - 2026-05-29
+
+### Fixed
+- 添加完整 codesign 签名步骤到 build-native.sh，修复 macOS 应用「租车总成本比较」打开报错"可能已损坏或不完整"的问题 (LUC-251)
+  - Sparkle.framework ad-hoc 签名
+  - codesign --deep --force --sign - 整包签名
+  - codesign --verify --deep --strict 验证
+  - xattr -cr 清除隔离属性
