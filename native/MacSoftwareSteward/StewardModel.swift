@@ -789,6 +789,18 @@ final class StewardModel: ObservableObject {
     private var dailyAgentPath: String {
         DailyInspectionScheduler.helperPath()
     }
+
+    /// 执行管理来源页面的恢复操作
+    func performSourceRecovery(action: SourceRecoveryAction) async {
+        switch action {
+        case .rescan:
+            await scanSoftware()
+        case .installMas:
+            await installMasCLI()
+        case .openURL(let url):
+            NSWorkspace.shared.open(url)
+        }
+    }
 }
 
 private struct FailureAnalysis {

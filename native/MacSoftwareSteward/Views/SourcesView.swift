@@ -38,14 +38,32 @@ struct SourcesView: View {
 struct BrewSourceView: View {
     @EnvironmentObject private var model: StewardModel
 
+    private var brewDiagnosis: SourceDiagnosis? {
+        guard let brew = model.scan?.brew else { return nil }
+        return SourceDiagnosticEngine.diagnoseBrew(
+            available: brew.available,
+            error: brew.error,
+            hasScan: model.scan != nil
+        )
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 if let brew = model.scan?.brew {
                     InfoLine(text: brew.available ? "\(brew.version) · \(brew.prefix)" : "未检测到 Homebrew")
-                    if !brew.error.isEmpty {
-                        WarningLine(text: brew.error)
+
+                    // 错误诊断卡片（替代裸 WarningLine）
+                    if let diagnosis = brewDiagnosis {
+                        ErrorRecoveryCard(
+                            diagnosis: diagnosis,
+                            onAction: { action in
+                                Task { await model.performSourceRecovery(action: action) }
+                            },
+                            isProcessing: model.isScanning
+                        )
                     }
+
                     PackageSection(title: "Formula", packages: filteredBrew(brew.formulae))
                     PackageSection(title: "Cask", packages: filteredBrew(brew.casks))
                 } else {
@@ -85,32 +103,49 @@ struct AppStoreSourceView: View {
         }
     }
 
+    private var masDiagnosis: SourceDiagnosis? {
+        guard let mas = model.scan?.mas else { return nil }
+        return SourceDiagnosticEngine.diagnoseMas(
+            available: mas.available,
+            error: mas.error,
+            canInstallMas: model.canInstallMasCLI
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let mas = model.scan?.mas {
                 HStack(spacing: 12) {
                     InfoLine(text: mas.available ? "通过 mas CLI 扫描与升级" : "未检测到 mas CLI")
                     Spacer()
-                    if !mas.available {
+                    if !mas.available && model.canInstallMasCLI {
                         Button {
                             Task { await model.installMasCLI() }
                         } label: {
                             Label("安装 mas CLI", systemImage: "arrow.down.circle")
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(!model.canInstallMasCLI || model.hasRunningJob)
+                        .disabled(model.hasRunningJob)
                     }
                 }
-                if !mas.error.isEmpty {
-                    WarningLine(text: mas.error)
+
+                // 错误诊断卡片（替代裸 WarningLine）
+                if let diagnosis = masDiagnosis {
+                    ErrorRecoveryCard(
+                        diagnosis: diagnosis,
+                        onAction: { action in
+                            Task { await model.performSourceRecovery(action: action) }
+                        },
+                        isProcessing: model.isScanning || model.hasRunningJob
+                    )
                 }
-                if !mas.available {
+
+                // mas 不可用且无法自动安装时的额外提示（保留已有逻辑）
+                if !mas.available && !model.canInstallMasCLI {
                     InstallToolPrompt(
-                        title: model.canInstallMasCLI ? "可通过 Homebrew 自动安装" : "需要先安装 Homebrew",
-                        text: model.canInstallMasCLI
-                            ? "点击安装会执行 brew install mas，完成后自动重新扫描 App Store 应用。"
-                            : "当前未检测到可用的 Homebrew，无法自动安装 mas CLI。",
-                        symbol: model.canInstallMasCLI ? "terminal" : "exclamationmark.lock"
+                        title: "需要先安装 Homebrew",
+                        text: "当前未检测到可用的 Homebrew，无法自动安装 mas CLI。",
+                        symbol: "exclamationmark.lock"
                     )
                 }
             }
