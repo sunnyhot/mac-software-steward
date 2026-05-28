@@ -34,6 +34,8 @@ final class AppUpdateModel: ObservableObject {
     @Published var downloadedSizeText: String? = nil
     /// 下载速度（人类可读，如 "3.5 MB/s"）
     @Published var downloadSpeedText: String? = nil
+    /// 最近一次下载/安装失败的用户可读错误信息；nil 表示无失败
+    @Published var updateErrorMessage: String? = nil
 
     private var latestRelease: GitHubRelease?
     private let session: URLSession
@@ -76,6 +78,7 @@ final class AppUpdateModel: ObservableObject {
         guard !isChecking else { return }
         isChecking = true
         progress = ""
+        updateErrorMessage = nil
         if !automatic {
             status = "正在检查 GitHub Release..."
         }
@@ -137,6 +140,7 @@ final class AppUpdateModel: ObservableObject {
         }
 
         isInstalling = true
+        updateErrorMessage = nil
         downloadFraction = 0
         downloadedSizeText = nil
         downloadSpeedText = nil
@@ -152,15 +156,56 @@ final class AppUpdateModel: ObservableObject {
             let extractedApp = try await extractApp(from: downloaded)
             progress = "正在准备重启并安装..."
             let destination = try scheduleInstallAndRestart(newAppURL: extractedApp)
+            updateErrorMessage = nil
             status = "安装脚本已启动，将安装到 \(destination.path) 并重启。"
         } catch {
-            status = "安装更新失败：\(error.localizedDescription)"
+            let friendlyMessage = Self.friendlyUpdateErrorMessage(from: error)
+            updateErrorMessage = friendlyMessage
+            status = "安装更新失败：\(friendlyMessage)"
             progress = ""
             isInstalling = false
             downloadFraction = nil
             downloadedSizeText = nil
             downloadSpeedText = nil
+            // 自动下载失败时打开更新弹窗让用户看到失败原因
+            showUpdateDialog = true
         }
+    }
+
+    /// 将底层错误转换为用户可理解的更新失败描述
+    private static func friendlyUpdateErrorMessage(from error: Error) -> String {
+        let nsError = error as NSError
+        let domain = nsError.domain
+        let code = nsError.code
+        let description = error.localizedDescription
+
+        // 网络相关错误
+        if domain == NSURLErrorDomain {
+            switch code {
+            case NSURLErrorNotConnectedToInternet,
+                 NSURLErrorNetworkConnectionLost,
+                 NSURLErrorCannotConnectToHost,
+                 NSURLErrorCannotFindHost,
+                 NSURLErrorDNSLookupFailed,
+                 NSURLErrorTimedOut:
+                return "网络连接失败，请检查网络后重试。"
+            case NSURLErrorCancelled:
+                return "下载已被取消。"
+            default:
+                break
+            }
+        }
+
+        // AppUpdateError.message 已是用户友好的
+        if let updateError = error as? AppUpdateError {
+            return updateError.localizedDescription
+        }
+
+        // 兜底：截断过长的技术信息
+        if description.count > 100 {
+            return String(description.prefix(100)) + "…"
+        }
+        return description
     }
 
     private func fetchLatestRelease() async throws -> GitHubRelease {

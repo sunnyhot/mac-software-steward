@@ -347,6 +347,34 @@ struct AppUpdateDialog: View {
                         .progressViewStyle(.linear)
                     }
                 }
+            } else if let errorMessage = updater.updateErrorMessage {
+                // 下载/安装失败：显示错误信息和重试入口
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.callout)
+                            .foregroundStyle(.red)
+                        Text("更新失败")
+                            .font(.system(.headline, design: .rounded))
+                            .foregroundStyle(.red)
+                        Spacer()
+                    }
+                    Text(errorMessage)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(.red.opacity(0.06))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(.red.opacity(0.2), lineWidth: 1)
+                        )
+                )
             }
 
             Divider()
@@ -375,7 +403,11 @@ struct AppUpdateDialog: View {
                     Button {
                         Task { await updater.downloadInstallAndRestart() }
                     } label: {
-                        Label("立即下载安装", systemImage: "square.and.arrow.down")
+                        if updater.updateErrorMessage != nil {
+                            Label("重试下载", systemImage: "arrow.clockwise")
+                        } else {
+                            Label("立即下载安装", systemImage: "square.and.arrow.down")
+                        }
                     }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
