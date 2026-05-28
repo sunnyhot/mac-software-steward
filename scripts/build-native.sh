@@ -44,8 +44,22 @@ xcrun swiftc \
 chmod +x "$MACOS_DIR/$APP_NAME"
 chmod +x "$MACOS_DIR/${APP_NAME}Agent"
 
-if command -v codesign >/dev/null 2>&1; then
-  codesign --force --sign - "$APP_DIR" >/dev/null
+# Ad-hoc sign (sign frameworks first, then the whole bundle)
+echo "==> Signing app bundle..."
+if [ -d "${APP_DIR}/Contents/Frameworks/Sparkle.framework" ]; then
+    codesign --force --sign - "${APP_DIR}/Contents/Frameworks/Sparkle.framework"
+    echo "    Signed Sparkle.framework"
 fi
+codesign --deep --force --sign - "${APP_DIR}"
+echo "    Ad-hoc signed ${APP_NAME}.app"
+
+# Verify signature
+echo "==> Verifying signature..."
+codesign --verify --deep --strict "${APP_DIR}"
+echo "    Signature OK"
+
+# Clear quarantine attributes
+xattr -cr "${APP_DIR}"
+echo "    Cleared quarantine attributes"
 
 echo "$APP_DIR"
