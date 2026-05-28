@@ -355,6 +355,16 @@ struct ManualCheckUpdateRow: View {
                     Text("发现新版本 \(updater.latestVersion)，可前往下载安装")
                         .font(.caption)
                         .foregroundStyle(.orange)
+                } else if let errorMessage = updater.updateErrorMessage {
+                    // 下载失败时在设置页展示错误信息
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                        Text(errorMessage)
+                            .lineLimit(2)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.red)
                 } else {
                     Text("当前版本 \(updater.currentVersion)")
                         .font(.caption)
@@ -369,11 +379,15 @@ struct ManualCheckUpdateRow: View {
             }
             .disabled(updater.isChecking || updater.isInstalling)
 
-            if updater.updateAvailable && !updater.isInstalling {
+            if (updater.updateAvailable || updater.updateErrorMessage != nil) && !updater.isInstalling {
                 Button {
                     Task { await updater.downloadInstallAndRestart() }
                 } label: {
-                    Label("下载安装", systemImage: "square.and.arrow.down")
+                    if updater.updateErrorMessage != nil {
+                        Label("重试", systemImage: "arrow.clockwise")
+                    } else {
+                        Label("下载安装", systemImage: "square.and.arrow.down")
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(updater.isInstalling)
