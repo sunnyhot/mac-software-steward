@@ -144,7 +144,7 @@ private struct HeaderView: View {
             ) {
                 model.prepareUpgradePlan()
             }
-            .disabled(model.availableUpdates.isEmpty)
+            .disabled(model.availableUpdates.isEmpty || model.hasRunningJob)
             .help(model.upgradeAllHelpText)
         }
     }

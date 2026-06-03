@@ -131,6 +131,7 @@ private struct MenuBarUpgradeMenu: View {
         .disabled(model.isScanning)
 
         Button {
+            openMainWindowOnce()
             model.prepareUpgradePlan()
         } label: {
             Label("一键升级", systemImage: "bolt.fill")

@@ -194,7 +194,13 @@ final class StewardModel: ObservableObject {
     }
 
     func confirmUpgradePlan() async {
-        let selectedRows = upgradePlanRows.filter { selectedPlanIDs.contains($0.packageID) && $0.canExecute }
+        let selectedRows = upgradePlanRows.filter { row in
+            guard selectedPlanIDs.contains(row.packageID), row.canExecute, let package = row.package else {
+                return false
+            }
+            let status = packageProgress[package.id]?.status
+            return status != .succeeded && !isPackageActive(package.id)
+        }
         guard !selectedRows.isEmpty else {
             errorMessage = "没有选中的可执行升级项。"
             return
@@ -223,8 +229,14 @@ final class StewardModel: ObservableObject {
 
             for row in rows {
                 guard let package = row.package else { continue }
+                let status = packageProgress[package.id]?.status
+                guard status != .succeeded, !isPackageActive(package.id) else { continue }
                 let command = try await command(for: package)
                 steps.append(UpgradeStep(command: command, packageID: package.id, packageName: package.name))
+            }
+
+            guard steps.contains(where: { $0.packageID != nil }) else {
+                throw StewardError.message("没有选中的可执行升级项。")
             }
 
             enqueueJob(label: "一键升级可管理软件", steps: steps, rescanAfterSuccess: true)
