@@ -2,10 +2,28 @@ import SwiftUI
 
 struct UpdatesView: View {
     @EnvironmentObject private var model: StewardModel
+    @State private var selectedFilter: UpdateFilter = .all
 
     var updates: [UpdatablePackage] {
-        filter(model.allUpgradeablePackages, query: model.query) { package in
+        let base = filter(model.allUpgradeablePackages, query: model.query) { package in
             "\(package.name) \(package.source) \(package.installedVersion) \(package.currentVersion)"
+        }
+        return base.filter { package in
+            switch selectedFilter {
+            case .all:
+                return true
+            case .homebrew:
+                return package.source.contains("Brew")
+            case .appStore:
+                return package.source.contains("App Store")
+            case .risk:
+                return package.autoUpdates || package.isPinned
+            case .failed:
+                let status = model.packageProgress[package.id]?.status
+                return status == .failed || status == .timedOut || status == .cancelled
+            case .skipped:
+                return model.policyStore.effectivePolicy(for: package, includeGreedy: model.includeGreedy) == .skip
+            }
         }
     }
 
@@ -16,6 +34,13 @@ struct UpdatesView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
+                Picker("筛选", selection: $selectedFilter) {
+                    ForEach(UpdateFilter.allCases) { filter in
+                        Text(filter.rawValue).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 420)
                 Button {
                     model.selectedTab = .settings
                 } label: {
@@ -234,6 +259,17 @@ struct UpdateRow: View {
         case nil: return package.outdated ? Color.orange.opacity(0.15) : Color.primary.opacity(0.06)
         }
     }
+}
+
+private enum UpdateFilter: String, CaseIterable, Identifiable {
+    case all = "全部"
+    case homebrew = "Homebrew"
+    case appStore = "App Store"
+    case risk = "高风险"
+    case failed = "失败"
+    case skipped = "已跳过"
+
+    var id: String { rawValue }
 }
 
 // MARK: - Status Badges

@@ -166,6 +166,22 @@ private struct LogDetailView: View {
 
                 Badge(text: job.status.rawValue, color: statusColor(job.status))
 
+                Button {
+                    copyToPasteboard(fullLogText(job))
+                } label: {
+                    Label("复制日志", systemImage: "doc.on.doc")
+                }
+                .buttonStyle(.borderless)
+                .disabled(job.log.isEmpty)
+
+                Button {
+                    copyToPasteboard(failedCommand(job))
+                } label: {
+                    Label("复制命令", systemImage: "terminal")
+                }
+                .buttonStyle(.borderless)
+                .disabled(job.status != .failed && job.status != .timedOut)
+
                 if job.status == .running {
                     Button {
                         model.cancelJob(job.id)
@@ -185,18 +201,6 @@ private struct LogDetailView: View {
                 .foregroundStyle(autoScroll ? Color.accentColor : .secondary)
                 .help(autoScroll ? "自动滚动（已开启）" : "自动滚动（已关闭）")
 
-                if !job.log.isEmpty {
-                    Button {
-                        let fullText = job.log.map { "[\($0.stream)] \($0.text)" }.joined(separator: "\n")
-                        copyToPasteboard(fullText)
-                    } label: {
-                        Image(systemName: "doc.on.doc")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .help("复制全部日志")
-                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -243,6 +247,14 @@ private struct LogDetailView: View {
                 proxy.scrollTo(lastId, anchor: .bottom)
             }
         }
+    }
+
+    private func fullLogText(_ job: UpgradeJob) -> String {
+        job.log.map { "[\($0.stream)] \($0.text)" }.joined(separator: "\n")
+    }
+
+    private func failedCommand(_ job: UpgradeJob) -> String {
+        job.log.reversed().first(where: { $0.stream == "command" })?.text.replacingOccurrences(of: "$ ", with: "") ?? job.commands.first ?? ""
     }
 }
 
