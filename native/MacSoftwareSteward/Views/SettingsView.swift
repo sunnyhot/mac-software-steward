@@ -19,6 +19,8 @@ struct SettingsView: View {
 
                 SettingsGroupBox {
                     SettingsGroupHeader(title: "扫描与升级策略", symbol: "slider.horizontal.3")
+                    PolicyHelpRow()
+                    SettingsDivider()
                     GreedyCaskRow()
                     SettingsDivider()
                     BrewUpdateRow()
@@ -161,6 +163,21 @@ struct DockIconRow: View {
             Toggle("", isOn: $dockIconVisible)
                 .toggleStyle(.switch)
                 .labelsHidden()
+        }
+    }
+}
+
+struct PolicyHelpRow: View {
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("单包升级策略")
+                    .font(.body)
+                Text("在可升级列表中可为每个软件设置自动升级、确认后升级、仅提醒或跳过；每日巡检只执行自动升级项。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
         }
     }
 }

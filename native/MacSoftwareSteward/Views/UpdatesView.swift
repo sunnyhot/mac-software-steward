@@ -161,6 +161,17 @@ struct UpdateRow: View {
                     Badge(text: "自更新", color: .blue)
                 }
 
+                Picker("", selection: Binding(
+                    get: { model.policyStore.effectivePolicy(for: package, includeGreedy: model.includeGreedy) },
+                    set: { model.policyStore.set($0, forPackageID: package.id) }
+                )) {
+                    ForEach(UpgradePolicy.allCases) { policy in
+                        Text(policy.title).tag(policy)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 116)
+
                 if let progress {
                     PackageProgressBadge(progress: progress)
                 } else {
