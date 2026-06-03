@@ -38,6 +38,7 @@ final class StewardModel: ObservableObject {
     }
 
     let policyStore = UpgradePolicyStore()
+    let historyStore = UpgradeHistoryStore()
 
     private var activeJobCount = 0
     private var pendingJobQueue: [(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool)] = []
@@ -521,6 +522,18 @@ final class StewardModel: ObservableObject {
                 $0.log.append(LogLine(stream: "system", text: "完成"))
             }
             $0.finishedAt = Date()
+        }
+        if let job = jobs.first(where: { $0.id == id }) {
+            historyStore.append(UpgradeHistoryRecord(
+                id: job.id,
+                label: job.label,
+                status: job.status.rawValue,
+                startedAt: job.startedAt,
+                finishedAt: job.finishedAt,
+                commands: job.commands,
+                exitCode: job.exitCode,
+                summary: failureSummary(for: job)
+            ))
         }
 
         upgradeProgress = nil

@@ -25,6 +25,25 @@ struct JobsView: View {
                         JobRow(job: job, isSelected: job.id == selectedJobId)
                             .tag(job.id)
                     }
+
+                    if !model.historyStore.records.isEmpty {
+                        Section {
+                            ForEach(model.historyStore.records.prefix(10)) { record in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(record.label)
+                                        .font(.caption.bold())
+                                    Text("\(record.status) · \(record.summary)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                            }
+                        } header: {
+                            Text("历史记录")
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 .listStyle(.sidebar)
                 .frame(minWidth: 220, idealWidth: 280, maxWidth: 340)
