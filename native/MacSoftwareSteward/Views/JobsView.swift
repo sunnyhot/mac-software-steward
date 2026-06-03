@@ -34,6 +34,7 @@ struct JobsView: View {
                 // 日志详情
                 if let job = selectedJob {
                     LogDetailView(job: job, autoScroll: $autoScroll)
+                        .environmentObject(model)
                         .transition(.opacity)
                 } else {
                     VStack(spacing: 10) {
@@ -127,6 +128,7 @@ private struct JobRow: View {
 // MARK: - Log Detail View
 
 private struct LogDetailView: View {
+    @EnvironmentObject private var model: StewardModel
     var job: UpgradeJob
     @Binding var autoScroll: Bool
 
@@ -146,8 +148,12 @@ private struct LogDetailView: View {
                 Badge(text: job.status.rawValue, color: statusColor(job.status))
 
                 if job.status == .running {
-                    ProgressView()
-                        .controlSize(.small)
+                    Button {
+                        model.cancelJob(job.id)
+                    } label: {
+                        Label("取消任务", systemImage: "stop.circle")
+                    }
+                    .buttonStyle(.bordered)
                 }
 
                 Button {

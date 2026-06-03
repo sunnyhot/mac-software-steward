@@ -219,7 +219,8 @@ struct UpdateRow: View {
         switch progress?.status {
         case .running, .queued: return Color.accentColor.opacity(0.04)
         case .succeeded: return Color.green.opacity(0.04)
-        case .failed: return Color.red.opacity(0.04)
+        case .failed, .cancelled, .timedOut: return Color.red.opacity(0.04)
+        case .warning: return Color.yellow.opacity(0.04)
         case nil: return package.outdated ? Color.orange.opacity(0.03) : .clear
         }
     }
@@ -228,7 +229,8 @@ struct UpdateRow: View {
         switch progress?.status {
         case .running, .queued: return Color.accentColor.opacity(0.2)
         case .succeeded: return Color.green.opacity(0.2)
-        case .failed: return Color.red.opacity(0.2)
+        case .failed, .cancelled, .timedOut: return Color.red.opacity(0.2)
+        case .warning: return Color.yellow.opacity(0.2)
         case nil: return package.outdated ? Color.orange.opacity(0.15) : Color.primary.opacity(0.06)
         }
     }
@@ -291,6 +293,9 @@ struct PackageProgressBadge: View {
         case .running: return "hourglass"
         case .succeeded: return "checkmark.circle.fill"
         case .failed: return "xmark.circle.fill"
+        case .cancelled: return "stop.circle.fill"
+        case .timedOut: return "timer"
+        case .warning: return "exclamationmark.triangle.fill"
         }
     }
 
@@ -298,7 +303,8 @@ struct PackageProgressBadge: View {
         switch progress.status {
         case .queued, .running: return .accentColor
         case .succeeded: return .green
-        case .failed: return .red
+        case .failed, .cancelled, .timedOut: return .red
+        case .warning: return .yellow
         }
     }
 }
@@ -331,7 +337,7 @@ struct PackageProgressDetail: View {
                     .font(.caption)
                     .foregroundStyle(.green)
             }
-            if progress.status == .failed && !progress.failureSummary.isEmpty {
+            if (progress.status == .failed || progress.status == .timedOut) && !progress.failureSummary.isEmpty {
                 failureDetail
             } else if progress.status != .queued {
                 Text(progress.detail)

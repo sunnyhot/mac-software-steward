@@ -36,6 +36,8 @@ struct CommandResult {
 struct StreamingCommandResult {
     var code: Int32
     var recentOutput: String
+    var terminationReason: CommandTerminationReason = .exited
+
     /// Whether the process was terminated by a signal (crash)
     var wasSignaled: Bool {
         code < 0 || code > 128
@@ -61,6 +63,30 @@ struct StreamingCommandResult {
             }
         }
         return nil
+    }
+}
+
+enum CommandTerminationReason: String {
+    case exited
+    case timedOut
+    case cancelled
+    case launchFailed
+}
+
+final class CommandCancellationToken: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        lock.unlock()
+    }
+
+    var isCancelled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancelled
     }
 }
 
@@ -166,6 +192,8 @@ enum CommandRunner {
     static func runStreamingDetailed(
         _ executable: String,
         arguments: [String],
+        timeout: TimeInterval = 7200,
+        cancellationToken: CommandCancellationToken? = nil,
         onOutput: @escaping @Sendable (String, String) -> Void
     ) async -> StreamingCommandResult {
         await withCheckedContinuation { continuation in
@@ -174,6 +202,7 @@ enum CommandRunner {
             let stderr = Pipe()
             let gate = FinishGate()
             let recentOutput = LockedRecentOutput()
+            let terminationReason = LockedTerminationReason()
 
             process.executableURL = URL(fileURLWithPath: executable)
             process.arguments = arguments
@@ -196,19 +225,50 @@ enum CommandRunner {
                 emit(stderr.fileHandleForReading.readDataToEndOfFile(), stream: "stderr", recentOutput: recentOutput, onOutput: onOutput)
                 continuation.resume(returning: StreamingCommandResult(
                     code: finishedProcess.terminationStatus,
-                    recentOutput: recentOutput.text()
+                    recentOutput: recentOutput.text(),
+                    terminationReason: terminationReason.value()
                 ))
+            }
+
+            let requestTermination: @Sendable (CommandTerminationReason) -> Void = { reason in
+                guard process.isRunning else { return }
+                terminationReason.set(reason)
+                process.terminate()
+                DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
+                    if process.isRunning {
+                        process.interrupt()
+                    }
+                }
             }
 
             do {
                 try process.run()
             } catch {
+                guard gate.close() else { return }
                 onOutput("stderr", error.localizedDescription)
                 recentOutput.append(stream: "stderr", text: error.localizedDescription)
                 continuation.resume(returning: StreamingCommandResult(
                     code: -1,
-                    recentOutput: recentOutput.text()
+                    recentOutput: recentOutput.text(),
+                    terminationReason: .launchFailed
                 ))
+                return
+            }
+
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
+                requestTermination(.timedOut)
+            }
+
+            if let cancellationToken {
+                DispatchQueue.global().async {
+                    while process.isRunning {
+                        if cancellationToken.isCancelled {
+                            requestTermination(.cancelled)
+                            return
+                        }
+                        Thread.sleep(forTimeInterval: 0.1)
+                    }
+                }
             }
         }
     }
@@ -292,6 +352,25 @@ private final class FinishGate: @unchecked Sendable {
         guard !isClosed else { return false }
         isClosed = true
         return true
+    }
+}
+
+private final class LockedTerminationReason: @unchecked Sendable {
+    private let lock = NSLock()
+    private var reason: CommandTerminationReason = .exited
+
+    func set(_ next: CommandTerminationReason) {
+        lock.lock()
+        if reason == .exited {
+            reason = next
+        }
+        lock.unlock()
+    }
+
+    func value() -> CommandTerminationReason {
+        lock.lock()
+        defer { lock.unlock() }
+        return reason
     }
 }
 

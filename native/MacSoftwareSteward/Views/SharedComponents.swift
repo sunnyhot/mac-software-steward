@@ -464,7 +464,8 @@ func statusColor(_ status: JobStatus) -> Color {
     switch status {
     case .queued, .running: return .orange
     case .succeeded: return .green
-    case .failed: return .red
+    case .failed, .cancelled, .timedOut: return .red
+    case .warning: return .yellow
     }
 }
 

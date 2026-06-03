@@ -59,6 +59,9 @@ enum JobStatus: String {
     case running = "运行中"
     case succeeded = "完成"
     case failed = "失败"
+    case cancelled = "已取消"
+    case timedOut = "超时"
+    case warning = "需确认"
 }
 
 enum PackageUpgradeStatus: String, Hashable {
@@ -66,6 +69,9 @@ enum PackageUpgradeStatus: String, Hashable {
     case running = "升级中"
     case succeeded = "完成"
     case failed = "失败"
+    case cancelled = "已取消"
+    case timedOut = "超时"
+    case warning = "需确认"
 }
 
 struct AppItem: Identifiable, Hashable {

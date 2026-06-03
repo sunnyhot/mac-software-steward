@@ -42,6 +42,7 @@ final class StewardModel: ObservableObject {
     private var activeJobCount = 0
     private var pendingJobQueue: [(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool)] = []
     private var debounceTask: Task<Void, Never>?
+    private var activeCancellationTokens: [UUID: CommandCancellationToken] = [:]
     @Published var upgradeProgress: UpgradeProgress?
     /// 用户关闭过的失败任务 ID，关闭后不再显示失败通知（直到新任务失败）
     @Published var dismissedFailureJobID: UUID?
@@ -168,6 +169,10 @@ final class StewardModel: ObservableObject {
     func clearPackageFailure(_ packageID: String) {
         packageProgress.removeValue(forKey: packageID)
         recomputeDerivedData()
+    }
+
+    func cancelJob(_ id: UUID) {
+        activeCancellationTokens[id]?.cancel()
     }
 
     /// 关闭失败通知面板（不删除任务记录，仅隐藏通知）
@@ -432,15 +437,58 @@ final class StewardModel: ObservableObject {
                 updateUpgradeProgress(currentPackage: step.packageName)
             }
             appendLog(id: id, stream: "command", text: "$ \(command.display)")
-            let result = await CommandRunner.runStreamingDetailed(command.executable, arguments: command.arguments) { stream, text in
+            let token = CommandCancellationToken()
+            activeCancellationTokens[id] = token
+            let result = await CommandRunner.runStreamingDetailed(
+                command.executable,
+                arguments: command.arguments,
+                timeout: 7200,
+                cancellationToken: token
+            ) { stream, text in
                 Task { @MainActor in
                     self.appendLog(id: id, stream: stream, text: text)
                     self.updatePackageDetail(for: step, stream: stream, text: text)
                 }
             }
+            activeCancellationTokens[id] = nil
             let code = result.code
 
-            if code != 0 {
+            if result.terminationReason == .cancelled {
+                failedCount += 1
+                firstErrorCode = firstErrorCode ?? (code == 0 ? 1 : code)
+                markCancelled(step)
+                updateJob(id) {
+                    $0.status = .cancelled
+                    $0.exitCode = code == 0 ? 1 : code
+                    $0.log.append(LogLine(stream: "system", text: "已取消：\(command.display)"))
+                }
+                if step.packageID != nil {
+                    completedSteps += 1
+                    updateUpgradeProgress(completed: completedSteps, failed: failedCount, currentPackage: nil)
+                }
+                break
+            } else if result.terminationReason == .timedOut {
+                failedCount += 1
+                firstErrorCode = firstErrorCode ?? (code == 0 ? 1 : code)
+                let analysis = FailureAnalysis(
+                    summary: "升级命令超时。",
+                    suggestion: "请稍后重试，或在终端中手动运行命令检查是否卡在网络、权限或交互提示。",
+                    action: .retryInTerminal,
+                    copyText: "命令：\(command.display)\n最近输出：\n\(result.recentOutput)",
+                    command: command.display
+                )
+                markTimedOut(step, analysis: analysis)
+                updateJob(id) {
+                    $0.status = .timedOut
+                    $0.exitCode = code == 0 ? 1 : code
+                    $0.log.append(LogLine(stream: "system", text: "超时：\(command.display)"))
+                }
+                if step.packageID != nil {
+                    completedSteps += 1
+                    updateUpgradeProgress(completed: completedSteps, failed: failedCount, currentPackage: nil)
+                }
+                break
+            } else if code != 0 {
                 failedCount += 1
                 if firstErrorCode == nil { firstErrorCode = code }
                 let analysis = failureAnalysis(command: command.display, code: code, output: result.recentOutput)
@@ -461,7 +509,9 @@ final class StewardModel: ObservableObject {
         }
 
         updateJob(id) {
-            if failedCount > 0 {
+            if $0.status == .cancelled || $0.status == .timedOut {
+                $0.exitCode = firstErrorCode ?? $0.exitCode ?? 1
+            } else if failedCount > 0 {
                 $0.status = .failed
                 $0.exitCode = firstErrorCode ?? 1
                 $0.log.append(LogLine(stream: "system", text: "完成，\(failedCount) 个步骤失败"))
@@ -474,6 +524,7 @@ final class StewardModel: ObservableObject {
         }
 
         upgradeProgress = nil
+        activeCancellationTokens[id] = nil
 
         if rescanAfterSuccess {
             await scanSoftware()
@@ -540,6 +591,31 @@ final class StewardModel: ObservableObject {
             packageID: packageID,
             packageName: packageName,
             status: .failed,
+            detail: analysis.summary,
+            failureSummary: analysis.summary,
+            recoverySuggestion: analysis.suggestion,
+            copyText: analysis.copyText,
+            recoveryAction: analysis.action,
+            lastFailedCommand: analysis.command
+        )
+    }
+
+    private func markCancelled(_ step: UpgradeStep) {
+        guard let packageID = step.packageID, let packageName = step.packageName else { return }
+        packageProgress[packageID] = PackageUpgradeProgress(
+            packageID: packageID,
+            packageName: packageName,
+            status: .cancelled,
+            detail: "升级已取消"
+        )
+    }
+
+    private func markTimedOut(_ step: UpgradeStep, analysis: FailureAnalysis) {
+        guard let packageID = step.packageID, let packageName = step.packageName else { return }
+        packageProgress[packageID] = PackageUpgradeProgress(
+            packageID: packageID,
+            packageName: packageName,
+            status: .timedOut,
             detail: analysis.summary,
             failureSummary: analysis.summary,
             recoverySuggestion: analysis.suggestion,
