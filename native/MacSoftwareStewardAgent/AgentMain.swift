@@ -18,9 +18,26 @@ struct MacSoftwareStewardAgent {
         let scan = await SoftwareScanner.scanAll(includeGreedy: includeGreedy)
         print("[scan] 应用 \(scan.summary.applications)，formula \(scan.summary.brewFormulae)，cask \(scan.summary.brewCasks)，可操作升级 \(scan.summary.actionable)")
 
-        let formulaUpdates = scan.brew.formulae.filter { $0.upgradeable }
-        let caskUpdates = scan.brew.casks.filter { $0.upgradeable }
-        let masUpdates = scan.mas.apps.filter { $0.upgradeable }
+        let policyStore = UpgradePolicyStore()
+        let rows = UpgradePlanner.makePlan(scan: scan, policyStore: policyStore, includeGreedy: includeGreedy)
+        let automaticPackages = DailyUpgradePolicy.automaticPackages(from: rows)
+        let formulaUpdates = automaticPackages.compactMap { package -> BrewPackage? in
+            if case .brew(let brew) = package, brew.kind == "formula" { return brew }
+            return nil
+        }
+        let caskUpdates = automaticPackages.compactMap { package -> BrewPackage? in
+            if case .brew(let brew) = package, brew.kind == "cask" { return brew }
+            return nil
+        }
+        let masUpdates = automaticPackages.compactMap { package -> MasApp? in
+            if case .mas(let app) = package { return app }
+            return nil
+        }
+        let skipped = rows.filter { $0.policy != .automatic || !$0.canExecute }
+        for row in skipped {
+            let reason = row.skipReason.isEmpty ? row.policy.title : row.skipReason
+            print("[skip] \(row.packageName): \(reason)")
+        }
 
         guard !formulaUpdates.isEmpty || !caskUpdates.isEmpty || !masUpdates.isEmpty else {
             print("[system] 未发现可自动升级的软件")
@@ -46,18 +63,22 @@ struct MacSoftwareStewardAgent {
             if runBrewUpdate {
                 commands.append((brew, ["update"], "brew update"))
             }
-            if !formulaUpdates.isEmpty {
-                commands.append((brew, ["upgrade"], "brew upgrade"))
+            for formula in formulaUpdates {
+                let args = ["upgrade", formula.name]
+                commands.append((brew, args, (["brew"] + args).joined(separator: " ")))
             }
-            if !caskUpdates.isEmpty {
-                let args = ["upgrade", "--cask"] + (includeGreedy ? ["--greedy"] : [])
+            for cask in caskUpdates {
+                let args = ["upgrade", "--cask"] + (includeGreedy ? ["--greedy"] : []) + [cask.name]
                 commands.append((brew, args, (["brew"] + args).joined(separator: " ")))
             }
         }
 
         if !masUpdates.isEmpty {
             if let mas = await CommandRunner.commandPath("mas") {
-                commands.append((mas, ["upgrade"], "mas upgrade"))
+                for app in masUpdates {
+                    let args = ["upgrade", app.appId]
+                    commands.append((mas, args, (["mas"] + args).joined(separator: " ")))
+                }
             } else {
                 print("[warn] 发现 Mac App Store 更新，但 mas CLI 不可用，已跳过")
             }
