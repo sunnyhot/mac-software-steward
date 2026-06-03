@@ -72,7 +72,7 @@ struct MacSoftwareStewardApp: App {
                     model.prepareUpgradePlan()
                 }
                 .keyboardShortcut("u", modifiers: [.command, .shift])
-                .disabled(model.availableUpdates.isEmpty || model.hasRunningJob)
+                .disabled(model.availableUpdates.isEmpty || model.hasRunningJob || model.isConfirmingUpgradePlan)
 
                 Button("检查应用更新") {
                     Task { await updater.checkForUpdates() }
@@ -90,11 +90,15 @@ struct MacSoftwareStewardApp: App {
         if model.hasRunningJob {
             return "升级中 · 剩余 \(model.availableUpdates.count) 待升级"
         }
+        if model.isConfirmingUpgradePlan {
+            return "准备升级中"
+        }
         return totalCount > 0 ? "\(totalCount) 个更新" : "已最新"
     }
 
     private var menuBarSymbol: String {
         if model.isScanning { return "magnifyingglass" }
+        if model.isConfirmingUpgradePlan { return "hourglass" }
         if model.hasRunningJob { return "arrow.triangle.2.circlepath" }
         return model.allUpgradeablePackages.isEmpty ? "checkmark.circle" : "arrow.down.circle.fill"
     }
@@ -134,12 +138,14 @@ private struct MenuBarUpgradeMenu: View {
             openMainWindowOnce()
             model.prepareUpgradePlan()
         } label: {
-            Label("一键升级", systemImage: "bolt.fill")
+            Label(model.isConfirmingUpgradePlan ? "准备中" : "一键升级", systemImage: model.isConfirmingUpgradePlan ? "hourglass" : "bolt.fill")
         }
-        .disabled(model.availableUpdates.isEmpty || model.hasRunningJob)
+        .disabled(model.availableUpdates.isEmpty || model.hasRunningJob || model.isConfirmingUpgradePlan)
 
         if model.hasRunningJob {
             Text("升级任务运行中")
+        } else if model.isConfirmingUpgradePlan {
+            Text("正在准备升级任务")
         }
 
         Divider()
@@ -173,6 +179,9 @@ private struct MenuBarUpgradeMenu: View {
         }
         if model.hasRunningJob {
             return "正在升级，剩余 \(model.availableUpdates.count) 项待升级"
+        }
+        if model.isConfirmingUpgradePlan {
+            return "正在准备升级任务"
         }
         let totalCount = model.allUpgradeablePackages.count
         return totalCount == 0

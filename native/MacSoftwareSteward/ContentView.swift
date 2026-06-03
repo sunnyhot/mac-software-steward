@@ -137,14 +137,14 @@ private struct HeaderView: View {
             .disabled(model.isScanning)
 
             HeaderButton(
-                title: model.hasRunningJob ? "升级中" : "一键升级",
-                icon: model.hasRunningJob ? "hourglass" : "bolt.fill",
+                title: model.hasRunningJob ? "升级中" : (model.isConfirmingUpgradePlan ? "准备中" : "一键升级"),
+                icon: model.hasRunningJob || model.isConfirmingUpgradePlan ? "hourglass" : "bolt.fill",
                 isProminent: true,
-                isLoading: model.hasRunningJob
+                isLoading: model.hasRunningJob || model.isConfirmingUpgradePlan
             ) {
                 model.prepareUpgradePlan()
             }
-            .disabled(model.availableUpdates.isEmpty || model.hasRunningJob)
+            .disabled(model.availableUpdates.isEmpty || model.hasRunningJob || model.isConfirmingUpgradePlan)
             .help(model.upgradeAllHelpText)
         }
     }

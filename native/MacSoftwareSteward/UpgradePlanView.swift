@@ -30,20 +30,23 @@ struct UpgradePlanView: View {
                 Button("全选可执行项") {
                     model.selectedPlanIDs = Set(model.upgradePlanRows.filter(\.canExecute).map(\.packageID))
                 }
+                .disabled(model.isConfirmingUpgradePlan)
                 Button("清空选择") {
                     model.selectedPlanIDs.removeAll()
                 }
+                .disabled(model.isConfirmingUpgradePlan)
                 Spacer()
                 Button("取消") {
                     dismiss()
                 }
+                .disabled(model.isConfirmingUpgradePlan)
                 Button {
                     Task { await model.confirmUpgradePlan() }
                 } label: {
-                    Label("执行升级", systemImage: "bolt.fill")
+                    Label(model.isConfirmingUpgradePlan ? "准备中" : "执行升级", systemImage: model.isConfirmingUpgradePlan ? "hourglass" : "bolt.fill")
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(selectedCount == 0)
+                .disabled(selectedCount == 0 || model.isConfirmingUpgradePlan)
             }
         }
         .padding(20)
@@ -67,7 +70,7 @@ private struct UpgradePlanRowView: View {
             ))
             .labelsHidden()
             .toggleStyle(.checkbox)
-            .disabled(!row.canExecute)
+            .disabled(!row.canExecute || model.isConfirmingUpgradePlan)
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {

@@ -32,6 +32,7 @@ final class StewardModel: ObservableObject {
     @Published var upgradePlanRows: [UpgradePlanRow] = []
     @Published var selectedPlanIDs: Set<String> = []
     @Published var showingUpgradePlan = false
+    @Published var isConfirmingUpgradePlan = false
     @Published var maxConcurrentUpgrades: Int = UserDefaults.standard.object(forKey: "maxConcurrentUpgrades") as? Int ?? 3 {
         didSet { UserDefaults.standard.set(maxConcurrentUpgrades, forKey: "maxConcurrentUpgrades") }
     }
@@ -175,6 +176,7 @@ final class StewardModel: ObservableObject {
     }
 
     func prepareUpgradePlan() {
+        guard !isConfirmingUpgradePlan else { return }
         guard let scan else {
             errorMessage = "请先扫描软件。"
             return
@@ -194,6 +196,7 @@ final class StewardModel: ObservableObject {
     }
 
     func confirmUpgradePlan() async {
+        guard !isConfirmingUpgradePlan else { return }
         let selectedRows = upgradePlanRows.filter { row in
             guard selectedPlanIDs.contains(row.packageID), row.canExecute, let package = row.package else {
                 return false
@@ -205,6 +208,8 @@ final class StewardModel: ObservableObject {
             errorMessage = "没有选中的可执行升级项。"
             return
         }
+        isConfirmingUpgradePlan = true
+        defer { isConfirmingUpgradePlan = false }
         await upgradeSelectedPlanRows(selectedRows)
         showingUpgradePlan = false
     }
@@ -227,18 +232,26 @@ final class StewardModel: ObservableObject {
                 steps.append(UpgradeStep(command: UpgradeCommand(executable: brew, arguments: ["update"], display: "brew update"), packageID: nil, packageName: nil))
             }
 
+            var packageSteps: [UpgradeStep] = []
             for row in rows {
                 guard let package = row.package else { continue }
                 let status = packageProgress[package.id]?.status
                 guard status != .succeeded, !isPackageActive(package.id) else { continue }
                 let command = try await command(for: package)
-                steps.append(UpgradeStep(command: command, packageID: package.id, packageName: package.name))
+                packageSteps.append(UpgradeStep(command: command, packageID: package.id, packageName: package.name))
             }
 
-            guard steps.contains(where: { $0.packageID != nil }) else {
+            packageSteps = packageSteps.filter { step in
+                guard let packageID = step.packageID else { return false }
+                let status = packageProgress[packageID]?.status
+                return status != .succeeded && !isPackageActive(packageID)
+            }
+
+            guard !packageSteps.isEmpty else {
                 throw StewardError.message("没有选中的可执行升级项。")
             }
 
+            steps.append(contentsOf: packageSteps)
             enqueueJob(label: "一键升级可管理软件", steps: steps, rescanAfterSuccess: true)
             selectedTab = .updates
         } catch {
