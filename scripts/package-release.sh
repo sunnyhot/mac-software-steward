@@ -28,15 +28,32 @@ else
   {
     echo "## Mac 软件管家 v$VERSION"
     echo ""
-    echo "### UI 优化"
-    echo "- 整体布局专业化重构：统一 .regularMaterial 背景、.rounded 字体、12pt/10pt 圆角规范"
-    echo "- 组件化提取：HeaderButton、MetricCard、SettingsDivider、JobNoticeIcon 等"
-    echo "- macOS 15+ 特效适配：symbolEffect 添加 #available 守卫，兼容 macOS 14"
-    echo "- 动效打磨：hover 缩放、spring 动画参数优化"
-    echo "- 全页面覆盖：UpdatesView/ApplicationsView/SourcesView/JobsView/SettingsView"
+    echo "### 一键升级安全增强"
+    echo "- 新增升级计划确认页，展示命令、来源、版本变化、风险标签和跳过原因"
+    echo "- 新增单包升级策略：自动升级、确认后升级、仅提醒、跳过"
+    echo "- 每日巡检只执行自动升级项，避免静默升级高风险软件"
+    echo "- 支持升级任务取消、长时间命令超时、失败恢复提示和日志复制"
+    echo "- 升级后自动重扫验证结果，并持久化升级历史"
+    echo "- 更新页支持来源、风险、失败和跳过筛选"
+    echo ""
+    echo "### 扫描稳定性"
+    echo "- Homebrew cask 版本列表失败时自动回退到名称列表，减少扫描误报"
     echo ""
     echo "安装包资产：\`MacSoftwareSteward.zip\`"
   } > "$NOTES_FILE"
 fi
+
+SHA256="$(awk '{print $1}' "$ZIP_PATH.sha256")"
+cat > "$RELEASE_DIR/latest.json" <<MANIFEST_EOF
+{
+  "version": "$VERSION",
+  "tag": "v$VERSION",
+  "asset": "MacSoftwareSteward.zip",
+  "sha256": "$SHA256",
+  "notes": "Mac 软件管家 v$VERSION",
+  "download_url": "https://github.com/sunnyhot/mac-software-steward/releases/download/v$VERSION/MacSoftwareSteward.zip",
+  "html_url": "https://github.com/sunnyhot/mac-software-steward/releases/tag/v$VERSION"
+}
+MANIFEST_EOF
 
 echo "$ZIP_PATH"

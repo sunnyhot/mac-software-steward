@@ -28,6 +28,7 @@ if ! git remote get-url origin >/dev/null 2>&1; then
 fi
 
 bash "$ROOT_DIR/scripts/package-release.sh" >/dev/null
+git restore --worktree --staged native/Resources/AppIcon.iconset >/dev/null 2>&1 || true
 
 git add \
   .gitignore \
@@ -37,7 +38,7 @@ git add \
   scripts
 
 if ! git diff --cached --quiet; then
-  git commit -m "Build native updater and daily inspection"
+  git commit -m "release: v$VERSION"
 fi
 
 git push -u origin HEAD:main
@@ -48,6 +49,7 @@ if gh release view "$TAG" --repo "$OWNER/$REPO" >/dev/null 2>&1; then
     "$ROOT_DIR/release/MacSoftwareSteward.zip.sha256" \
     "$ROOT_DIR/release/MacSoftwareSteward-v$VERSION.zip" \
     "$ROOT_DIR/release/MacSoftwareSteward-v$VERSION.zip.sha256" \
+    "$ROOT_DIR/release/latest.json" \
     --repo "$OWNER/$REPO" \
     --clobber
 else
@@ -56,6 +58,7 @@ else
     "$ROOT_DIR/release/MacSoftwareSteward.zip.sha256" \
     "$ROOT_DIR/release/MacSoftwareSteward-v$VERSION.zip" \
     "$ROOT_DIR/release/MacSoftwareSteward-v$VERSION.zip.sha256" \
+    "$ROOT_DIR/release/latest.json" \
     --repo "$OWNER/$REPO" \
     --title "Mac 软件管家 $TAG" \
     --notes-file "$ROOT_DIR/release/RELEASE_NOTES.md" \
