@@ -106,6 +106,10 @@ struct UpdateRow: View {
         model.packageProgress[package.id]
     }
 
+    private var packageActionDisabled: Bool {
+        model.isConfirmingUpgradePlan || model.isPackageActive(package.id)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             // 主行：图标 + 名称 + 标签 + 操作
@@ -197,7 +201,7 @@ struct UpdateRow: View {
                 Label("重试", systemImage: "arrow.clockwise")
             }
             .buttonStyle(.borderless)
-            .disabled(model.isPackageActive(package.id))
+            .disabled(packageActionDisabled)
         } else {
             Button {
                 Task { await model.upgrade(package) }
@@ -205,7 +209,7 @@ struct UpdateRow: View {
                 Label("升级", systemImage: "play")
             }
             .buttonStyle(.borderless)
-            .disabled(!package.upgradeable || model.isPackageActive(package.id))
+            .disabled(!package.upgradeable || packageActionDisabled)
         }
     }
 
@@ -304,6 +308,10 @@ struct PackageProgressBadge: View {
 struct PackageProgressDetail: View {
     @EnvironmentObject private var model: StewardModel
     var progress: PackageUpgradeProgress
+
+    private var packageActionDisabled: Bool {
+        model.isConfirmingUpgradePlan || model.isPackageActive(progress.packageID)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -431,6 +439,7 @@ struct PackageProgressDetail: View {
             }
             .buttonStyle(.borderless)
             .font(.caption)
+            .disabled(packageActionDisabled)
 
         case .rescan:
             Button {
@@ -440,6 +449,7 @@ struct PackageProgressDetail: View {
             }
             .buttonStyle(.borderless)
             .font(.caption)
+            .disabled(model.isConfirmingUpgradePlan)
 
         case .openLog:
             Button {
@@ -449,6 +459,7 @@ struct PackageProgressDetail: View {
             }
             .buttonStyle(.borderless)
             .font(.caption)
+            .disabled(packageActionDisabled)
 
         case .checkNetwork:
             Button {
@@ -458,6 +469,7 @@ struct PackageProgressDetail: View {
             }
             .buttonStyle(.borderless)
             .font(.caption)
+            .disabled(packageActionDisabled)
 
         case .freeDisk:
             if let url = URL(string: "x-apple.systempreferences:com.apple.settings.Storage") {

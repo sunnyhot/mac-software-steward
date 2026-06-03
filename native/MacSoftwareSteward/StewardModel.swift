@@ -133,9 +133,10 @@ final class StewardModel: ObservableObject {
     }
 
     func upgrade(_ package: UpdatablePackage) async {
-        guard !isPackageActive(package.id) else { return }
+        guard !isConfirmingUpgradePlan, !isPackageActive(package.id) else { return }
         do {
             let command = try await command(for: package)
+            guard !isConfirmingUpgradePlan, !isPackageActive(package.id) else { return }
             enqueueJob(label: "升级 \(package.name)", steps: [
                 UpgradeStep(command: command, packageID: package.id, packageName: package.name)
             ], rescanAfterSuccess: true)
@@ -146,6 +147,7 @@ final class StewardModel: ObservableObject {
 
     /// 重试升级某个包（清除失败状态后重新执行）
     func retryPackage(_ packageID: String) async {
+        guard !isConfirmingUpgradePlan else { return }
         // 清除旧的失败状态
         packageProgress.removeValue(forKey: packageID)
         recomputeDerivedData()
