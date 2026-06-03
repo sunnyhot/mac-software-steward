@@ -15,6 +15,11 @@ enum ScanPhase: String, CaseIterable {
 }
 
 enum SoftwareScanner {
+    struct BrewInstalledPackagesResult {
+        var packages: [(name: String, installedVersion: String)]
+        var error: String
+    }
+
     static func scanAll(includeGreedy: Bool, onPhaseChange: ((ScanPhase) -> Void)? = nil) async -> ScanResult {
         let started = Date()
 
@@ -128,19 +133,31 @@ enum SoftwareScanner {
             return collected
         }
 
-        let installedFormulae = parseBrewVersionList(results["formulaList"]?.stdout ?? "")
-        let installedCasks = parseBrewVersionList(results["caskList"]?.stdout ?? "")
-        let outdatedPayload = parseBrewOutdated(results["outdated"]?.stdout ?? "")
+        let missingResult = CommandResult(ok: false, code: -1, stdout: "", stderr: "Homebrew scan task did not return a result.")
+        let formulaList = results["formulaList"] ?? missingResult
+        let caskList = results["caskList"] ?? missingResult
+        let outdated = results["outdated"] ?? missingResult
+        let caskNameList: CommandResult?
+        if caskList.ok {
+            caskNameList = nil
+        } else {
+            caskNameList = await CommandRunner.run(brewPath, arguments: ["list", "--cask", "-1"], timeout: timeout)
+        }
+
+        let formulaListResult = installedBrewPackages(primary: formulaList)
+        let caskListResult = installedBrewPackages(primary: caskList, fallback: caskNameList)
+        let installedFormulae = formulaListResult.packages
+        let installedCasks = caskListResult.packages
+        let outdatedPayload = parseBrewOutdated(outdated.stdout)
         let formulae = mergeBrew(installed: installedFormulae, outdated: outdatedPayload.formulae, kind: "formula")
         let casks = mergeBrew(installed: installedCasks, outdated: outdatedPayload.casks, kind: "cask")
 
-        var errors: [String] = []
-        for (tag, result) in results where !result.ok {
-            let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !stderr.isEmpty {
-                errors.append("[\(tag)] \(stderr)")
-            }
-        }
+        let errors = [
+            formulaListResult.error,
+            caskListResult.error,
+            commandError(outdated)
+        ]
+            .filter { !$0.isEmpty }
 
         return BrewScan(
             available: true,
@@ -292,6 +309,41 @@ enum SoftwareScanner {
                 guard let name = parts.first else { return nil }
                 return (name, parts.dropFirst().joined(separator: ", "))
             }
+    }
+
+    static func installedBrewPackages(
+        primary: CommandResult,
+        fallback: CommandResult? = nil
+    ) -> BrewInstalledPackagesResult {
+        let primaryPackages = parseBrewVersionList(primary.stdout)
+        if primary.ok {
+            return BrewInstalledPackagesResult(packages: primaryPackages, error: "")
+        }
+
+        if let fallback, fallback.ok {
+            return BrewInstalledPackagesResult(
+                packages: parseBrewVersionList(fallback.stdout),
+                error: ""
+            )
+        }
+
+        let fallbackPackages = fallback.map { parseBrewVersionList($0.stdout) } ?? []
+        let errors = [
+            commandError(primary),
+            fallback.map(commandError) ?? ""
+        ]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+
+        return BrewInstalledPackagesResult(
+            packages: primaryPackages.isEmpty ? fallbackPackages : primaryPackages,
+            error: errors
+        )
+    }
+
+    static func commandError(_ result: CommandResult) -> String {
+        guard !result.ok else { return "" }
+        return result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static func parseBrewOutdated(_ stdout: String) -> (formulae: [[String: Any]], casks: [[String: Any]]) {
