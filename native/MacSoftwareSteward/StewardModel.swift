@@ -527,7 +527,14 @@ final class StewardModel: ObservableObject {
         activeCancellationTokens[id] = nil
 
         if rescanAfterSuccess {
+            let previousProgress = packageProgress
             await scanSoftware()
+            if let scan {
+                let remaining = UpgradeVerifier.remainingOutdatedIDs(in: scan)
+                for (id, progress) in previousProgress {
+                    packageProgress[id] = UpgradeVerifier.verify(progress: progress, remainingPackageIDs: remaining)
+                }
+            }
         }
     }
 
