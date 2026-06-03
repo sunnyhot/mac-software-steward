@@ -28,6 +28,11 @@ else
   {
     echo "## Mac 软件管家 v$VERSION"
     echo ""
+    echo "### 应用自更新体验"
+    echo "- 升级弹框改为大卡片样式，展示包名、大小、发布时间和完整更新说明"
+    echo "- 下载中展示百分比和已下载/总大小，安装中按钮进入明确禁用态"
+    echo "- latest.json 写入 release notes、包大小和发布时间，客户端无需额外请求即可展示"
+    echo ""
     echo "### 一键升级安全增强"
     echo "- 新增升级计划确认页，展示命令、来源、版本变化、风险标签和跳过原因"
     echo "- 新增单包升级策略：自动升级、确认后升级、仅提醒、跳过"
@@ -44,16 +49,31 @@ else
 fi
 
 SHA256="$(awk '{print $1}' "$ZIP_PATH.sha256")"
-cat > "$RELEASE_DIR/latest.json" <<MANIFEST_EOF
-{
-  "version": "$VERSION",
-  "tag": "v$VERSION",
-  "asset": "MacSoftwareSteward.zip",
-  "sha256": "$SHA256",
-  "notes": "Mac 软件管家 v$VERSION",
-  "download_url": "https://github.com/sunnyhot/mac-software-steward/releases/download/v$VERSION/MacSoftwareSteward.zip",
-  "html_url": "https://github.com/sunnyhot/mac-software-steward/releases/tag/v$VERSION"
-}
-MANIFEST_EOF
+SIZE="$(stat -f%z "$ZIP_PATH")"
+PUBLISHED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+VERSION="$VERSION" \
+SHA256="$SHA256" \
+SIZE="$SIZE" \
+PUBLISHED_AT="$PUBLISHED_AT" \
+NOTES_FILE="$NOTES_FILE" \
+OUT_FILE="$RELEASE_DIR/latest.json" \
+node <<'NODE'
+const fs = require('fs');
+
+const version = process.env.VERSION;
+const manifest = {
+  version,
+  tag: `v${version}`,
+  asset: 'MacSoftwareSteward.zip',
+  sha256: process.env.SHA256,
+  size: Number(process.env.SIZE || 0),
+  published_at: process.env.PUBLISHED_AT,
+  notes: fs.readFileSync(process.env.NOTES_FILE, 'utf8').trim(),
+  download_url: `https://github.com/sunnyhot/mac-software-steward/releases/download/v${version}/MacSoftwareSteward.zip`,
+  html_url: `https://github.com/sunnyhot/mac-software-steward/releases/tag/v${version}`
+};
+
+fs.writeFileSync(process.env.OUT_FILE, `${JSON.stringify(manifest, null, 2)}\n`);
+NODE
 
 echo "$ZIP_PATH"

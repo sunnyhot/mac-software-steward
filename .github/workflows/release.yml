@@ -55,9 +55,11 @@ jobs:
           cp release/MacSoftwareSteward.zip "release/MacSoftwareSteward-v${VERSION}.zip"
           cd release
           SHA256=$(shasum -a 256 MacSoftwareSteward.zip | awk '{print $1}')
+          SIZE=$(stat -f%z MacSoftwareSteward.zip)
           echo "${SHA256}  MacSoftwareSteward.zip" > MacSoftwareSteward.zip.sha256
           shasum -a 256 "MacSoftwareSteward-v${VERSION}.zip" > "MacSoftwareSteward-v${VERSION}.zip.sha256"
           echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "size=${SIZE}" >> "$GITHUB_OUTPUT"
           echo "Package contents:"
           ls -lh
 
@@ -66,17 +68,40 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           TAG="${{ steps.version.outputs.tag }}"
           SHA256="${{ steps.package.outputs.sha256 }}"
-          cat > release/latest.json <<MANIFEST_EOF
-          {
-            "version": "${VERSION}",
-            "tag": "${TAG}",
-            "asset": "MacSoftwareSteward.zip",
-            "sha256": "${SHA256}",
-            "notes": "Mac 软件管家 ${TAG}",
-            "download_url": "https://github.com/sunnyhot/mac-software-steward/releases/download/${TAG}/MacSoftwareSteward.zip",
-            "html_url": "https://github.com/sunnyhot/mac-software-steward/releases/tag/${TAG}"
-          }
-          MANIFEST_EOF
+          SIZE="${{ steps.package.outputs.size }}"
+          PUBLISHED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          cat > release/RELEASE_NOTES.md <<NOTES_EOF
+          ## Mac 软件管家 ${TAG}
+
+          ### 应用自更新体验
+          - 升级弹框改为大卡片样式，展示包名、大小、发布时间和完整更新说明
+          - latest.json 包含 release notes、包大小和发布时间，便于客户端展示
+          - 下载中展示百分比和已下载/总大小
+          NOTES_EOF
+          VERSION="${VERSION}" \
+          TAG="${TAG}" \
+          SHA256="${SHA256}" \
+          SIZE="${SIZE}" \
+          PUBLISHED_AT="${PUBLISHED_AT}" \
+          NOTES_FILE="release/RELEASE_NOTES.md" \
+          OUT_FILE="release/latest.json" \
+          node <<'NODE'
+          const fs = require('fs');
+
+          const manifest = {
+            version: process.env.VERSION,
+            tag: process.env.TAG,
+            asset: 'MacSoftwareSteward.zip',
+            sha256: process.env.SHA256,
+            size: Number(process.env.SIZE || 0),
+            published_at: process.env.PUBLISHED_AT,
+            notes: fs.readFileSync(process.env.NOTES_FILE, 'utf8').trim(),
+            download_url: `https://github.com/sunnyhot/mac-software-steward/releases/download/${process.env.TAG}/MacSoftwareSteward.zip`,
+            html_url: `https://github.com/sunnyhot/mac-software-steward/releases/tag/${process.env.TAG}`
+          };
+
+          fs.writeFileSync(process.env.OUT_FILE, `${JSON.stringify(manifest, null, 2)}\n`);
+          NODE
           echo "Generated latest.json:"
           cat release/latest.json
 
@@ -84,6 +109,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: Mac 软件管家 ${{ steps.version.outputs.tag }}
+          body_path: release/RELEASE_NOTES.md
           files: |
             release/MacSoftwareSteward.zip
             release/MacSoftwareSteward.zip.sha256

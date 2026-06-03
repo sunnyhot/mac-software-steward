@@ -25,6 +25,9 @@ final class AppUpdateModel: ObservableObject {
     @Published var latestVersion = ""
     @Published var releaseURL = ""
     @Published var releaseNotes = ""
+    @Published var releaseAssetName = ""
+    @Published var releaseAssetSizeText = ""
+    @Published var releasePublishedAtText = ""
     @Published var updateAvailable = false
     /// 是否显示应用更新弹框
     @Published var showUpdateDialog = false
@@ -33,6 +36,8 @@ final class AppUpdateModel: ObservableObject {
     @Published var downloadFraction: Double? = nil
     /// 已下载字节数（人类可读，如 "1.2 MB"）
     @Published var downloadedSizeText: String? = nil
+    /// 下载总大小（人类可读，如 "3.1 MB"）
+    @Published var totalDownloadSizeText: String? = nil
     /// 下载速度（人类可读，如 "3.5 MB/s"）
     @Published var downloadSpeedText: String? = nil
     /// 最近一次下载/安装失败的用户可读错误信息；nil 表示无失败
@@ -66,8 +71,25 @@ final class AppUpdateModel: ObservableObject {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
     }
 
+    var appDisplayName: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Mac 软件管家"
+    }
+
     var repositoryName: String {
         "\(owner)/\(repo)"
+    }
+
+    var downloadStatusText: String {
+        if let fraction = downloadFraction {
+            let percent = "\(Int(fraction * 100))%"
+            let downloaded = downloadedSizeText ?? ""
+            let total = totalDownloadSizeText ?? releaseAssetSizeText
+            if !downloaded.isEmpty, !total.isEmpty {
+                return "正在下载... \(percent)  \(downloaded) / \(total)"
+            }
+            return "正在下载... \(percent)"
+        }
+        return progress.isEmpty ? "正在准备..." : progress
     }
 
     func autoCheckIfNeeded() async {
@@ -95,6 +117,10 @@ final class AppUpdateModel: ObservableObject {
             latestVersion = release.versionString
             releaseURL = release.htmlURL
             releaseNotes = release.body ?? ""
+            let displayAsset = release.asset(named: assetName) ?? release.firstZipAsset
+            releaseAssetName = displayAsset?.name ?? assetName
+            releaseAssetSizeText = Self.fileSizeText(displayAsset?.size ?? 0)
+            releasePublishedAtText = Self.displayDateTime(from: release.publishedAt)
             updateAvailable = compareVersions(release.versionString, currentVersion) == .orderedDescending
             lastCheckTime = Date()
             status = updateAvailable
@@ -149,6 +175,7 @@ final class AppUpdateModel: ObservableObject {
         updateErrorMessage = nil
         downloadFraction = 0
         downloadedSizeText = nil
+        totalDownloadSizeText = releaseAssetSizeText.isEmpty ? nil : releaseAssetSizeText
         downloadSpeedText = nil
         downloadStartTime = Date()
         lastDownloadedBytes = 0
@@ -172,6 +199,7 @@ final class AppUpdateModel: ObservableObject {
             isInstalling = false
             downloadFraction = nil
             downloadedSizeText = nil
+            totalDownloadSizeText = nil
             downloadSpeedText = nil
             // 自动下载失败时打开更新弹窗让用户看到失败原因
             showUpdateDialog = true
@@ -182,6 +210,27 @@ final class AppUpdateModel: ObservableObject {
 
     /// 从 latest.json 静态 manifest 读取最新版本信息。
     /// 不再调用 GitHub REST API，不受 API 速率限制。
+
+    private static func fileSizeText(_ bytes: Int) -> String {
+        guard bytes > 0 else { return "" }
+        return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+    }
+
+    private static func displayDateTime(from isoString: String?) -> String {
+        guard let isoString, !isoString.isEmpty else { return "" }
+        let fractionalParser = ISO8601DateFormatter()
+        fractionalParser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = fractionalParser.date(from: isoString) ?? {
+            let parser = ISO8601DateFormatter()
+            parser.formatOptions = [.withInternetDateTime]
+            return parser.date(from: isoString)
+        }()
+        guard let date else { return "" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        return formatter.string(from: date)
+    }
 
     /// 将底层错误转换为用户可理解的更新失败描述
     private static func friendlyUpdateErrorMessage(from error: Error) -> String {
@@ -248,9 +297,10 @@ final class AppUpdateModel: ObservableObject {
                 GitHubRelease.Asset(
                     name: manifest.asset,
                     browserDownloadURL: manifest.downloadURL,
-                    size: 0
+                    size: manifest.size ?? 0
                 )
-            ]
+            ],
+            publishedAt: manifest.publishedAt
         )
     }
 
@@ -270,6 +320,7 @@ final class AppUpdateModel: ObservableObject {
                 guard let self else { return }
                 if totalExpected > 0 {
                     self.downloadFraction = Double(totalWritten) / Double(totalExpected)
+                    self.totalDownloadSizeText = ByteCountFormatter.string(fromByteCount: totalExpected, countStyle: .file)
                 }
                 self.downloadedSizeText = ByteCountFormatter.string(fromByteCount: totalWritten, countStyle: .file)
                 // 计算下载速度（每秒采样一次避免抖动）
@@ -447,7 +498,7 @@ final class AppUpdateModel: ObservableObject {
 // MARK: - 静态 Manifest 模型
 
 /// latest.json 的数据结构，由 Release workflow 自动生成。
-/// 包含：version, tag, asset, sha256, notes, download_url, html_url
+/// 包含：version, tag, asset, sha256, notes, download_url, html_url, size, published_at
 private struct LatestManifest: Decodable {
     var version: String
     var tag: String
@@ -456,11 +507,14 @@ private struct LatestManifest: Decodable {
     var notes: String
     var downloadURL: String
     var htmlURL: String
+    var size: Int?
+    var publishedAt: String?
 
     enum CodingKeys: String, CodingKey {
-        case version, tag, asset, sha256, notes
+        case version, tag, asset, sha256, notes, size
         case downloadURL = "download_url"
         case htmlURL = "html_url"
+        case publishedAt = "published_at"
     }
 }
 
@@ -486,6 +540,7 @@ private struct GitHubRelease: Decodable {
     var draft: Bool
     var prerelease: Bool
     var assets: [Asset]
+    var publishedAt: String?
 
     enum CodingKeys: String, CodingKey {
         case tagName = "tag_name"
@@ -495,6 +550,7 @@ private struct GitHubRelease: Decodable {
         case draft
         case prerelease
         case assets
+        case publishedAt = "published_at"
     }
 
     var versionString: String {

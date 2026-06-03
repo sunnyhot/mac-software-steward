@@ -253,169 +253,175 @@ struct UpgradeProgressBar: View {
 
 struct AppUpdateDialog: View {
     @EnvironmentObject private var updater: AppUpdateModel
-    @State private var releaseNotesCollapsed = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(spacing: 16) {
-                ZStack {
-                    Circle()
-                        .fill(Color.accentColor.opacity(0.1))
-                        .frame(width: 56, height: 56)
-                    Image(systemName: "arrow.down.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundStyle(Color.accentColor)
-                }
+        VStack(alignment: .leading, spacing: 22) {
+            header
+            metadataRow
+            releaseNotesPanel
+            statusArea
+            actionRow
+        }
+        .padding(30)
+        .frame(width: 760)
+    }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("发现新版本")
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                    HStack(spacing: 6) {
-                        Text("v\(updater.currentVersion)")
-                            .foregroundStyle(.secondary)
-                        Image(systemName: "arrow.right")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text("v\(updater.latestVersion)")
-                            .foregroundStyle(Color.accentColor)
-                            .bold()
-                    }
-                    .font(.subheadline)
-                }
-                Spacer()
+    private var header: some View {
+        HStack(alignment: .top, spacing: 18) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.accentColor.opacity(0.10))
+                    .frame(width: 72, height: 72)
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 38, weight: .bold))
+                    .foregroundStyle(Color.accentColor)
             }
 
-            Divider()
-
-            if !updater.releaseNotes.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("更新内容")
-                            .font(.system(.headline, design: .rounded))
-                        Spacer()
-                        Button {
-                            withAnimation(.spring(response: 0.3)) { releaseNotesCollapsed.toggle() }
-                        } label: {
-                            Image(systemName: releaseNotesCollapsed ? "chevron.right" : "chevron.down")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    if !releaseNotesCollapsed {
-                        ScrollView {
-                            Text(updater.releaseNotes)
-                                .font(.system(.callout, design: .monospaced))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .textSelection(.enabled)
-                        }
-                        .frame(maxHeight: 200)
-                    }
-                }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("发现新版本")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundStyle(.green)
+                Text("\(updater.appDisplayName) v\(updater.latestVersion)")
+                    .font(.system(size: 32, weight: .heavy, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Text("当前 \(updater.currentVersion) · 最新 \(updater.latestVersion)")
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
             }
 
-            if updater.isInstalling {
-                VStack(alignment: .leading, spacing: 8) {
-                    if let fraction = updater.downloadFraction {
-                        ProgressView(value: fraction) {
-                            Text("正在下载 v\(updater.latestVersion)...")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        } currentValueLabel: {
-                            HStack(spacing: 4) {
-                                Text("\(Int(fraction * 100))%")
-                                if let size = updater.downloadedSizeText {
-                                    Text("·")
-                                    Text(size)
-                                }
-                                if let speed = updater.downloadSpeedText {
-                                    Text("·")
-                                    Text(speed)
-                                }
-                            }
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        }
-                        .progressViewStyle(.linear)
-                    } else {
-                        ProgressView {
-                            Text(updater.progress.isEmpty ? "正在准备..." : updater.progress)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .progressViewStyle(.linear)
-                    }
-                }
-            } else if let errorMessage = updater.updateErrorMessage {
-                // 下载/安装失败：显示错误信息和重试入口
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.callout)
-                            .foregroundStyle(.red)
-                        Text("更新失败")
-                            .font(.system(.headline, design: .rounded))
-                            .foregroundStyle(.red)
-                        Spacer()
-                    }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var metadataRow: some View {
+        HStack(spacing: 12) {
+            UpdateMetaPill(text: updater.releaseAssetName.isEmpty ? "MacSoftwareSteward.zip" : updater.releaseAssetName, isPrimary: true)
+            if !updater.releaseAssetSizeText.isEmpty {
+                UpdateMetaPill(text: updater.releaseAssetSizeText)
+            }
+            if !updater.releasePublishedAtText.isEmpty {
+                UpdateMetaPill(text: updater.releasePublishedAtText)
+            }
+        }
+    }
+
+    private var releaseNotesPanel: some View {
+        ScrollView {
+            Text(updater.releaseNotes.isEmpty ? "暂无更新说明。" : updater.releaseNotes)
+                .font(.system(size: 17, weight: .regular))
+                .lineSpacing(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+        }
+        .frame(minHeight: 190, maxHeight: 260)
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.55))
+        )
+    }
+
+    @ViewBuilder
+    private var statusArea: some View {
+        if updater.isInstalling {
+            VStack(alignment: .leading, spacing: 12) {
+                ProgressView(value: updater.downloadFraction ?? 0)
+                    .progressViewStyle(.linear)
+                    .tint(Color.accentColor)
+                Text(updater.downloadStatusText)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+        } else if let errorMessage = updater.updateErrorMessage {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("更新失败")
+                        .font(.system(.headline, design: .rounded))
+                        .foregroundStyle(.red)
                     Text(errorMessage)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(.red.opacity(0.06))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(.red.opacity(0.2), lineWidth: 1)
-                        )
-                )
+                Spacer(minLength: 0)
             }
-
-            Divider()
-
-            HStack {
-                if !updater.releaseURL.isEmpty {
-                    Button {
-                        if let url = URL(string: updater.releaseURL) {
-                            NSWorkspace.shared.open(url)
-                        }
-                    } label: {
-                        Text("在 GitHub 查看")
-                    }
-                    .buttonStyle(.borderless)
-                }
-
-                Spacer()
-
-                Button("稍后提醒") {
-                    updater.showUpdateDialog = false
-                }
-                .buttonStyle(.bordered)
-                .keyboardShortcut(.cancelAction)
-
-                if !updater.isInstalling {
-                    Button {
-                        Task { await updater.downloadInstallAndRestart() }
-                    } label: {
-                        if updater.updateErrorMessage != nil {
-                            Label("重试下载", systemImage: "arrow.clockwise")
-                        } else {
-                            Label("立即下载安装", systemImage: "square.and.arrow.down")
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
-                }
-            }
+            .padding(12)
+            .background(.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(.red.opacity(0.18), lineWidth: 1)
+            )
+        } else {
+            Divider().opacity(0.5)
         }
-        .padding(24)
-        .frame(width: 480)
+    }
+
+    private var actionRow: some View {
+        HStack {
+            Button("稍后") {
+                updater.showUpdateDialog = false
+            }
+            .buttonStyle(.bordered)
+            .disabled(updater.isInstalling)
+            .keyboardShortcut(.cancelAction)
+
+            Spacer()
+
+            Button {
+                if let url = URL(string: updater.releaseURL) {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                Text("查看发布页")
+            }
+            .buttonStyle(.bordered)
+            .disabled(updater.releaseURL.isEmpty)
+
+            Button {
+                Task { await updater.downloadInstallAndRestart() }
+            } label: {
+                if updater.isInstalling {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("安装中...")
+                    }
+                } else if updater.updateErrorMessage != nil {
+                    Label("重试下载", systemImage: "arrow.clockwise")
+                } else {
+                    Label("立即安装", systemImage: "square.and.arrow.down")
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(updater.isInstalling)
+            .keyboardShortcut(.defaultAction)
+        }
+    }
+}
+
+private struct UpdateMetaPill: View {
+    var text: String
+    var isPrimary = false
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 15, weight: .semibold, design: .rounded))
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .foregroundStyle(isPrimary ? Color.accentColor : .secondary)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isPrimary ? Color.accentColor.opacity(0.10) : Color.secondary.opacity(0.10))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isPrimary ? Color.accentColor.opacity(0.22) : Color.secondary.opacity(0.18), lineWidth: 1)
+            )
     }
 }
 
