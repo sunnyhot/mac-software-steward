@@ -29,9 +29,14 @@ final class StewardModel: ObservableObject {
     @Published var dailyLaunchAgentPath = DailyInspectionScheduler.launchAgentURL.path
     @Published var dailyLogPath = DailyInspectionScheduler.logURL.path
     @Published var packageProgress: [String: PackageUpgradeProgress] = [:]
+    @Published var upgradePlanRows: [UpgradePlanRow] = []
+    @Published var selectedPlanIDs: Set<String> = []
+    @Published var showingUpgradePlan = false
     @Published var maxConcurrentUpgrades: Int = UserDefaults.standard.object(forKey: "maxConcurrentUpgrades") as? Int ?? 3 {
         didSet { UserDefaults.standard.set(maxConcurrentUpgrades, forKey: "maxConcurrentUpgrades") }
     }
+
+    let policyStore = UpgradePolicyStore()
 
     private var activeJobCount = 0
     private var pendingJobQueue: [(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool)] = []
@@ -169,41 +174,57 @@ final class StewardModel: ObservableObject {
         }
     }
 
+    func prepareUpgradePlan() {
+        guard let scan else {
+            errorMessage = "请先扫描软件。"
+            return
+        }
+        let rows = UpgradePlanner.makePlan(scan: scan, policyStore: policyStore, includeGreedy: includeGreedy)
+        upgradePlanRows = rows
+        selectedPlanIDs = Set(rows.filter { $0.selection == .selected }.map(\.packageID))
+        showingUpgradePlan = true
+    }
+
+    func setPlanSelection(_ packageID: String, selected: Bool) {
+        if selected {
+            selectedPlanIDs.insert(packageID)
+        } else {
+            selectedPlanIDs.remove(packageID)
+        }
+    }
+
+    func confirmUpgradePlan() async {
+        let selectedRows = upgradePlanRows.filter { selectedPlanIDs.contains($0.packageID) && $0.canExecute }
+        guard !selectedRows.isEmpty else {
+            errorMessage = "没有选中的可执行升级项。"
+            return
+        }
+        await upgradeSelectedPlanRows(selectedRows)
+        showingUpgradePlan = false
+    }
+
     func upgradeAll() async {
+        prepareUpgradePlan()
+    }
+
+    private func upgradeSelectedPlanRows(_ rows: [UpgradePlanRow]) async {
         do {
             var steps: [UpgradeStep] = []
-            let brewUpdates = availableUpdates.compactMap { package -> BrewPackage? in
-                guard !isPackageActive(package.id) else { return nil }
-                if case .brew(let brewPackage) = package, brewPackage.upgradeable { return brewPackage }
-                return nil
-            }
-            let masUpdates = availableUpdates.compactMap { package -> MasApp? in
-                guard !isPackageActive(package.id) else { return nil }
-                if case .mas(let app) = package, app.upgradeable { return app }
-                return nil
+
+            let brewRows = rows.filter {
+                if case .brew = $0.package { return true }
+                return false
             }
 
-            if !brewUpdates.isEmpty {
+            if !brewRows.isEmpty && runBrewUpdate {
                 let brew = try await requireCommand("brew")
-                if runBrewUpdate {
-                    let update = UpgradeCommand(executable: brew, arguments: ["update"], display: "brew update")
-                    steps.append(UpgradeStep(command: update, packageID: nil, packageName: nil))
-                }
-                for package in brewUpdates {
-                    let updatable = UpdatablePackage.brew(package)
-                    let command = try await command(for: updatable)
-                    steps.append(UpgradeStep(command: command, packageID: updatable.id, packageName: updatable.name))
-                }
+                steps.append(UpgradeStep(command: UpgradeCommand(executable: brew, arguments: ["update"], display: "brew update"), packageID: nil, packageName: nil))
             }
 
-            for app in masUpdates {
-                let updatable = UpdatablePackage.mas(app)
-                let command = try await command(for: updatable)
-                steps.append(UpgradeStep(command: command, packageID: updatable.id, packageName: updatable.name))
-            }
-
-            guard !steps.isEmpty else {
-                throw StewardError.message("没有可升级的可管理软件。")
+            for row in rows {
+                guard let package = row.package else { continue }
+                let command = try await command(for: package)
+                steps.append(UpgradeStep(command: command, packageID: package.id, packageName: package.name))
             }
 
             enqueueJob(label: "一键升级可管理软件", steps: steps, rescanAfterSuccess: true)

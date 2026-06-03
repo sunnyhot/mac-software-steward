@@ -69,7 +69,7 @@ struct MacSoftwareStewardApp: App {
                 .keyboardShortcut("r", modifiers: [.command])
 
                 Button("一键升级可管理软件") {
-                    Task { await model.upgradeAll() }
+                    model.prepareUpgradePlan()
                 }
                 .keyboardShortcut("u", modifiers: [.command, .shift])
                 .disabled(model.availableUpdates.isEmpty || model.hasRunningJob)
@@ -131,7 +131,7 @@ private struct MenuBarUpgradeMenu: View {
         .disabled(model.isScanning)
 
         Button {
-            Task { await model.upgradeAll() }
+            model.prepareUpgradePlan()
         } label: {
             Label("一键升级", systemImage: "bolt.fill")
         }

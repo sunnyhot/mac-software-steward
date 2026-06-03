@@ -20,6 +20,10 @@ struct ContentView: View {
             AppUpdateDialog()
                 .environmentObject(updater)
         }
+        .sheet(isPresented: $model.showingUpgradePlan) {
+            UpgradePlanView()
+                .environmentObject(model)
+        }
     }
 
     @ViewBuilder
@@ -138,7 +142,7 @@ private struct HeaderView: View {
                 isProminent: true,
                 isLoading: model.hasRunningJob
             ) {
-                Task { await model.upgradeAll() }
+                model.prepareUpgradePlan()
             }
             .disabled(model.availableUpdates.isEmpty)
             .help(model.upgradeAllHelpText)
