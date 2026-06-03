@@ -364,9 +364,13 @@ struct ManualCheckUpdateRow: View {
                         .progressViewStyle(.linear)
                         .frame(maxWidth: 260)
                     } else {
-                        Text(updater.progress)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text(updater.downloadStatusText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 } else if updater.updateAvailable {
                     Text("发现新版本 \(updater.latestVersion)，可前往下载安装")

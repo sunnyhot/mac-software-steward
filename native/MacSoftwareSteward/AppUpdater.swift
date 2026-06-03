@@ -89,16 +89,19 @@ final class AppUpdateModel: ObservableObject {
             }
             return "正在下载... \(percent)"
         }
+        if let downloaded = downloadedSizeText {
+            let total = totalDownloadSizeText ?? releaseAssetSizeText
+            if !total.isEmpty {
+                return "正在下载... \(downloaded) / \(total)"
+            }
+            return "正在下载... \(downloaded)"
+        }
         return progress.isEmpty ? "正在准备..." : progress
     }
 
     func autoCheckIfNeeded() async {
         guard automaticChecksEnabled else { return }
         await checkForUpdates(automatic: true)
-        if updateAvailable, automaticDownloadsEnabled {
-            showUpdateDialog = false
-            await downloadInstallAndRestart()
-        }
         startPeriodicCheck()
     }
 
@@ -173,14 +176,14 @@ final class AppUpdateModel: ObservableObject {
 
         isInstalling = true
         updateErrorMessage = nil
-        downloadFraction = 0
+        downloadFraction = nil
         downloadedSizeText = nil
         totalDownloadSizeText = releaseAssetSizeText.isEmpty ? nil : releaseAssetSizeText
         downloadSpeedText = nil
         downloadStartTime = Date()
         lastDownloadedBytes = 0
         lastDownloadSpeedTime = Date()
-        progress = "正在下载 \(asset.name)..."
+        progress = "正在连接下载 \(asset.name)..."
 
         do {
             let downloaded = try await download(asset: asset)
@@ -311,8 +314,6 @@ final class AppUpdateModel: ObservableObject {
         let workDirectory = try makeWorkDirectory()
         let destination = workDirectory.appendingPathComponent(asset.name)
 
-        // 使用 delegate-based URLSession 获取下载进度
-        // 注意：didFinishDownloadingTo 必须移动文件，否则系统会删除临时文件
         let stableTempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("MacSoftwareSteward-\(UUID().uuidString).zip")
         let delegate = DownloadProgressDelegate(stableSaveURL: stableTempURL) { [weak self] bytesWritten, totalWritten, totalExpected in
@@ -321,7 +322,10 @@ final class AppUpdateModel: ObservableObject {
                 if totalExpected > 0 {
                     self.downloadFraction = Double(totalWritten) / Double(totalExpected)
                     self.totalDownloadSizeText = ByteCountFormatter.string(fromByteCount: totalExpected, countStyle: .file)
+                } else {
+                    self.downloadFraction = nil
                 }
+                self.progress = "正在下载 \(asset.name)..."
                 self.downloadedSizeText = ByteCountFormatter.string(fromByteCount: totalWritten, countStyle: .file)
                 // 计算下载速度（每秒采样一次避免抖动）
                 let now = Date()
@@ -338,18 +342,24 @@ final class AppUpdateModel: ObservableObject {
                 }
             }
         }
-        let downloadSession = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+        let configuration = URLSessionConfiguration.default
+        configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        configuration.timeoutIntervalForRequest = 30
+        configuration.timeoutIntervalForResource = 300
+        let downloadSession = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
         defer { downloadSession.finishTasksAndInvalidate() }
 
-        let (_, response) = try await downloadSession.download(for: URLRequest(url: url))
+        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 30)
+        let task = downloadSession.downloadTask(with: request)
+        let downloadedFile = try await delegate.waitForDownload(task)
+        let response = task.response
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw AppUpdateError.message("下载安装包失败。")
         }
-        // 使用 delegate 在 didFinishDownloadingTo 中保存的文件，而非已删除的临时文件
-        guard FileManager.default.fileExists(atPath: stableTempURL.path) else {
+        guard FileManager.default.fileExists(atPath: downloadedFile.path) else {
             throw AppUpdateError.message("下载文件保存失败：临时文件不存在。")
         }
-        try FileManager.default.moveItem(at: stableTempURL, to: destination)
+        try FileManager.default.moveItem(at: downloadedFile, to: destination)
         return destination
     }
 
@@ -595,13 +605,14 @@ private func versionParts(_ version: String) -> [Int] {
         .map { Int($0) ?? 0 }
 }
 
-/// URLSession 下载进度委托
-/// 注意：必须实现 didFinishDownloadingTo 并移动文件到 stableSaveURL，
-/// 否则系统会在 delegate 回调返回后删除临时文件，导致 async download(for:) 返回的 URL 无效。
+/// URLSession 下载进度委托。
+/// 注意：不要和 async `download(for:)` 混用；该 API 不会把进度交给 session delegate。
 private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
     private let onProgress: (Int64, Int64, Int64) -> Void
-    /// didFinishDownloadingTo 中保存文件的稳定位置
     private let stableSaveURL: URL
+    private var continuation: CheckedContinuation<URL, Error>?
+    private var savedFileURL: URL?
+    private var savedFileError: Error?
 
     init(stableSaveURL: URL, onProgress: @escaping (Int64, Int64, Int64) -> Void) {
         self.stableSaveURL = stableSaveURL
@@ -609,13 +620,31 @@ private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelega
         super.init()
     }
 
+    func waitForDownload(_ task: URLSessionDownloadTask) async throws -> URL {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                self.continuation = continuation
+                task.resume()
+            }
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
     func urlSession(
         _ session: URLSession,
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
-        // 必须在方法返回前移动文件，否则系统删除临时文件
-        try? FileManager.default.moveItem(at: location, to: stableSaveURL)
+        do {
+            if FileManager.default.fileExists(atPath: stableSaveURL.path) {
+                try FileManager.default.removeItem(at: stableSaveURL)
+            }
+            try FileManager.default.moveItem(at: location, to: stableSaveURL)
+            savedFileURL = stableSaveURL
+        } catch {
+            savedFileError = error
+        }
     }
 
     func urlSession(
@@ -633,6 +662,17 @@ private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelega
         task: URLSessionTask,
         didCompleteWithError error: Error?
     ) {
-        // 错误由 async/await 处理，此处无需额外处理
+        guard let continuation else { return }
+        self.continuation = nil
+
+        if let error {
+            continuation.resume(throwing: error)
+        } else if let savedFileError {
+            continuation.resume(throwing: savedFileError)
+        } else if let savedFileURL {
+            continuation.resume(returning: savedFileURL)
+        } else {
+            continuation.resume(throwing: AppUpdateError.message("下载文件保存失败：未收到完成文件。"))
+        }
     }
 }

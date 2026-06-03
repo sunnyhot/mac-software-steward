@@ -326,9 +326,15 @@ struct AppUpdateDialog: View {
     private var statusArea: some View {
         if updater.isInstalling {
             VStack(alignment: .leading, spacing: 12) {
-                ProgressView(value: updater.downloadFraction ?? 0)
-                    .progressViewStyle(.linear)
-                    .tint(Color.accentColor)
+                if let fraction = updater.downloadFraction {
+                    ProgressView(value: fraction)
+                        .progressViewStyle(.linear)
+                        .tint(Color.accentColor)
+                } else {
+                    ProgressView()
+                        .progressViewStyle(.linear)
+                        .tint(Color.accentColor)
+                }
                 Text(updater.downloadStatusText)
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
