@@ -429,85 +429,40 @@ final class StewardModel: ObservableObject {
         var failedCount = 0
         var firstErrorCode: Int32?
         var completedSteps = 0
+        var shouldStop = false
+        let token = CommandCancellationToken()
+        activeCancellationTokens[id] = token
 
-        for step in steps {
-            let command = step.command
-            markRunning(step)
-            recomputeDerivedData()
-            if step.packageName != nil {
-                updateUpgradeProgress(currentPackage: step.packageName)
-            }
-            appendLog(id: id, stream: "command", text: "$ \(command.display)")
-            let token = CommandCancellationToken()
-            activeCancellationTokens[id] = token
-            let result = await CommandRunner.runStreamingDetailed(
-                command.executable,
-                arguments: command.arguments,
-                timeout: 7200,
-                cancellationToken: token
-            ) { stream, text in
-                Task { @MainActor in
-                    self.appendLog(id: id, stream: stream, text: text)
-                    self.updatePackageDetail(for: step, stream: stream, text: text)
-                }
-            }
-            activeCancellationTokens[id] = nil
-            let code = result.code
+        let setupSteps = steps.filter { $0.packageID == nil }
+        let packageSteps = steps.filter { $0.packageID != nil }
 
-            if result.terminationReason == .cancelled {
-                failedCount += 1
-                firstErrorCode = firstErrorCode ?? (code == 0 ? 1 : code)
-                markCancelled(step)
-                updateJob(id) {
-                    $0.status = .cancelled
-                    $0.exitCode = code == 0 ? 1 : code
-                    $0.log.append(LogLine(stream: "system", text: "已取消：\(command.display)"))
-                }
-                if step.packageID != nil {
-                    completedSteps += 1
-                    updateUpgradeProgress(completed: completedSteps, failed: failedCount, currentPackage: nil)
-                }
-                break
-            } else if result.terminationReason == .timedOut {
-                failedCount += 1
-                firstErrorCode = firstErrorCode ?? (code == 0 ? 1 : code)
-                let analysis = FailureAnalysis(
-                    summary: "升级命令超时。",
-                    suggestion: "请稍后重试，或在终端中手动运行命令检查是否卡在网络、权限或交互提示。",
-                    action: .retryInTerminal,
-                    copyText: "命令：\(command.display)\n最近输出：\n\(result.recentOutput)",
-                    command: command.display
-                )
-                markTimedOut(step, analysis: analysis)
-                updateJob(id) {
-                    $0.status = .timedOut
-                    $0.exitCode = code == 0 ? 1 : code
-                    $0.log.append(LogLine(stream: "system", text: "超时：\(command.display)"))
-                }
-                if step.packageID != nil {
-                    completedSteps += 1
-                    updateUpgradeProgress(completed: completedSteps, failed: failedCount, currentPackage: nil)
-                }
-                break
-            } else if code != 0 {
-                failedCount += 1
-                if firstErrorCode == nil { firstErrorCode = code }
-                let analysis = failureAnalysis(command: command.display, code: code, output: result.recentOutput)
-                markFailed(step, analysis: analysis)
-                recomputeDerivedData()
-                updateJob(id) {
-                    $0.log.append(LogLine(stream: "system", text: "失败：\(command.display)，退出码 \(code)"))
-                }
-            } else {
-                markSucceeded(step)
-                recomputeDerivedData()
-            }
-
-            if step.packageID != nil {
-                completedSteps += 1
-                updateUpgradeProgress(completed: completedSteps, failed: failedCount, currentPackage: nil)
-            }
+        for step in setupSteps {
+            let command = prepareStepExecution(jobID: id, step: step)
+            let result = await runCommand(jobID: id, step: step, command: command, token: token)
+            shouldStop = handleStepResult(
+                jobID: id,
+                step: step,
+                command: command,
+                result: result,
+                failedCount: &failedCount,
+                firstErrorCode: &firstErrorCode,
+                completedSteps: &completedSteps
+            )
+            if shouldStop { break }
         }
+
+        if !shouldStop {
+            shouldStop = await runPackageStepsConcurrently(
+                jobID: id,
+                steps: packageSteps,
+                token: token,
+                failedCount: &failedCount,
+                firstErrorCode: &firstErrorCode,
+                completedSteps: &completedSteps
+            )
+        }
+
+        activeCancellationTokens[id] = nil
 
         updateJob(id) {
             if $0.status == .cancelled || $0.status == .timedOut {
@@ -537,7 +492,6 @@ final class StewardModel: ObservableObject {
         }
 
         upgradeProgress = nil
-        activeCancellationTokens[id] = nil
 
         if rescanAfterSuccess {
             let previousProgress = packageProgress
@@ -549,6 +503,174 @@ final class StewardModel: ObservableObject {
                 }
             }
         }
+    }
+
+    private func prepareStepExecution(jobID id: UUID, step: UpgradeStep) -> UpgradeCommand {
+        let command = step.command
+        markRunning(step)
+        recomputeDerivedData()
+        if step.packageName != nil {
+            updateUpgradeProgress(currentPackage: step.packageName)
+        }
+        appendLog(id: id, stream: "command", text: "$ \(command.display)")
+        return command
+    }
+
+    private func runCommand(jobID id: UUID, step: UpgradeStep, command: UpgradeCommand, token: CommandCancellationToken) async -> StreamingCommandResult {
+        await CommandRunner.runStreamingDetailed(
+            command.executable,
+            arguments: command.arguments,
+            timeout: 7200,
+            cancellationToken: token
+        ) { stream, text in
+            Task { @MainActor in
+                self.appendLog(id: id, stream: stream, text: text)
+                self.updatePackageDetail(for: step, stream: stream, text: text)
+            }
+        }
+    }
+
+    private func runPackageStepsConcurrently(
+        jobID id: UUID,
+        steps: [UpgradeStep],
+        token: CommandCancellationToken,
+        failedCount: inout Int,
+        firstErrorCode: inout Int32?,
+        completedSteps: inout Int
+    ) async -> Bool {
+        guard !steps.isEmpty else { return false }
+        let maxSlots = maxConcurrentUpgrades <= 0 ? steps.count : max(1, maxConcurrentUpgrades)
+        let launchCount = min(maxSlots, steps.count)
+        var nextIndex = 0
+        var shouldStop = false
+
+        await withTaskGroup(of: StepExecutionOutcome.self) { group in
+            func launchNext() async {
+                guard nextIndex < steps.count, !shouldStop, !token.isCancelled else { return }
+                let step = steps[nextIndex]
+                nextIndex += 1
+                let command = await MainActor.run {
+                    self.prepareStepExecution(jobID: id, step: step)
+                }
+                let model = self
+                group.addTask {
+                    let result = await CommandRunner.runStreamingDetailed(
+                        command.executable,
+                        arguments: command.arguments,
+                        timeout: 7200,
+                        cancellationToken: token
+                    ) { stream, text in
+                        Task { @MainActor in
+                            model.appendLog(id: id, stream: stream, text: text)
+                            model.updatePackageDetail(for: step, stream: stream, text: text)
+                        }
+                    }
+                    return StepExecutionOutcome(step: step, command: command, result: result)
+                }
+            }
+
+            for _ in 0..<launchCount {
+                await launchNext()
+            }
+
+            if launchCount > 1 {
+                updateUpgradeProgress(currentPackage: "\(launchCount) 个任务并行中")
+            }
+
+            while let outcome = await group.next() {
+                let stop = handleStepResult(
+                    jobID: id,
+                    step: outcome.step,
+                    command: outcome.command,
+                    result: outcome.result,
+                    failedCount: &failedCount,
+                    firstErrorCode: &firstErrorCode,
+                    completedSteps: &completedSteps
+                )
+                if stop {
+                    shouldStop = true
+                    token.cancel()
+                    group.cancelAll()
+                }
+                await launchNext()
+            }
+        }
+
+        return shouldStop
+    }
+
+    private func handleStepResult(
+        jobID id: UUID,
+        step: UpgradeStep,
+        command: UpgradeCommand,
+        result: StreamingCommandResult,
+        failedCount: inout Int,
+        firstErrorCode: inout Int32?,
+        completedSteps: inout Int
+    ) -> Bool {
+        let code = result.code
+
+        if result.terminationReason == .cancelled {
+            failedCount += 1
+            firstErrorCode = firstErrorCode ?? (code == 0 ? 1 : code)
+            markCancelled(step)
+            updateJob(id) {
+                $0.status = .cancelled
+                $0.exitCode = code == 0 ? 1 : code
+                $0.log.append(LogLine(stream: "system", text: "已取消：\(command.display)"))
+            }
+            if step.packageID != nil {
+                completedSteps += 1
+                updateUpgradeProgress(completed: completedSteps, failed: failedCount, currentPackage: nil)
+            }
+            return true
+        } else if result.terminationReason == .timedOut {
+            failedCount += 1
+            firstErrorCode = firstErrorCode ?? (code == 0 ? 1 : code)
+            let analysis = FailureAnalysis(
+                summary: "升级命令超时。",
+                suggestion: "请稍后重试，或在终端中手动运行命令检查是否卡在网络、权限或交互提示。",
+                action: .retryInTerminal,
+                copyText: "命令：\(command.display)\n最近输出：\n\(result.recentOutput)",
+                command: command.display
+            )
+            markTimedOut(step, analysis: analysis)
+            updateJob(id) {
+                $0.status = .timedOut
+                $0.exitCode = code == 0 ? 1 : code
+                $0.log.append(LogLine(stream: "system", text: "超时：\(command.display)"))
+            }
+            if step.packageID != nil {
+                completedSteps += 1
+                updateUpgradeProgress(completed: completedSteps, failed: failedCount, currentPackage: nil)
+            }
+            return true
+        } else if code != 0 {
+            failedCount += 1
+            if firstErrorCode == nil { firstErrorCode = code }
+            let analysis = failureAnalysis(command: command.display, code: code, output: result.recentOutput)
+            markFailed(step, analysis: analysis)
+            recomputeDerivedData()
+            updateJob(id) {
+                $0.log.append(LogLine(stream: "system", text: "失败：\(command.display)，退出码 \(code)"))
+            }
+        } else {
+            markSucceeded(step)
+            recomputeDerivedData()
+        }
+
+        if step.packageID != nil {
+            completedSteps += 1
+            updateUpgradeProgress(completed: completedSteps, failed: failedCount, currentPackage: nil)
+        }
+
+        return false
+    }
+
+    private struct StepExecutionOutcome {
+        var step: UpgradeStep
+        var command: UpgradeCommand
+        var result: StreamingCommandResult
     }
 
     private func updateUpgradeProgress(completed: Int? = nil, failed: Int? = nil, currentPackage: String? = nil) {
