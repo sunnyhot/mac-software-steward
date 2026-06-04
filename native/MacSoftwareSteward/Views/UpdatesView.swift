@@ -318,8 +318,10 @@ struct PackageProgressBadge: View {
                 Image(systemName: symbol)
                     .font(.system(size: 12, weight: .semibold))
             }
-            Text(progress.status.rawValue)
+            Text(statusText)
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -354,6 +356,14 @@ struct PackageProgressBadge: View {
         case .warning: return .yellow
         }
     }
+
+    private var statusText: String {
+        guard progress.status == .running else { return progress.status.rawValue }
+        if progress.phaseText == "下载中", let fraction = progress.downloadFraction {
+            return "下载中 \(Int(fraction * 100))%"
+        }
+        return progress.phaseText.isEmpty ? progress.status.rawValue : progress.phaseText
+    }
 }
 
 // MARK: - Progress Detail
@@ -386,7 +396,7 @@ struct PackageProgressDetail: View {
             }
             if (progress.status == .failed || progress.status == .timedOut) && !progress.failureSummary.isEmpty {
                 failureDetail
-            } else if progress.status != .queued {
+            } else if progress.status != .queued && progress.status != .running {
                 Text(progress.detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -400,8 +410,12 @@ struct PackageProgressDetail: View {
 
     @ViewBuilder
     private var runningProgress: some View {
-        if let fraction = progress.downloadFraction, fraction > 0 {
-            VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(phaseText, systemImage: phaseSymbol)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let fraction = progress.downloadFraction {
                 ProgressView(value: fraction)
                     .progressViewStyle(.linear)
                     .tint(.accentColor)
@@ -421,18 +435,17 @@ struct PackageProgressDetail: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-            }
-        } else {
-            VStack(alignment: .leading, spacing: 4) {
+            } else {
                 ProgressView()
                     .progressViewStyle(.linear)
-                Text(progress.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
             }
+
+            Text(progress.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
         }
     }
 
@@ -555,6 +568,26 @@ struct PackageProgressDetail: View {
         case .cleanup: return "清理并重试"
         case .repairPerms: return "重试"
         default: return "重试"
+        }
+    }
+
+    private var phaseText: String {
+        progress.phaseText.isEmpty ? "执行中" : progress.phaseText
+    }
+
+    private var phaseSymbol: String {
+        switch phaseText {
+        case "准备下载": return "arrow.down.circle"
+        case "下载中": return "arrow.down.circle.fill"
+        case "下载完成": return "checkmark.circle"
+        case "校验下载": return "checkmark.shield"
+        case "安装中": return "square.and.arrow.down"
+        case "替换应用": return "arrow.triangle.2.circlepath"
+        case "链接命令": return "link"
+        case "移除旧链接": return "link.badge.minus"
+        case "清理中": return "trash"
+        case "执行命令": return "terminal"
+        default: return "gearshape"
         }
     }
 

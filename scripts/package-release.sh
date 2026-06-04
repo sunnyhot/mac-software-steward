@@ -29,6 +29,8 @@ else
     echo "## Mac 软件管家 v$VERSION"
     echo ""
     echo "### 应用自更新体验"
+    echo "- 升级列表显示当前阶段：准备下载、下载中、安装中、替换应用、清理中等"
+    echo "- Homebrew/curl 下载时展示百分比、已下载/总大小和下载速度"
     echo "- Homebrew Caskroom 旧版本 App 残留导致覆盖冲突时，自动执行 brew uninstall --cask --force 清理"
     echo "- Homebrew Cask 下载失败但本机 App 已不存在时，自动执行 brew uninstall --cask --force 清理残留"
     echo "- 遇到 Homebrew Cask 记录仍在但 App 已被删除时，自动执行 brew uninstall --cask --force 清理残留"

@@ -766,7 +766,8 @@ final class StewardModel: ObservableObject {
             packageID: packageID,
             packageName: packageName,
             status: .running,
-            detail: step.command.display
+            detail: step.command.display,
+            phaseText: "执行命令"
         )
     }
 
@@ -833,71 +834,23 @@ final class StewardModel: ObservableObject {
     private func updatePackageDetail(for step: UpgradeStep, stream: String, text: String) {
         guard let packageID = step.packageID, var progress = packageProgress[packageID] else { return }
         guard progress.status == .running else { return }
-        progress.detail = "[\(stream)] \(text)"
+        let parsed = PackageProgressParser.parse(stream: stream, text: text)
+        if let phaseText = parsed.phaseText {
+            progress.phaseText = phaseText
+        }
+        progress.detail = parsed.detail
         progress.updatedAt = Date()
 
-        // Parse download progress from Homebrew output
-        // brew download patterns:
-        //   "Downloading https://... 12.3%"  or  "Downloading https://... 100.0%"
-        //   "Already downloaded: /path/to/file"
-        //   "curl: ...  12.3%  2.1M  --:-- ETA"
-        let downloadInfo = parseDownloadProgress(from: text)
-        if let fraction = downloadInfo.fraction {
-            progress.downloadFraction = fraction
+        if parsed.clearsDownloadProgress {
+            progress.downloadFraction = nil
+            progress.downloadSizeText = nil
+            progress.downloadSpeedText = nil
         }
-        if let sizeText = downloadInfo.sizeText {
-            progress.downloadSizeText = sizeText
-        }
-        if let speedText = downloadInfo.speedText {
-            progress.downloadSpeedText = speedText
-        }
-        // Reset download progress if we see non-download output
-        if !text.lowercased().contains("download") && !text.contains("%") && !text.contains("curl") {
-            // Keep existing download info - don't reset
-        }
+        if let fraction = parsed.downloadFraction { progress.downloadFraction = fraction }
+        if let sizeText = parsed.downloadSizeText { progress.downloadSizeText = sizeText }
+        if let speedText = parsed.downloadSpeedText { progress.downloadSpeedText = speedText }
 
         packageProgress[packageID] = progress
-    }
-
-    /// Parse brew/curl download progress from command output
-    private func parseDownloadProgress(from text: String) -> (fraction: Double?, sizeText: String?, speedText: String?) {
-        let lowercased = text.lowercased()
-
-        // Pattern 1: "Downloading https://... 45.6%"
-        if lowercased.contains("downloading") {
-            // Extract percentage
-            if let pctRange = text.range(of: #"(\d+\.?\d*)\s*%"#, options: .regularExpression) {
-                let pctStr = text[pctRange].replacingOccurrences(of: "%", with: "").trimmingCharacters(in: .whitespaces)
-                if let pct = Double(pctStr) {
-                    let fraction = min(max(pct / 100.0, 0), 1.0)
-                    return (fraction, nil, nil)
-                }
-            }
-            // "Downloading" without percentage means download just started
-            return (0.0, nil, nil)
-        }
-
-        // Pattern 2: "Already downloaded" → download complete
-        if lowercased.contains("already downloaded") {
-            return (1.0, nil, nil)
-        }
-
-        // Pattern 3: curl progress "  45.6  12.3M  2.1M/s  0:00:05"
-        // curl -# output: "###  45.6%"
-        if let pctMatch = text.range(of: #"(\d+\.?\d*)\s*%"#, options: .regularExpression) {
-            let pctStr = text[pctMatch].replacingOccurrences(of: "%", with: "").trimmingCharacters(in: .whitespaces)
-            if let pct = Double(pctStr), pct > 0 && pct <= 100 {
-                let fraction = pct / 100.0
-                // Try to extract speed info
-                var speed: String? = nil
-                if let speedMatch = text.range(of: #"(\d+\.?\d*\s*[KMGT]?B/s)"#, options: .regularExpression) {
-                    speed = String(text[speedMatch])
-                }
-                return (fraction, nil, speed)
-            }
-        }
-
-        return (nil, nil, nil)
     }
 
     private func failureAnalysis(command: String, code: Int32, output: String) -> FailureAnalysis {

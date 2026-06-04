@@ -261,6 +261,7 @@ struct PackageUpgradeProgress: Hashable {
     var packageName: String
     var status: PackageUpgradeStatus
     var detail: String
+    var phaseText = ""
     var failureSummary = ""
     var recoverySuggestion = ""
     var copyText = ""
