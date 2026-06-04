@@ -74,6 +74,7 @@ jobs:
           ## Mac 软件管家 ${TAG}
 
           ### 应用自更新体验
+          - Homebrew Cask 下载失败但本机 App 已不存在时，自动执行 brew uninstall --cask --force 清理残留
           - 遇到 Homebrew Cask 记录仍在但 App 已被删除时，自动执行 brew uninstall --cask --force 清理残留
           - 修复一键升级并行数量只作用于 job、包升级仍串行执行的问题
           - 一键升级现在会在 brew update 后按设置的并行数量同时执行多个包升级

@@ -682,7 +682,8 @@ final class StewardModel: ObservableObject {
         output: String,
         token: CommandCancellationToken?
     ) async -> Bool {
-        guard let caskName = staleBrewCaskName(command: command, output: output) else { return false }
+        let appPresence = appPresenceForBrewCask(step)
+        guard let caskName = BrewCaskCleanupDetector.cleanupCandidate(command: command, output: output, appPresence: appPresence) else { return false }
         appendLog(id: id, stream: "system", text: "检测到 \(caskName) 的 App 已不存在，自动从 Homebrew Cask 中移除。")
         let cleanupCommand = UpgradeCommand(
             executable: command.executable,
@@ -708,13 +709,15 @@ final class StewardModel: ObservableObject {
         return true
     }
 
-    private func staleBrewCaskName(command: UpgradeCommand, output: String) -> String? {
-        let lowercased = output.lowercased()
-        guard lowercased.contains("app source"), lowercased.contains("is not there") else { return nil }
-        guard command.arguments.contains("upgrade"), command.arguments.contains("--cask") else { return nil }
-        return command.arguments.reversed().first { argument in
-            !argument.hasPrefix("-") && argument != "upgrade"
+    private func appPresenceForBrewCask(_ step: UpgradeStep) -> BrewCaskAppPresence {
+        guard let packageID = step.packageID, packageID.hasPrefix("brew:cask:") else {
+            return BrewCaskAppPresence(scanSucceeded: false, relatedAppExists: false)
         }
+        guard let applications = scan?.applications else {
+            return BrewCaskAppPresence(scanSucceeded: false, relatedAppExists: false)
+        }
+        let relatedAppExists = applications.items.contains { $0.relatedPackageID == packageID }
+        return BrewCaskAppPresence(scanSucceeded: applications.ok, relatedAppExists: relatedAppExists)
     }
 
     private struct StepExecutionOutcome {
