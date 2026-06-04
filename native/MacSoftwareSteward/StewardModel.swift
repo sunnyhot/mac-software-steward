@@ -439,7 +439,7 @@ final class StewardModel: ObservableObject {
         for step in setupSteps {
             let command = prepareStepExecution(jobID: id, step: step)
             let result = await runCommand(jobID: id, step: step, command: command, token: token)
-            shouldStop = handleStepResult(
+            shouldStop = await handleStepResult(
                 jobID: id,
                 step: step,
                 command: command,
@@ -578,7 +578,7 @@ final class StewardModel: ObservableObject {
             }
 
             while let outcome = await group.next() {
-                let stop = handleStepResult(
+                let stop = await handleStepResult(
                     jobID: id,
                     step: outcome.step,
                     command: outcome.command,
@@ -607,7 +607,7 @@ final class StewardModel: ObservableObject {
         failedCount: inout Int,
         firstErrorCode: inout Int32?,
         completedSteps: inout Int
-    ) -> Bool {
+    ) async -> Bool {
         let code = result.code
 
         if result.terminationReason == .cancelled {
@@ -646,13 +646,21 @@ final class StewardModel: ObservableObject {
             }
             return true
         } else if code != 0 {
-            failedCount += 1
-            if firstErrorCode == nil { firstErrorCode = code }
-            let analysis = failureAnalysis(command: command.display, code: code, output: result.recentOutput)
-            markFailed(step, analysis: analysis)
-            recomputeDerivedData()
-            updateJob(id) {
-                $0.log.append(LogLine(stream: "system", text: "失败：\(command.display)，退出码 \(code)"))
+            if await cleanupStaleBrewCaskIfNeeded(jobID: id, step: step, command: command, output: result.recentOutput, token: activeCancellationTokens[id]) {
+                markCleanedUp(step)
+                recomputeDerivedData()
+                updateJob(id) {
+                    $0.log.append(LogLine(stream: "system", text: "已清理失效的 Homebrew Cask：\(step.packageName ?? command.display)"))
+                }
+            } else {
+                failedCount += 1
+                if firstErrorCode == nil { firstErrorCode = code }
+                let analysis = failureAnalysis(command: command.display, code: code, output: result.recentOutput)
+                markFailed(step, analysis: analysis)
+                recomputeDerivedData()
+                updateJob(id) {
+                    $0.log.append(LogLine(stream: "system", text: "失败：\(command.display)，退出码 \(code)"))
+                }
             }
         } else {
             markSucceeded(step)
@@ -665,6 +673,48 @@ final class StewardModel: ObservableObject {
         }
 
         return false
+    }
+
+    private func cleanupStaleBrewCaskIfNeeded(
+        jobID id: UUID,
+        step: UpgradeStep,
+        command: UpgradeCommand,
+        output: String,
+        token: CommandCancellationToken?
+    ) async -> Bool {
+        guard let caskName = staleBrewCaskName(command: command, output: output) else { return false }
+        appendLog(id: id, stream: "system", text: "检测到 \(caskName) 的 App 已不存在，自动从 Homebrew Cask 中移除。")
+        let cleanupCommand = UpgradeCommand(
+            executable: command.executable,
+            arguments: ["uninstall", "--cask", "--force", caskName],
+            display: "brew uninstall --cask --force \(caskName)"
+        )
+        appendLog(id: id, stream: "command", text: "$ \(cleanupCommand.display)")
+        let result = await CommandRunner.runStreamingDetailed(
+            cleanupCommand.executable,
+            arguments: cleanupCommand.arguments,
+            timeout: 600,
+            cancellationToken: token
+        ) { stream, text in
+            Task { @MainActor in
+                self.appendLog(id: id, stream: stream, text: text)
+                self.updatePackageDetail(for: step, stream: stream, text: text)
+            }
+        }
+        guard result.terminationReason == .exited, result.code == 0 else {
+            appendLog(id: id, stream: "system", text: "清理 \(caskName) 失败，退出码 \(result.code)。")
+            return false
+        }
+        return true
+    }
+
+    private func staleBrewCaskName(command: UpgradeCommand, output: String) -> String? {
+        let lowercased = output.lowercased()
+        guard lowercased.contains("app source"), lowercased.contains("is not there") else { return nil }
+        guard command.arguments.contains("upgrade"), command.arguments.contains("--cask") else { return nil }
+        return command.arguments.reversed().first { argument in
+            !argument.hasPrefix("-") && argument != "upgrade"
+        }
     }
 
     private struct StepExecutionOutcome {
@@ -724,6 +774,16 @@ final class StewardModel: ObservableObject {
             packageName: packageName,
             status: .succeeded,
             detail: "升级完成"
+        )
+    }
+
+    private func markCleanedUp(_ step: UpgradeStep) {
+        guard let packageID = step.packageID, let packageName = step.packageName else { return }
+        packageProgress[packageID] = PackageUpgradeProgress(
+            packageID: packageID,
+            packageName: packageName,
+            status: .succeeded,
+            detail: "已清理失效的 Homebrew Cask"
         )
     }
 
@@ -901,7 +961,16 @@ final class StewardModel: ObservableObject {
             )
         }
 
-        // 2. 应用已存在（Cask 覆盖冲突）
+        // 2. Homebrew cask 记录仍在，但对应 App 已被手动删除
+        if lowercased.contains("app source") && lowercased.contains("is not there") {
+            return FailureHint(
+                summary: "Homebrew 中保留了已不存在的 Cask 记录。",
+                suggestion: "系统会自动尝试从 Homebrew Cask 中移除该残留记录；如果仍失败，请在终端运行对应的 brew uninstall --cask --force 命令。",
+                action: .cleanup
+            )
+        }
+
+        // 3. 应用已存在（Cask 覆盖冲突）
         if lowercased.contains("already exists") || lowercased.contains("it seems there is already an app") || lowercased.contains("app already exists") {
             return FailureHint(
                 summary: "目标位置已存在同名应用，无法直接覆盖安装。",
@@ -910,7 +979,7 @@ final class StewardModel: ObservableObject {
             )
         }
 
-        // 3. 权限不足
+        // 4. 权限不足
         if lowercased.contains("permission denied") || lowercased.contains("operation not permitted") || lowercased.contains("eacces") {
             return FailureHint(
                 summary: "没有写入权限，无法完成安装。",
@@ -919,7 +988,7 @@ final class StewardModel: ObservableObject {
             )
         }
 
-        // 4. 校验失败（缓存损坏）
+        // 5. 校验失败（缓存损坏）
         if lowercased.contains("checksum mismatch") || lowercased.contains("sha256 mismatch") {
             return FailureHint(
                 summary: "下载的文件校验不通过，可能是缓存损坏。",
@@ -928,7 +997,7 @@ final class StewardModel: ObservableObject {
             )
         }
 
-        // 5. 网络/下载超时
+        // 6. 网络/下载超时
         if lowercased.contains("timeout") || lowercased.contains("timed out") || lowercased.contains("connection refused") || lowercased.contains("could not resolve") || lowercased.contains("network") || (lowercased.contains("curl") && lowercased.contains("error")) {
             return FailureHint(
                 summary: "网络连接出现问题，下载失败。",
@@ -937,7 +1006,7 @@ final class StewardModel: ObservableObject {
             )
         }
 
-        // 6. 磁盘空间不足
+        // 7. 磁盘空间不足
         if lowercased.contains("no space left") || lowercased.contains("disk full") || lowercased.contains("not enough space") || lowercased.contains("enospc") {
             return FailureHint(
                 summary: "磁盘空间不足，无法完成下载和安装。",
@@ -946,7 +1015,7 @@ final class StewardModel: ObservableObject {
             )
         }
 
-        // 7. 版本冲突/依赖问题
+        // 8. 版本冲突/依赖问题
         if lowercased.contains("version conflict") || lowercased.contains("conflicting") || (lowercased.contains("depends on") && lowercased.contains("not installed")) || lowercased.contains("broken") || lowercased.contains("dependency") {
             return FailureHint(
                 summary: "存在依赖关系问题，无法直接升级。",
@@ -955,7 +1024,7 @@ final class StewardModel: ObservableObject {
             )
         }
 
-        // 8. 文件/工具不存在
+        // 9. 文件/工具不存在
         if lowercased.contains("no such file or directory") || lowercased.contains("not found") {
             return FailureHint(
                 summary: "所需的文件或工具未找到。",
@@ -964,7 +1033,7 @@ final class StewardModel: ObservableObject {
             )
         }
 
-        // 9. mas CLI 崩溃
+        // 10. mas CLI 崩溃
         if lowercased.contains("signal") || lowercased.contains("sigsegv") || lowercased.contains("sigabrt") || lowercased.contains("崩溃") {
             return FailureHint(
                 summary: "命令进程崩溃，可能是工具与当前系统版本不兼容。",
@@ -973,7 +1042,7 @@ final class StewardModel: ObservableObject {
             )
         }
 
-        // 10. 下载被中断
+        // 11. 下载被中断
         if lowercased.contains("download") && (lowercased.contains("interrupted") || lowercased.contains("failed") || lowercased.contains("incomplete")) {
             return FailureHint(
                 summary: "下载过程中被中断，文件不完整。",
@@ -982,7 +1051,7 @@ final class StewardModel: ObservableObject {
             )
         }
 
-        // 11. sudo 密码/终端问题（mas upgrade 调用 sudo）
+        // 12. sudo 密码/终端问题（mas upgrade 调用 sudo）
         if lowercased.contains("sudo") && (lowercased.contains("password is required") || lowercased.contains("terminal is required") || lowercased.contains("a password is required") || lowercased.contains("read the password")) {
             return FailureHint(
                 summary: "系统需要管理员密码才能完成安装，但当前环境无法输入密码。",
