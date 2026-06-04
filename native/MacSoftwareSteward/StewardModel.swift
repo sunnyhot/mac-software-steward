@@ -974,6 +974,14 @@ final class StewardModel: ObservableObject {
         }
 
         // 3. 应用已存在（Cask 覆盖冲突）
+        if BrewCaskCleanupDetector.isCaskroomAppConflict(lowercased) {
+            return FailureHint(
+                summary: "Homebrew Caskroom 中存在旧版本 App 残留。",
+                suggestion: "系统会自动尝试执行 brew uninstall --cask --force 清理该残留记录；如果仍失败，请在终端运行对应命令后重新扫描。",
+                action: .cleanup
+            )
+        }
+
         if lowercased.contains("already exists") || lowercased.contains("it seems there is already an app") || lowercased.contains("app already exists") {
             return FailureHint(
                 summary: "目标位置已存在同名应用，无法直接覆盖安装。",

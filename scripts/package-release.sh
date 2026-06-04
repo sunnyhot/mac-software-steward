@@ -29,6 +29,7 @@ else
     echo "## Mac 软件管家 v$VERSION"
     echo ""
     echo "### 应用自更新体验"
+    echo "- Homebrew Caskroom 旧版本 App 残留导致覆盖冲突时，自动执行 brew uninstall --cask --force 清理"
     echo "- Homebrew Cask 下载失败但本机 App 已不存在时，自动执行 brew uninstall --cask --force 清理残留"
     echo "- 遇到 Homebrew Cask 记录仍在但 App 已被删除时，自动执行 brew uninstall --cask --force 清理残留"
     echo "- 修复一键升级并行数量只作用于 job、包升级仍串行执行的问题"

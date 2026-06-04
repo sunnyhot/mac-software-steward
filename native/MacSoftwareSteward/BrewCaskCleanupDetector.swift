@@ -23,6 +23,10 @@ enum BrewCaskCleanupDetector {
             return caskName
         }
 
+        if isCaskroomAppConflict(lowercased), appPresence.scanSucceeded, !appPresence.relatedAppExists {
+            return caskName
+        }
+
         return nil
     }
 
@@ -40,5 +44,10 @@ enum BrewCaskCleanupDetector {
         lowercasedOutput.contains("download failed on cask")
             || lowercasedOutput.contains("download failed:")
             || lowercasedOutput.contains("curl: (18)")
+    }
+
+    static func isCaskroomAppConflict(_ lowercasedOutput: String) -> Bool {
+        lowercasedOutput.contains("already an app at")
+            && lowercasedOutput.contains("/caskroom/")
     }
 }

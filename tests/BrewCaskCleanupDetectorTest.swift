@@ -47,5 +47,26 @@ struct BrewCaskCleanupDetectorTest {
             appPresence: BrewCaskAppPresence(scanSucceeded: false, relatedAppExists: false)
         )
         precondition(appSourceCandidate == "codexbar", "App source failures should still clean without scan evidence")
+
+        let caskroomConflictCommand = UpgradeCommand(
+            executable: "/opt/homebrew/bin/brew",
+            arguments: ["upgrade", "--cask", "--greedy", "iina"],
+            display: "brew upgrade --cask --greedy iina"
+        )
+        let caskroomConflictOutput = "Error: iina: It seems there is already an App at '/opt/homebrew/Caskroom/iina/1.4.2,164/IINA.app'."
+        let caskroomConflictCandidate = BrewCaskCleanupDetector.cleanupCandidate(
+            command: caskroomConflictCommand,
+            output: caskroomConflictOutput,
+            appPresence: BrewCaskAppPresence(scanSucceeded: true, relatedAppExists: false)
+        )
+        precondition(caskroomConflictCandidate == "iina", "Caskroom App conflicts with a missing installed app should clean iina, got \(String(describing: caskroomConflictCandidate))")
+
+        let applicationsConflictOutput = "Error: iina: It seems there is already an App at '/Applications/IINA.app'."
+        let applicationsConflictCandidate = BrewCaskCleanupDetector.cleanupCandidate(
+            command: caskroomConflictCommand,
+            output: applicationsConflictOutput,
+            appPresence: BrewCaskAppPresence(scanSucceeded: true, relatedAppExists: false)
+        )
+        precondition(applicationsConflictCandidate == nil, "Application-directory conflicts should not be treated as stale Caskroom cleanup")
     }
 }
