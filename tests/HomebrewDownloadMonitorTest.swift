@@ -25,5 +25,9 @@ struct HomebrewDownloadMonitorTest {
 
         let unrelated = try HomebrewDownloadMonitor.snapshot(packageName: "warp", in: directory, previous: nil, now: Date(timeIntervalSince1970: 40))
         precondition(unrelated == nil, "Unrelated incomplete files must not be matched")
+
+        precondition(HomebrewDownloadMonitor.canApplySnapshot(toPhase: "安装中"), "Active incomplete downloads must be allowed to correct premature installing phase")
+        precondition(!HomebrewDownloadMonitor.canApplySnapshot(toPhase: "替换应用"), "Cache download snapshots must not override real app replacement phase")
+        precondition(!HomebrewDownloadMonitor.canApplySnapshot(toPhase: "清理中"), "Cache download snapshots must not override cleanup phase")
     }
 }

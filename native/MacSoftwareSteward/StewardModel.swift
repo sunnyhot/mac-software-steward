@@ -771,6 +771,7 @@ final class StewardModel: ObservableObject {
             detail: step.command.display,
             phaseText: "执行命令"
         )
+        startHomebrewDownloadMonitorIfNeeded(for: step)
     }
 
     private func markSucceeded(_ step: UpgradeStep) {
@@ -899,8 +900,7 @@ final class StewardModel: ObservableObject {
 
     private func applyHomebrewDownloadSnapshot(_ snapshot: HomebrewDownloadSnapshot, packageID: String) {
         guard var progress = packageProgress[packageID], progress.status == .running else { return }
-        let downloadablePhases = ["", "执行命令", "准备下载", "下载中"]
-        guard downloadablePhases.contains(progress.phaseText) else { return }
+        guard HomebrewDownloadMonitor.canApplySnapshot(toPhase: progress.phaseText) else { return }
 
         progress.phaseText = "下载中"
         progress.detail = snapshot.detailText

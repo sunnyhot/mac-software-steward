@@ -75,6 +75,10 @@ enum HomebrewDownloadMonitor {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 
+    static func canApplySnapshot(toPhase phaseText: String) -> Bool {
+        ["", "执行命令", "准备下载", "下载中", "安装中"].contains(phaseText)
+    }
+
     private static func newestFile(in urls: [URL]) -> URL {
         urls.max { lhs, rhs in
             modificationDate(of: lhs) < modificationDate(of: rhs)
