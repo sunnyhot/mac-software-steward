@@ -3,6 +3,10 @@ import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if activateExistingInstanceIfNeeded() {
+            return
+        }
+
         // 读取 UserDefaults，注意区分「未设值」和「显式设为 false」
         let dockIconVisible: Bool
         if UserDefaults.standard.object(forKey: "dockIconVisible") == nil {
@@ -23,6 +27,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+    }
+
+    private func activateExistingInstanceIfNeeded() -> Bool {
+        guard let bundleIdentifier = Bundle.main.bundleIdentifier else { return false }
+        let currentPID = ProcessInfo.processInfo.processIdentifier
+        let runningApplications = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
+        let runningPIDs = runningApplications.map(\.processIdentifier)
+        guard AppSingleInstancePolicy.shouldTerminateCurrent(
+            currentProcessIdentifier: currentPID,
+            runningProcessIdentifiers: runningPIDs
+        ) else {
+            return false
+        }
+
+        let existingApplication = runningApplications
+            .filter { $0.processIdentifier != currentPID }
+            .min { $0.processIdentifier < $1.processIdentifier }
+        existingApplication?.activate(options: [.activateAllWindows])
+        NSApp.terminate(nil)
+        return true
     }
 }
 

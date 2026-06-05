@@ -29,6 +29,8 @@ else
     echo "## Mac 软件管家 v$VERSION"
     echo ""
     echo "### 应用自更新体验"
+    echo "- 修复 Homebrew 下载缓存被锁时误报为文件不完整的问题，改为提示等待原任务结束后重试"
+    echo "- 启动时自动避免 Mac 软件管家多实例并存，降低重复触发 brew upgrade 导致锁冲突的概率"
     echo "- 更新弹框改为更紧凑的确认面板，降低遮挡感；更新说明保留滚动查看"
     echo "- Homebrew Cask 下载时通过 cask URL 探测文件总大小，显示百分比、已下载/总大小、速度和剩余时间"
     echo "- 修复 Homebrew Cask 续传下载时被 Upgrading 日志提前显示成安装中的问题，下载缓存仍存在时会继续显示下载大小和速度"
