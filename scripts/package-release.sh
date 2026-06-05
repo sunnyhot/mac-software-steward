@@ -29,6 +29,7 @@ else
     echo "## Mac 软件管家 v$VERSION"
     echo ""
     echo "### 应用自更新体验"
+    echo "- Homebrew Cask 下载日志没有持续进度时，自动从 Homebrew 缓存 .incomplete 文件推断已下载大小和速度"
     echo "- 修复从深色切换到跟随系统后，窗口侧栏与设置卡片出现深浅混搭的问题"
     echo "- 升级列表显示当前阶段：准备下载、下载中、安装中、替换应用、清理中等"
     echo "- Homebrew/curl 下载时展示百分比、已下载/总大小和下载速度"

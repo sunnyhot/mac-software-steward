@@ -419,25 +419,13 @@ struct PackageProgressDetail: View {
                 ProgressView(value: fraction)
                     .progressViewStyle(.linear)
                     .tint(.accentColor)
-                HStack(spacing: 12) {
-                    Text("\(Int(fraction * 100))%")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(Color.accentColor)
-                    if let sizeText = progress.downloadSizeText {
-                        Label(sizeText, systemImage: "arrow.down.circle")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    if let speedText = progress.downloadSpeedText {
-                        Label(speedText, systemImage: "gauge.with.dots.needle.33percent")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                downloadMetricRow(percentText: "\(Int(fraction * 100))%")
             } else {
                 ProgressView()
                     .progressViewStyle(.linear)
+                if progress.downloadSizeText != nil || progress.downloadSpeedText != nil {
+                    downloadMetricRow(percentText: nil)
+                }
             }
 
             Text(progress.detail)
@@ -446,6 +434,28 @@ struct PackageProgressDetail: View {
                 .lineLimit(3)
                 .truncationMode(.middle)
                 .textSelection(.enabled)
+        }
+    }
+
+    @ViewBuilder
+    private func downloadMetricRow(percentText: String?) -> some View {
+        HStack(spacing: 12) {
+            if let percentText {
+                Text(percentText)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.accentColor)
+            }
+            if let sizeText = progress.downloadSizeText {
+                Label(sizeText, systemImage: "arrow.down.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if let speedText = progress.downloadSpeedText {
+                Label(speedText, systemImage: "gauge.with.dots.needle.33percent")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 

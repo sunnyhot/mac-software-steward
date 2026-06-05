@@ -44,6 +44,7 @@ final class StewardModel: ObservableObject {
     private var pendingJobQueue: [(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool)] = []
     private var debounceTask: Task<Void, Never>?
     private var activeCancellationTokens: [UUID: CommandCancellationToken] = [:]
+    private var downloadMonitorTasks: [String: Task<Void, Never>] = [:]
     @Published var upgradeProgress: UpgradeProgress?
     /// 用户关闭过的失败任务 ID，关闭后不再显示失败通知（直到新任务失败）
     @Published var dismissedFailureJobID: UUID?
@@ -751,6 +752,7 @@ final class StewardModel: ObservableObject {
     private func markQueued(_ steps: [UpgradeStep]) {
         for step in steps {
             guard let packageID = step.packageID, let packageName = step.packageName else { continue }
+            stopHomebrewDownloadMonitor(packageID: packageID)
             packageProgress[packageID] = PackageUpgradeProgress(
                 packageID: packageID,
                 packageName: packageName,
@@ -773,6 +775,7 @@ final class StewardModel: ObservableObject {
 
     private func markSucceeded(_ step: UpgradeStep) {
         guard let packageID = step.packageID, let packageName = step.packageName else { return }
+        stopHomebrewDownloadMonitor(packageID: packageID)
         packageProgress[packageID] = PackageUpgradeProgress(
             packageID: packageID,
             packageName: packageName,
@@ -783,6 +786,7 @@ final class StewardModel: ObservableObject {
 
     private func markCleanedUp(_ step: UpgradeStep) {
         guard let packageID = step.packageID, let packageName = step.packageName else { return }
+        stopHomebrewDownloadMonitor(packageID: packageID)
         packageProgress[packageID] = PackageUpgradeProgress(
             packageID: packageID,
             packageName: packageName,
@@ -793,6 +797,7 @@ final class StewardModel: ObservableObject {
 
     private func markFailed(_ step: UpgradeStep, analysis: FailureAnalysis) {
         guard let packageID = step.packageID, let packageName = step.packageName else { return }
+        stopHomebrewDownloadMonitor(packageID: packageID)
         packageProgress[packageID] = PackageUpgradeProgress(
             packageID: packageID,
             packageName: packageName,
@@ -808,6 +813,7 @@ final class StewardModel: ObservableObject {
 
     private func markCancelled(_ step: UpgradeStep) {
         guard let packageID = step.packageID, let packageName = step.packageName else { return }
+        stopHomebrewDownloadMonitor(packageID: packageID)
         packageProgress[packageID] = PackageUpgradeProgress(
             packageID: packageID,
             packageName: packageName,
@@ -818,6 +824,7 @@ final class StewardModel: ObservableObject {
 
     private func markTimedOut(_ step: UpgradeStep, analysis: FailureAnalysis) {
         guard let packageID = step.packageID, let packageName = step.packageName else { return }
+        stopHomebrewDownloadMonitor(packageID: packageID)
         packageProgress[packageID] = PackageUpgradeProgress(
             packageID: packageID,
             packageName: packageName,
@@ -837,6 +844,9 @@ final class StewardModel: ObservableObject {
         let parsed = PackageProgressParser.parse(stream: stream, text: text)
         if let phaseText = parsed.phaseText {
             progress.phaseText = phaseText
+            if phaseText == "准备下载" || phaseText == "下载中" {
+                startHomebrewDownloadMonitorIfNeeded(for: step)
+            }
         }
         progress.detail = parsed.detail
         progress.updatedAt = Date()
@@ -850,6 +860,58 @@ final class StewardModel: ObservableObject {
         if let sizeText = parsed.downloadSizeText { progress.downloadSizeText = sizeText }
         if let speedText = parsed.downloadSpeedText { progress.downloadSpeedText = speedText }
 
+        packageProgress[packageID] = progress
+    }
+
+    private func startHomebrewDownloadMonitorIfNeeded(for step: UpgradeStep) {
+        guard let packageID = step.packageID,
+              let packageName = step.packageName,
+              isHomebrewCaskUpgrade(step),
+              downloadMonitorTasks[packageID] == nil else { return }
+
+        let directory = HomebrewDownloadMonitor.downloadsDirectory()
+        downloadMonitorTasks[packageID] = Task { @MainActor in
+            var previous: HomebrewDownloadSnapshot?
+            while !Task.isCancelled {
+                guard packageProgress[packageID]?.status == .running else { break }
+                if let snapshot = try? HomebrewDownloadMonitor.snapshot(
+                    packageName: packageName,
+                    in: directory,
+                    previous: previous
+                ) {
+                    previous = snapshot
+                    applyHomebrewDownloadSnapshot(snapshot, packageID: packageID)
+                }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            downloadMonitorTasks[packageID] = nil
+        }
+    }
+
+    private func stopHomebrewDownloadMonitor(packageID: String) {
+        downloadMonitorTasks[packageID]?.cancel()
+        downloadMonitorTasks[packageID] = nil
+    }
+
+    private func isHomebrewCaskUpgrade(_ step: UpgradeStep) -> Bool {
+        step.command.arguments.contains("upgrade") && step.command.arguments.contains("--cask")
+    }
+
+    private func applyHomebrewDownloadSnapshot(_ snapshot: HomebrewDownloadSnapshot, packageID: String) {
+        guard var progress = packageProgress[packageID], progress.status == .running else { return }
+        let downloadablePhases = ["", "执行命令", "准备下载", "下载中"]
+        guard downloadablePhases.contains(progress.phaseText) else { return }
+
+        progress.phaseText = "下载中"
+        progress.detail = snapshot.detailText
+        progress.updatedAt = Date()
+        progress.downloadSizeText = snapshot.downloadSizeText
+        progress.downloadSpeedText = snapshot.downloadSpeedText
+        if let fraction = snapshot.downloadFraction {
+            progress.downloadFraction = fraction
+        } else if progress.downloadFraction == 0 {
+            progress.downloadFraction = nil
+        }
         packageProgress[packageID] = progress
     }
 
