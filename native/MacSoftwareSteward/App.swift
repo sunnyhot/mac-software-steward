@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -40,14 +41,21 @@ struct MacSoftwareStewardApp: App {
                 .environmentObject(model)
                 .environmentObject(updater)
                 .environmentObject(launchAtLogin)
-                .preferredColorScheme(currentAppearanceMode.colorScheme)
+                .preferredColorScheme(AppAppearanceResolver.colorScheme(for: currentAppearanceMode))
                 .frame(minWidth: 1120, minHeight: 720)
                 .task {
+                    AppAppearanceResolver.apply(currentAppearanceMode)
                     applyDockIconPolicy()
                     if model.scan == nil {
                         await model.scanSoftware()
                     }
                     await updater.autoCheckIfNeeded()
+                }
+                .onAppear {
+                    AppAppearanceResolver.apply(currentAppearanceMode)
+                }
+                .onChange(of: appearanceMode) {
+                    AppAppearanceResolver.apply(currentAppearanceMode)
                 }
                 .onChange(of: dockIconVisible) {
                     applyDockIconPolicy()

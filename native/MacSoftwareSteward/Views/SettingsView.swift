@@ -53,6 +53,7 @@ struct SettingsView: View {
             .padding(24)
             .frame(maxWidth: 640, alignment: .leading)
         }
+        .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
     }
 }
 
@@ -66,10 +67,10 @@ struct SettingsGroupBox<Content: View>: View {
             content
         }
         .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         )
     }
 }
