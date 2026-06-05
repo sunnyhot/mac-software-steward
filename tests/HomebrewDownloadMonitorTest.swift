@@ -18,6 +18,17 @@ struct HomebrewDownloadMonitorTest {
         precondition(second?.byteCount == 150, "Expected android-studio size to grow")
         precondition(abs((second?.speedBytesPerSecond ?? 0) - 10) < 0.001, "Expected inferred speed from file growth")
 
+        let hinted = try HomebrewDownloadMonitor.snapshot(
+            packageName: "android-studio",
+            in: directory,
+            previous: first,
+            now: Date(timeIntervalSince1970: 20),
+            expectedByteCountHint: 200
+        )
+        precondition(abs((hinted?.downloadFraction ?? 0) - 0.75) < 0.001, "Expected hint-based fraction")
+        precondition(hinted?.downloadSizeText.contains("/") == true, "Expected downloaded / total size")
+        precondition(hinted?.downloadTimeRemainingText == "剩余 5 秒", "Expected ETA from hinted total and speed")
+
         let outlookFile = directory.appendingPathComponent("def--Microsoft_Outlook_16.109_Installer.pkg.incomplete")
         try Data(repeating: 2, count: 80).write(to: outlookFile)
         let outlook = try HomebrewDownloadMonitor.snapshot(packageName: "microsoft-outlook", in: directory, previous: nil, now: Date(timeIntervalSince1970: 30))

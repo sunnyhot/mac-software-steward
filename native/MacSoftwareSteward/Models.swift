@@ -274,6 +274,8 @@ struct PackageUpgradeProgress: Hashable {
     var downloadSizeText: String? = nil
     /// 下载速度描述（如 "2.1 MB/s"）
     var downloadSpeedText: String? = nil
+    /// 下载剩余时间描述（如 "剩余 12 分钟"）
+    var downloadTimeRemainingText: String? = nil
 }
 
 struct LogLine: Identifiable, Hashable {

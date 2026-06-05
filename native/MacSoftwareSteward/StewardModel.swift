@@ -45,6 +45,8 @@ final class StewardModel: ObservableObject {
     private var debounceTask: Task<Void, Never>?
     private var activeCancellationTokens: [UUID: CommandCancellationToken] = [:]
     private var downloadMonitorTasks: [String: Task<Void, Never>] = [:]
+    private var downloadSizeTasks: [String: Task<Void, Never>] = [:]
+    private var downloadExpectedSizes: [String: Int64] = [:]
     @Published var upgradeProgress: UpgradeProgress?
     /// 用户关闭过的失败任务 ID，关闭后不再显示失败通知（直到新任务失败）
     @Published var dismissedFailureJobID: UUID?
@@ -856,6 +858,7 @@ final class StewardModel: ObservableObject {
             progress.downloadFraction = nil
             progress.downloadSizeText = nil
             progress.downloadSpeedText = nil
+            progress.downloadTimeRemainingText = nil
         }
         if let fraction = parsed.downloadFraction { progress.downloadFraction = fraction }
         if let sizeText = parsed.downloadSizeText { progress.downloadSizeText = sizeText }
@@ -870,6 +873,7 @@ final class StewardModel: ObservableObject {
               isHomebrewCaskUpgrade(step),
               downloadMonitorTasks[packageID] == nil else { return }
 
+        startHomebrewDownloadSizeLookupIfNeeded(for: step)
         let directory = HomebrewDownloadMonitor.downloadsDirectory()
         downloadMonitorTasks[packageID] = Task { @MainActor in
             var previous: HomebrewDownloadSnapshot?
@@ -878,7 +882,8 @@ final class StewardModel: ObservableObject {
                 if let snapshot = try? HomebrewDownloadMonitor.snapshot(
                     packageName: packageName,
                     in: directory,
-                    previous: previous
+                    previous: previous,
+                    expectedByteCountHint: downloadExpectedSizes[packageID]
                 ) {
                     previous = snapshot
                     applyHomebrewDownloadSnapshot(snapshot, packageID: packageID)
@@ -892,6 +897,31 @@ final class StewardModel: ObservableObject {
     private func stopHomebrewDownloadMonitor(packageID: String) {
         downloadMonitorTasks[packageID]?.cancel()
         downloadMonitorTasks[packageID] = nil
+        downloadSizeTasks[packageID]?.cancel()
+        downloadSizeTasks[packageID] = nil
+        downloadExpectedSizes[packageID] = nil
+    }
+
+    private func startHomebrewDownloadSizeLookupIfNeeded(for step: UpgradeStep) {
+        guard let packageID = step.packageID,
+              let packageName = step.packageName,
+              downloadExpectedSizes[packageID] == nil,
+              downloadSizeTasks[packageID] == nil else { return }
+
+        let brewExecutable = step.command.executable
+        downloadSizeTasks[packageID] = Task { [weak self] in
+            let size = await HomebrewCaskDownloadSizeResolver.resolve(
+                caskName: packageName,
+                brewExecutable: brewExecutable
+            )
+            await MainActor.run {
+                guard let self else { return }
+                if let size {
+                    self.downloadExpectedSizes[packageID] = size
+                }
+                self.downloadSizeTasks[packageID] = nil
+            }
+        }
     }
 
     private func isHomebrewCaskUpgrade(_ step: UpgradeStep) -> Bool {
@@ -907,6 +937,7 @@ final class StewardModel: ObservableObject {
         progress.updatedAt = Date()
         progress.downloadSizeText = snapshot.downloadSizeText
         progress.downloadSpeedText = snapshot.downloadSpeedText
+        progress.downloadTimeRemainingText = snapshot.downloadTimeRemainingText
         if let fraction = snapshot.downloadFraction {
             progress.downloadFraction = fraction
         } else if progress.downloadFraction == 0 {

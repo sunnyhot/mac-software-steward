@@ -456,6 +456,11 @@ struct PackageProgressDetail: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            if let remainingText = progress.downloadTimeRemainingText {
+                Label(remainingText, systemImage: "clock")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 

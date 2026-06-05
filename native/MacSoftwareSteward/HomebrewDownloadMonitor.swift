@@ -24,6 +24,15 @@ struct HomebrewDownloadSnapshot: Equatable {
         return "\(HomebrewDownloadMonitor.formatBytes(Int64(speedBytesPerSecond)))/s"
     }
 
+    var downloadTimeRemainingText: String? {
+        guard let expectedByteCount,
+              let speedBytesPerSecond,
+              speedBytesPerSecond > 0,
+              expectedByteCount > byteCount else { return nil }
+        let seconds = Double(expectedByteCount - byteCount) / speedBytesPerSecond
+        return "剩余 \(HomebrewDownloadMonitor.formatDuration(seconds))"
+    }
+
     var detailText: String {
         if let speedBytesPerSecond, speedBytesPerSecond <= 0 {
             return "正在下载，等待网络响应"
@@ -46,6 +55,7 @@ enum HomebrewDownloadMonitor {
         in directory: URL = downloadsDirectory(),
         previous: HomebrewDownloadSnapshot?,
         now: Date = Date(),
+        expectedByteCountHint: Int64? = nil,
         fileManager: FileManager = .default
     ) throws -> HomebrewDownloadSnapshot? {
         let candidates = try fileManager.contentsOfDirectory(
@@ -59,7 +69,12 @@ enum HomebrewDownloadMonitor {
         guard !candidates.isEmpty else { return nil }
         let selected = candidates.first { $0 == previous?.fileURL } ?? newestFile(in: candidates)
         let byteCount = fileSize(of: selected, fileManager: fileManager)
-        let expectedByteCount = expectedSize(forIncompleteFile: selected, byteCount: byteCount, fileManager: fileManager)
+        let expectedByteCount = expectedSize(
+            forIncompleteFile: selected,
+            byteCount: byteCount,
+            hint: expectedByteCountHint,
+            fileManager: fileManager
+        )
         let speed = speedBytesPerSecond(for: selected, byteCount: byteCount, previous: previous, now: now)
 
         return HomebrewDownloadSnapshot(
@@ -73,6 +88,24 @@ enum HomebrewDownloadMonitor {
 
     static func formatBytes(_ bytes: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    static func formatDuration(_ seconds: Double) -> String {
+        let rounded = max(Int(seconds.rounded(.up)), 1)
+        if rounded < 60 { return "\(rounded) 秒" }
+
+        let minutes = Int(ceil(Double(rounded) / 60.0))
+        if minutes < 60 { return "\(minutes) 分钟" }
+
+        let hours = minutes / 60
+        let remainingMinutes = minutes % 60
+        if hours < 24 {
+            return remainingMinutes == 0 ? "\(hours) 小时" : "\(hours) 小时 \(remainingMinutes) 分钟"
+        }
+
+        let days = hours / 24
+        let remainingHours = hours % 24
+        return remainingHours == 0 ? "\(days) 天" : "\(days) 天 \(remainingHours) 小时"
     }
 
     static func canApplySnapshot(toPhase phaseText: String) -> Bool {
@@ -94,12 +127,14 @@ enum HomebrewDownloadMonitor {
         return size.int64Value
     }
 
-    private static func expectedSize(forIncompleteFile url: URL, byteCount: Int64, fileManager: FileManager) -> Int64? {
+    private static func expectedSize(forIncompleteFile url: URL, byteCount: Int64, hint: Int64?, fileManager: FileManager) -> Int64? {
         let incompleteSuffix = ".incomplete"
         guard url.path.hasSuffix(incompleteSuffix) else { return nil }
         let completePath = String(url.path.dropLast(incompleteSuffix.count))
         let completeSize = fileSize(of: URL(fileURLWithPath: completePath), fileManager: fileManager)
-        return completeSize > byteCount ? completeSize : nil
+        if completeSize > byteCount { return completeSize }
+        if let hint, hint > byteCount { return hint }
+        return nil
     }
 
     private static func speedBytesPerSecond(
