@@ -255,38 +255,42 @@ struct AppUpdateDialog: View {
     @EnvironmentObject private var updater: AppUpdateModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: AppUpdateDialogLayout.sectionSpacing) {
             header
             metadataRow
             releaseNotesPanel
             statusArea
             actionRow
         }
-        .padding(30)
-        .frame(width: 760)
+        .padding(AppUpdateDialogLayout.outerPadding)
+        .frame(
+            width: AppUpdateDialogLayout.dialogWidth,
+            height: AppUpdateDialogLayout.dialogHeight,
+            alignment: .topLeading
+        )
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 18) {
+        HStack(alignment: .top, spacing: AppUpdateDialogLayout.headerSpacing) {
             ZStack {
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppUpdateDialogLayout.iconCornerRadius)
                     .fill(Color.accentColor.opacity(0.10))
-                    .frame(width: 72, height: 72)
+                    .frame(width: AppUpdateDialogLayout.iconSize, height: AppUpdateDialogLayout.iconSize)
                 Image(systemName: "arrow.down")
-                    .font(.system(size: 38, weight: .bold))
+                    .font(.system(size: AppUpdateDialogLayout.iconSymbolSize, weight: .bold))
                     .foregroundStyle(Color.accentColor)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("发现新版本")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
                     .foregroundStyle(.green)
                 Text("\(updater.appDisplayName) v\(updater.latestVersion)")
-                    .font(.system(size: 32, weight: .heavy, design: .rounded))
+                    .font(.system(size: AppUpdateDialogLayout.titleSize, weight: .heavy, design: .rounded))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 Text("当前 \(updater.currentVersion) · 最新 \(updater.latestVersion)")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
             }
 
@@ -295,7 +299,7 @@ struct AppUpdateDialog: View {
     }
 
     private var metadataRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             UpdateMetaPill(text: updater.releaseAssetName.isEmpty ? "MacSoftwareSteward.zip" : updater.releaseAssetName, isPrimary: true)
             if !updater.releaseAssetSizeText.isEmpty {
                 UpdateMetaPill(text: updater.releaseAssetSizeText)
@@ -309,13 +313,13 @@ struct AppUpdateDialog: View {
     private var releaseNotesPanel: some View {
         ScrollView {
             Text(updater.releaseNotes.isEmpty ? "暂无更新说明。" : updater.releaseNotes)
-                .font(.system(size: 17, weight: .regular))
-                .lineSpacing(8)
+                .font(.system(size: 15, weight: .regular))
+                .lineSpacing(5)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
         }
-        .frame(minHeight: 190, maxHeight: 260)
-        .padding(18)
+        .frame(maxHeight: AppUpdateDialogLayout.releaseNotesMaxHeight)
+        .padding(AppUpdateDialogLayout.releaseNotesPadding)
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(nsColor: .controlBackgroundColor).opacity(0.55))
@@ -325,7 +329,7 @@ struct AppUpdateDialog: View {
     @ViewBuilder
     private var statusArea: some View {
         if updater.isInstalling {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 9) {
                 if let fraction = updater.downloadFraction {
                     ProgressView(value: fraction)
                         .progressViewStyle(.linear)
@@ -336,7 +340,7 @@ struct AppUpdateDialog: View {
                         .tint(Color.accentColor)
                 }
                 Text(updater.downloadStatusText)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
             }
         } else if let errorMessage = updater.updateErrorMessage {
@@ -415,10 +419,10 @@ private struct UpdateMetaPill: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
+            .font(.system(size: 13, weight: .semibold, design: .rounded))
             .lineLimit(1)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
             .foregroundStyle(isPrimary ? Color.accentColor : .secondary)
             .background(
                 RoundedRectangle(cornerRadius: 8)
