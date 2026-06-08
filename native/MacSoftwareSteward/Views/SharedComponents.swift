@@ -193,8 +193,14 @@ struct CopyableText: View {
 
 struct UpgradeProgressBar: View {
     var progress: UpgradeProgress
+    var packageProgress: [PackageUpgradeProgress] = []
 
     var body: some View {
+        let summary = UpgradeProgressPresenter.summaryText(
+            progress: progress,
+            packageProgress: packageProgress
+        )
+
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 ZStack {
@@ -220,8 +226,12 @@ struct UpgradeProgressBar: View {
                                 .lineLimit(1)
                         }
                     }
+                    Text(summary)
+                        .font(.caption)
+                        .foregroundStyle(progress.failed > 0 ? .orange : .secondary)
+                        .lineLimit(1)
                     if progress.failed > 0 {
-                        Text("\(progress.failed) 个失败")
+                        Text("失败项会保留在列表中，可直接重试或复制详情。")
                             .font(.caption)
                             .foregroundStyle(.red)
                     }

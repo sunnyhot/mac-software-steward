@@ -61,7 +61,10 @@ private struct HeaderView: View {
                         ))
                 }
                 if let progress = model.upgradeProgress, progress.total > 0 {
-                    UpgradeProgressBar(progress: progress)
+                    UpgradeProgressBar(
+                        progress: progress,
+                        packageProgress: Array(model.packageProgress.values)
+                    )
                         .transition(.opacity)
                 }
             }

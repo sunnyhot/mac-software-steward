@@ -381,9 +381,12 @@ struct PackageProgressDetail: View {
             if progress.status == .queued {
                 ProgressView(value: 0.15)
                     .progressViewStyle(.linear)
-                Text("等待升级")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 10) {
+                    Label("等待升级", systemImage: "clock")
+                    Text(UpgradeProgressPresenter.lastUpdateText(for: progress))
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             } else if progress.status == .running {
                 runningProgress
             } else if progress.status == .succeeded {
@@ -414,6 +417,20 @@ struct PackageProgressDetail: View {
             Label(phaseText, systemImage: phaseSymbol)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            HStack(spacing: 12) {
+                Text(UpgradeProgressPresenter.phaseDurationText(for: progress))
+                Text(UpgradeProgressPresenter.lastUpdateText(for: progress))
+            }
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+
+            if let staleHint = UpgradeProgressPresenter.staleHint(for: progress) {
+                Label(staleHint, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             if let fraction = progress.downloadFraction {
                 ProgressView(value: fraction)
