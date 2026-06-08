@@ -15,11 +15,6 @@ swift "$ROOT_DIR/scripts/generate-app-icon.swift" >/dev/null
 cp "$ROOT_DIR/native/Info.plist" "$CONTENTS_DIR/Info.plist"
 cp "$ROOT_DIR/native/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 
-MoleApp_SwiftFiles=()
-while IFS= read -r -d '' f; do
-  MoleApp_SwiftFiles+=("$f")
-done < <(find "$ROOT_DIR/macOS/MoleApp/Sources/MoleApp" -name '*.swift' ! -name '*Tests.swift' -print0 2>/dev/null)
-
 xcrun swiftc \
   -O \
   -target arm64-apple-macosx14.0 \
@@ -28,7 +23,6 @@ xcrun swiftc \
   -framework AppKit \
   "$ROOT_DIR"/native/MacSoftwareSteward/*.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/Views/*.swift \
-  "${MoleApp_SwiftFiles[@]}" \
   -o "$MACOS_DIR/$APP_NAME"
 
 xcrun swiftc \
