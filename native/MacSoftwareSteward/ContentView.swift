@@ -14,6 +14,7 @@ struct ContentView: View {
             .navigationSplitViewColumnWidth(min: 180, ideal: 210)
         } detail: {
             detailContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .animation(.easeInOut(duration: 0.2), value: model.selectedTab)
         }
         .sheet(isPresented: $updater.showUpdateDialog) {
