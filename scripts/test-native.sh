@@ -42,6 +42,14 @@ run_test AppWindowDoubleClickZoomPolicyTest \
   "$SRC/AppWindowDoubleClickZoomPolicy.swift" \
   "$TESTS/AppWindowDoubleClickZoomPolicyTest.swift"
 
+run_test AppTabVisibilityTest \
+  "$SRC/Models.swift" \
+  "$TESTS/AppTabVisibilityTest.swift"
+
+run_test AutomationProfileStoreTest \
+  "$SRC/AutomationProfileStore.swift" \
+  "$TESTS/AutomationProfileStoreTest.swift"
+
 run_test BrewCaskCleanupDetectorTest \
   "$SRC/Models.swift" \
   "$SRC/BrewCaskCleanupDetector.swift" \
@@ -66,6 +74,10 @@ run_test HomebrewCaskDownloadSizeResolverTest \
 run_test HomebrewDownloadMonitorTest \
   "$SRC/HomebrewDownloadMonitor.swift" \
   "$TESTS/HomebrewDownloadMonitorTest.swift"
+
+run_test InboxStoreTest \
+  "$SRC/InboxStore.swift" \
+  "$TESTS/InboxStoreTest.swift"
 
 run_test PackageProgressParserTest \
   "$SRC/PackageProgressParser.swift" \
