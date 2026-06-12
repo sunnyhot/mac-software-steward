@@ -34,6 +34,11 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.version.outputs.version }}" native/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ steps.version.outputs.version }}" native/Info.plist
 
+      - name: Run native tests
+        run: |
+          chmod +x scripts/test-native.sh
+          npm test
+
       - name: Build macOS App
         run: |
           chmod +x scripts/build-native.sh
