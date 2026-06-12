@@ -4,6 +4,7 @@ struct SettingsView: View {
     @EnvironmentObject private var model: StewardModel
     @EnvironmentObject private var updater: AppUpdateModel
     @EnvironmentObject private var launchAtLogin: LaunchAtLoginModel
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -15,6 +16,21 @@ struct SettingsView: View {
                     LaunchAtLoginRow()
                     SettingsDivider()
                     DockIconRow()
+                }
+
+                SettingsGroupBox {
+                    SettingsGroupHeader(title: "自动化管家", symbol: "wand.and.stars")
+                    AutomationProfileRow()
+                    SettingsDivider()
+                    AdvancedModeRow()
+                    SettingsDivider()
+                    NotificationPolicyRow()
+                    if automationProfile.profile.advancedModeEnabled {
+                        SettingsDivider()
+                        RegularAppNetworkPolicyRow()
+                        SettingsDivider()
+                        AutoRepairPolicyRow()
+                    }
                 }
 
                 SettingsGroupBox {
@@ -439,6 +455,148 @@ struct AutoDownloadUpdateRow: View {
             Toggle("", isOn: $updater.automaticDownloadsEnabled)
                 .toggleStyle(.switch)
                 .labelsHidden()
+        }
+    }
+}
+
+struct AutomationProfileRow: View {
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("自动化管家")
+                    .font(.body)
+                Text(statusText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if automationProfile.profile.onboardingCompleted {
+                Toggle("", isOn: Binding(
+                    get: { automationProfile.profile.automationEnabled },
+                    set: { automationProfile.setAutomationEnabled($0) }
+                ))
+                .toggleStyle(.switch)
+                .labelsHidden()
+            } else {
+                Button("开启") {
+                    automationProfile.completeOnboarding(enableAutomation: true)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                Button("保持手动") {
+                    automationProfile.completeOnboarding(enableAutomation: false)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+    }
+
+    private var statusText: String {
+        if !automationProfile.profile.onboardingCompleted {
+            return "首次开启后只自动处理低风险维护事项"
+        }
+        return automationProfile.profile.automationEnabled ? "低风险维护可自动处理" : "当前保持手动维护"
+    }
+}
+
+struct AdvancedModeRow: View {
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("高级模式")
+                    .font(.body)
+                Text("显示可升级、管理来源、任务日志和高级策略")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Toggle("", isOn: Binding(
+                get: { automationProfile.profile.advancedModeEnabled },
+                set: { automationProfile.setAdvancedMode($0) }
+            ))
+            .toggleStyle(.switch)
+            .labelsHidden()
+        }
+    }
+}
+
+struct NotificationPolicyRow: View {
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
+
+    var body: some View {
+        HStack {
+            Text("通知")
+                .font(.body)
+            Spacer()
+            Picker("", selection: Binding(
+                get: { automationProfile.profile.notificationPolicy },
+                set: { automationProfile.setNotificationPolicy($0) }
+            )) {
+                ForEach(NotificationPolicy.allCases) { policy in
+                    Text(policy.title).tag(policy)
+                }
+            }
+            .frame(width: 220)
+            .labelsHidden()
+        }
+    }
+}
+
+struct RegularAppNetworkPolicyRow: View {
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("普通 App 联网检查")
+                    .font(.body)
+                Text("控制 Sparkle 和厂商更新源检查范围")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Picker("", selection: Binding(
+                get: { automationProfile.profile.regularAppNetworkPolicy },
+                set: { automationProfile.setRegularAppNetworkPolicy($0) }
+            )) {
+                ForEach(RegularAppNetworkPolicy.allCases) { policy in
+                    Text(policy.title).tag(policy)
+                }
+            }
+            .frame(width: 220)
+            .labelsHidden()
+        }
+    }
+}
+
+struct AutoRepairPolicyRow: View {
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("失败恢复")
+                    .font(.body)
+                Text("控制是否允许低风险恢复动作自动执行")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Picker("", selection: Binding(
+                get: { automationProfile.profile.autoRepairPolicy },
+                set: { automationProfile.setAutoRepairPolicy($0) }
+            )) {
+                ForEach(AutoRepairPolicy.allCases) { policy in
+                    Text(policy.title).tag(policy)
+                }
+            }
+            .frame(width: 220)
+            .labelsHidden()
         }
     }
 }
