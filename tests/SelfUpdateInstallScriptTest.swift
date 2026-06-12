@@ -4,6 +4,7 @@ import Foundation
 struct SelfUpdateInstallScriptTest {
     static func main() {
         let script = SelfUpdateInstallScript.content
+
         guard let waitRange = script.range(of: "for i in {1..80}") else {
             preconditionFailure("Expected script to wait for the app to quit")
         }
@@ -13,12 +14,34 @@ struct SelfUpdateInstallScriptTest {
         guard let killRange = script.range(of: #"/bin/kill -KILL "$APP_PID""#) else {
             preconditionFailure("Expected script to force kill the old app if TERM does not work")
         }
-        guard let replaceRange = script.range(of: #"/bin/rm -rf "$DEST_APP""#) else {
-            preconditionFailure("Expected script to replace the destination app")
+        guard let tempRange = script.range(of: #"TEMP_APP="$DEST_APP.updating.$$""#) else {
+            preconditionFailure("Expected script to prepare a temporary destination")
+        }
+        guard let backupRange = script.range(of: #"BACKUP_APP="$DEST_APP.previous.$$""#) else {
+            preconditionFailure("Expected script to prepare a backup destination")
+        }
+        guard let trapRange = script.range(of: #"trap 'restore_backup' ERR"#) else {
+            preconditionFailure("Expected script to restore backup on failure")
+        }
+        guard let copyRange = script.range(of: #"/usr/bin/ditto "$NEW_APP" "$TEMP_APP""#) else {
+            preconditionFailure("Expected script to copy the new app into a temporary destination")
+        }
+        guard let backupMoveRange = script.range(of: #"/bin/mv "$DEST_APP" "$BACKUP_APP""#) else {
+            preconditionFailure("Expected script to move the old app to backup before replacement")
+        }
+        guard let replaceRange = script.range(of: #"/bin/mv "$TEMP_APP" "$DEST_APP""#) else {
+            preconditionFailure("Expected script to promote temporary app into final destination")
+        }
+        guard script.range(of: #"/bin/rm -rf "$DEST_APP""#) == nil else {
+            preconditionFailure("Script must not delete the destination app before backup")
         }
 
-        precondition(waitRange.lowerBound < termRange.lowerBound, "TERM should happen after the graceful wait")
+        precondition(waitRange.lowerBound < termRange.lowerBound, "TERM should happen after graceful wait")
         precondition(termRange.lowerBound < killRange.lowerBound, "KILL should happen after TERM")
-        precondition(killRange.lowerBound < replaceRange.lowerBound, "Replacement should happen only after the old app is gone")
+        precondition(tempRange.lowerBound < copyRange.lowerBound, "Temp path should be defined before copy")
+        precondition(backupRange.lowerBound < backupMoveRange.lowerBound, "Backup path should be defined before backup")
+        precondition(trapRange.lowerBound < backupMoveRange.lowerBound, "Rollback trap should be active before moving the old app")
+        precondition(copyRange.lowerBound < backupMoveRange.lowerBound, "New app should be copied before old app is moved")
+        precondition(backupMoveRange.lowerBound < replaceRange.lowerBound, "Backup should happen before final replacement")
     }
 }

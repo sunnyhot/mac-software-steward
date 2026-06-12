@@ -9,6 +9,20 @@ enum SelfUpdateInstallScript {
     NEW_APP="$3"
     WORK_DIR="$4"
     LOG_PATH="$5"
+    TEMP_APP="$DEST_APP.updating.$$"
+    BACKUP_APP="$DEST_APP.previous.$$"
+    RESTORE_NEEDED=0
+    restore_backup() {
+      local code="$?"
+      if [ "$RESTORE_NEEDED" = "1" ] && [ -d "$BACKUP_APP" ]; then
+        echo "[system] install failed, restoring backup from $BACKUP_APP"
+        /bin/rm -rf -- "$DEST_APP"
+        /bin/mv "$BACKUP_APP" "$DEST_APP"
+      fi
+      /bin/rm -rf "$TEMP_APP"
+      exit "$code"
+    }
+    trap 'restore_backup' ERR
     {
       echo "[system] $(date -u +%FT%TZ) installing update"
       for i in {1..80}; do
@@ -29,11 +43,20 @@ enum SelfUpdateInstallScript {
         /bin/sleep 0.25
       fi
       /bin/mkdir -p "$(/usr/bin/dirname "$DEST_APP")"
-      /bin/rm -rf "$DEST_APP"
-      /usr/bin/ditto "$NEW_APP" "$DEST_APP"
+      /bin/rm -rf "$TEMP_APP" "$BACKUP_APP"
+      /usr/bin/ditto "$NEW_APP" "$TEMP_APP"
+      /usr/bin/test -d "$TEMP_APP/Contents/MacOS"
+      EXECUTABLE_NAME="$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$TEMP_APP/Contents/Info.plist")"
+      /usr/bin/test -x "$TEMP_APP/Contents/MacOS/$EXECUTABLE_NAME"
+      if [ -e "$DEST_APP" ]; then
+        /bin/mv "$DEST_APP" "$BACKUP_APP"
+        RESTORE_NEEDED=1
+      fi
+      /bin/mv "$TEMP_APP" "$DEST_APP"
       /usr/bin/xattr -dr com.apple.quarantine "$DEST_APP" 2>/dev/null || true
       /usr/bin/open -n "$DEST_APP"
-      rm -rf "$WORK_DIR"
+      RESTORE_NEEDED=0
+      /bin/rm -rf "$BACKUP_APP" "$WORK_DIR"
       echo "[system] update installed to $DEST_APP"
     } >> "$LOG_PATH" 2>&1
     """
