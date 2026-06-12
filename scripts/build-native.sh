@@ -9,13 +9,57 @@ MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 SDK_PATH="$(xcrun --show-sdk-path)"
 
+first_tool_line() {
+  local output
+  output="$("$@" 2>&1 || true)"
+  printf '%s\n' "$output" | sed -n '1p'
+}
+
+print_toolchain() {
+  echo "==> Toolchain"
+  echo "    Developer dir: $(xcode-select -p 2>/dev/null || echo unknown)"
+  echo "    macOS SDK: $SDK_PATH"
+  echo "    SDK version: $(xcrun --sdk macosx --show-sdk-version 2>/dev/null || echo unknown)"
+  echo "    Swift: $(first_tool_line xcrun swift --version)"
+  echo "    Swift compiler: $(first_tool_line xcrun swiftc --version)"
+}
+
+explain_toolchain_failure() {
+  local output="$1"
+  if printf '%s' "$output" | grep -q "this SDK is not supported by the compiler"; then
+    echo ""
+    echo "error: Swift compiler and macOS SDK versions are incompatible."
+    echo "hint: Select matching Xcode/Command Line Tools with xcode-select."
+    echo "hint: Current SDK: $SDK_PATH"
+    echo "hint: Current swiftc: $(first_tool_line xcrun swiftc --version)"
+  fi
+}
+
+run_or_explain() {
+  local label="$1"
+  shift
+
+  echo "==> $label"
+  local output
+  if ! output="$("$@" 2>&1)"; then
+    printf '%s\n' "$output" >&2
+    explain_toolchain_failure "$output" >&2
+    return 1
+  fi
+
+  if [ -n "$output" ]; then
+    printf '%s\n' "$output"
+  fi
+}
+
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
-swift "$ROOT_DIR/scripts/generate-app-icon.swift" >/dev/null
+print_toolchain
+run_or_explain "Generating app icon" xcrun swift "$ROOT_DIR/scripts/generate-app-icon.swift"
 cp "$ROOT_DIR/native/Info.plist" "$CONTENTS_DIR/Info.plist"
 cp "$ROOT_DIR/native/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 
-xcrun swiftc \
+run_or_explain "Building $APP_NAME" xcrun swiftc \
   -O \
   -target arm64-apple-macosx14.0 \
   -sdk "$SDK_PATH" \
@@ -25,7 +69,7 @@ xcrun swiftc \
   "$ROOT_DIR"/native/MacSoftwareSteward/Views/*.swift \
   -o "$MACOS_DIR/$APP_NAME"
 
-xcrun swiftc \
+run_or_explain "Building ${APP_NAME}Agent" xcrun swiftc \
   -O \
   -target arm64-apple-macosx14.0 \
   -sdk "$SDK_PATH" \
@@ -35,6 +79,7 @@ xcrun swiftc \
   "$ROOT_DIR"/native/MacSoftwareSteward/UpgradePlanner.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/DailyUpgradePolicy.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/Scanner.swift \
+  "$ROOT_DIR"/native/MacSoftwareSteward/SoftwareScanning.swift \
   "$ROOT_DIR"/native/MacSoftwareStewardAgent/*.swift \
   -o "$MACOS_DIR/${APP_NAME}Agent"
 
