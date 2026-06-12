@@ -3,10 +3,11 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var model: StewardModel
     @EnvironmentObject private var updater: AppUpdateModel
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
 
     var body: some View {
         NavigationSplitView {
-            List(AppTab.allCases, selection: $model.selectedTab) { tab in
+            List(AppTab.visibleTabs(advancedModeEnabled: automationProfile.profile.advancedModeEnabled), selection: $model.selectedTab) { tab in
                 Label(tab.rawValue, systemImage: tab.symbol)
                     .tag(tab)
             }
@@ -24,6 +25,12 @@ struct ContentView: View {
         .sheet(isPresented: $model.showingUpgradePlan) {
             UpgradePlanView()
                 .environmentObject(model)
+        }
+        .onChange(of: automationProfile.profile.advancedModeEnabled) {
+            let visibleTabs = AppTab.visibleTabs(advancedModeEnabled: automationProfile.profile.advancedModeEnabled)
+            if !visibleTabs.contains(model.selectedTab) {
+                model.selectedTab = .inbox
+            }
         }
     }
 
@@ -299,6 +306,8 @@ private struct MetricCard: View {
 
 private struct MainPanel: View {
     @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
+    @EnvironmentObject private var inboxStore: InboxStore
 
     var body: some View {
         VStack(spacing: 14) {
@@ -322,12 +331,16 @@ private struct MainPanel: View {
 
             Group {
                 switch model.selectedTab {
+                case .inbox:
+                    InboxView()
                 case .updates:
                     UpdatesView()
                 case .applications:
                     ApplicationsView()
                 case .sources:
                     SourcesView()
+                case .history:
+                    HistoryView()
                 case .settings:
                     SettingsView()
                 case .jobs:

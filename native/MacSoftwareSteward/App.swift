@@ -102,6 +102,8 @@ struct MacSoftwareStewardApp: App {
     @StateObject private var model = StewardModel()
     @StateObject private var updater = AppUpdateModel()
     @StateObject private var launchAtLogin = LaunchAtLoginModel()
+    @StateObject private var automationProfile = AutomationProfileStore()
+    @StateObject private var inboxStore = InboxStore()
 
     var body: some Scene {
         WindowGroup(id: "main") {
@@ -109,6 +111,8 @@ struct MacSoftwareStewardApp: App {
                 .environmentObject(model)
                 .environmentObject(updater)
                 .environmentObject(launchAtLogin)
+                .environmentObject(automationProfile)
+                .environmentObject(inboxStore)
                 .preferredColorScheme(AppAppearanceResolver.colorScheme(for: currentAppearanceMode))
                 .frame(minWidth: 1120, minHeight: 720)
                 .task {
