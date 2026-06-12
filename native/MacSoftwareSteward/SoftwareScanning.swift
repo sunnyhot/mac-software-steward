@@ -6,6 +6,8 @@ protocol SoftwareScanning {
 }
 
 struct LiveSoftwareScanning: SoftwareScanning {
+    nonisolated init() {}
+
     func scanAll(includeGreedy: Bool, onPhaseChange: ((ScanPhase) -> Void)?) async -> ScanResult {
         await SoftwareScanner.scanAll(includeGreedy: includeGreedy, onPhaseChange: onPhaseChange)
     }

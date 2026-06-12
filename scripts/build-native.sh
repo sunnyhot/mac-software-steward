@@ -7,7 +7,7 @@ APP_DIR="$ROOT_DIR/build/${APP_NAME}.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
-SDK_PATH="$(xcrun --show-sdk-path)"
+SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
 
 first_tool_line() {
   local output

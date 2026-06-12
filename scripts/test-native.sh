@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$ROOT_DIR/build/tests"
-SDK_PATH="$(xcrun --show-sdk-path)"
+SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
 SWIFTC=(xcrun swiftc -target arm64-apple-macosx14.0 -sdk "$SDK_PATH")
 SRC="$ROOT_DIR/native/MacSoftwareSteward"
 TESTS="$ROOT_DIR/tests"
@@ -109,6 +109,7 @@ run_test SelfUpdateInstallScriptTest \
 
 run_test UpgradeFailureAnalyzerTest \
   "$SRC/Models.swift" \
+  "$SRC/BrewCaskCleanupDetector.swift" \
   "$SRC/UpgradeFailureAnalyzer.swift" \
   "$TESTS/UpgradeFailureAnalyzerTest.swift"
 
