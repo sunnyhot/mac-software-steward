@@ -547,7 +547,7 @@ struct PackageProgressDetail: View {
             }
             .buttonStyle(.borderless)
             .font(.caption)
-            .disabled(model.isConfirmingUpgradePlan)
+            .disabled(model.isScanning || model.isConfirmingUpgradePlan)
 
         case .openLog:
             Button {

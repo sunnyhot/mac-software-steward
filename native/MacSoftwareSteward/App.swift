@@ -143,6 +143,7 @@ struct MacSoftwareStewardApp: App {
                     Task { await model.scanSoftware() }
                 }
                 .keyboardShortcut("r", modifiers: [.command])
+                .disabled(model.isScanning)
 
                 Button("一键升级可管理软件") {
                     model.prepareUpgradePlan()

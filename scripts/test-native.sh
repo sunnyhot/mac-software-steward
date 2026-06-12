@@ -83,6 +83,26 @@ run_test ScannerNormalizeTokenTest \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerNormalizeTokenTest.swift"
 
+run_test StewardModelScanGuardTest \
+  "$SRC/CommandRunner.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/Scanner.swift" \
+  "$SRC/SoftwareScanning.swift" \
+  "$SRC/UpgradePolicyStore.swift" \
+  "$SRC/UpgradePlanner.swift" \
+  "$SRC/DailyUpgradePolicy.swift" \
+  "$SRC/DailyInspectionScheduler.swift" \
+  "$SRC/UpgradeHistoryStore.swift" \
+  "$SRC/BrewCaskCleanupDetector.swift" \
+  "$SRC/UpgradeFailureAnalyzer.swift" \
+  "$SRC/HomebrewDownloadMonitor.swift" \
+  "$SRC/HomebrewCaskDownloadSizeResolver.swift" \
+  "$SRC/PackageProgressParser.swift" \
+  "$SRC/SourceDiagnostics.swift" \
+  "$SRC/UpgradeVerifier.swift" \
+  "$SRC/StewardModel.swift" \
+  "$TESTS/StewardModelScanGuardTest.swift"
+
 run_test SelfUpdateInstallScriptTest \
   "$SRC/SelfUpdateInstallScript.swift" \
   "$TESTS/SelfUpdateInstallScriptTest.swift"

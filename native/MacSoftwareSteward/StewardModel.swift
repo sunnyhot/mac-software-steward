@@ -40,6 +40,7 @@ final class StewardModel: ObservableObject {
     let policyStore = UpgradePolicyStore()
     let historyStore = UpgradeHistoryStore()
 
+    private let scanner: SoftwareScanning
     private var activeJobCount = 0
     private var pendingJobQueue: [(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool)] = []
     private var debounceTask: Task<Void, Never>?
@@ -51,7 +52,8 @@ final class StewardModel: ObservableObject {
     /// 用户关闭过的失败任务 ID，关闭后不再显示失败通知（直到新任务失败）
     @Published var dismissedFailureJobID: UUID?
 
-    init() {
+    init(scanner: SoftwareScanning = LiveSoftwareScanning()) {
+        self.scanner = scanner
         refreshDailyInspectionStatus()
     }
 
@@ -122,10 +124,16 @@ final class StewardModel: ObservableObject {
     }
 
     func scanSoftware() async {
+        guard !isScanning else { return }
         isScanning = true
         errorMessage = ""
         scanPhase = .systemProfiler
-        let result = await SoftwareScanner.scanAll(includeGreedy: includeGreedy) { [weak self] phase in
+        defer {
+            scanPhase = nil
+            isScanning = false
+        }
+
+        let result = await scanner.scanAll(includeGreedy: includeGreedy) { [weak self] phase in
             Task { @MainActor in
                 self?.scanPhase = phase
             }
@@ -133,8 +141,6 @@ final class StewardModel: ObservableObject {
         scan = result
         prunePackageProgress(keeping: result)
         recomputeDerivedData()
-        scanPhase = nil
-        isScanning = false
     }
 
     func upgrade(_ package: UpdatablePackage) async {
