@@ -77,6 +77,12 @@ run_test ScannerBrewListFallbackTest \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerBrewListFallbackTest.swift"
 
+run_test ScannerNormalizeTokenTest \
+  "$SRC/CommandRunner.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/Scanner.swift" \
+  "$TESTS/ScannerNormalizeTokenTest.swift"
+
 run_test SelfUpdateInstallScriptTest \
   "$SRC/SelfUpdateInstallScript.swift" \
   "$TESTS/SelfUpdateInstallScriptTest.swift"

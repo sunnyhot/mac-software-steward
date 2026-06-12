@@ -490,17 +490,12 @@ enum SoftwareScanner {
     }
 
     static func normalizeToken(_ value: String) -> String {
-        if let cached = tokenCache[value] { return cached }
-        let result = value
+        value
             .lowercased()
             .replacingOccurrences(of: ".app", with: "")
             .replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
             .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
-        tokenCache[value] = result
-        return result
     }
-
-    private static var tokenCache: [String: String] = [:]
 
     private static func guessSource(path: String, obtainedFrom: String) -> String {
         let source = obtainedFrom.lowercased()
