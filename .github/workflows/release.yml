@@ -78,6 +78,13 @@ jobs:
           cat > release/RELEASE_NOTES.md <<NOTES_EOF
           ## Mac 软件管家 ${TAG}
 
+          ### 安全与发布可靠性
+          - 自更新下载完成后校验 release manifest 中的 SHA-256，缺失或不匹配会中止安装
+          - 自更新安装脚本改为临时 app + 旧版本备份的替换流程，失败时自动回滚
+          - 扫描流程增加防重入保护，避免重复触发扫描导致状态互相覆盖
+          - 新增 native Swift 测试 runner，并在 release workflow 构建前执行
+          - 构建脚本输出 Xcode、SDK 和 Swift 工具链诊断，便于定位本机环境问题
+
           ### 应用自更新体验
           - 移除未启用的 MoleApp 清理、卸载和优化模块，减少构建噪音并收敛应用代码边界
           - 升级任务总览显示执行中、排队、需处理和长时间无输出数量，便于判断卡在哪一步
