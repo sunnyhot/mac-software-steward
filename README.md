@@ -1,18 +1,22 @@
 # Mac 软件管家
 
-一个只在本机运行的 macOS 软件扫描与升级工具。现在包含 SwiftUI 原生 macOS 应用，以及早期 Web 面板。
+一个只在本机运行的 macOS 软件扫描与升级工具。当前主入口是 SwiftUI 原生 macOS 应用，负责扫描本机应用、Homebrew 包和 Mac App Store 应用，并提供升级、巡检与自更新能力。
 
 ## 原生 macOS 应用
 
 构建 `.app`：
 
 ```bash
+npm run build
+# 等价别名
 npm run build:native
 ```
 
 构建并打开：
 
 ```bash
+npm run open
+# 等价别名
 npm run open:native
 ```
 
@@ -38,20 +42,9 @@ build/MacSoftwareSteward.app
 - 每日巡检：通过用户级 LaunchAgent 定时扫描，发现可升级项后自动升级
 - 应用自更新：从 GitHub Releases 检查、下载、安装并重启应用
 
-## Web 面板运行
+## 早期 Web 面板
 
-```bash
-npm install
-npm run dev
-```
-
-打开 Vite 输出的本地地址，通常是：
-
-```text
-http://127.0.0.1:5173
-```
-
-API 只绑定到 `127.0.0.1:4317`。
+项目早期包含过 Web 面板入口；当前 `package.json` 的脚本已收敛到原生应用、测试、打包与发布流程，不再把 Web 面板作为受支持的日常运行入口。需要恢复 Web 调试时，应先从 Git 历史确认对应前端和本地 API 代码仍然完整。
 
 ## 能自动升级什么
 
@@ -99,6 +92,8 @@ Release 资产名必须包含：
 MacSoftwareSteward.zip
 ```
 
+Release 清单中的 `sha256` 必须对应 `MacSoftwareSteward.zip`。客户端会在安装前校验下载文件，缺失或不匹配都会中止自更新。
+
 ## 每日巡检
 
 原生应用的“每日巡检”页可以启用后台自动升级。启用后会写入用户级 LaunchAgent：
@@ -126,5 +121,7 @@ MacSoftwareSteward.app/Contents/MacOS/MacSoftwareStewardAgent
 ```bash
 npm test
 npm run build
-npm run build:native
+npm run package
 ```
+
+`scripts/build-native.sh` 会打印当前 Developer Dir、macOS SDK、Swift 和 Swift compiler 版本。如果看到 “SDK is not supported by the compiler”，说明本机 Swift 编译器与 macOS SDK 不匹配，需要通过 `xcode-select` 切换到匹配的 Xcode/Command Line Tools，或重新安装匹配版本的工具链。
