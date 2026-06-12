@@ -34,6 +34,10 @@ run_test AppUpdateDialogLayoutTest \
   "$SRC/AppUpdateDialogLayout.swift" \
   "$TESTS/AppUpdateDialogLayoutTest.swift"
 
+run_test AppUpdateSecurityTest \
+  "$SRC/AppUpdateSecurity.swift" \
+  "$TESTS/AppUpdateSecurityTest.swift"
+
 run_test AppWindowDoubleClickZoomPolicyTest \
   "$SRC/AppWindowDoubleClickZoomPolicy.swift" \
   "$TESTS/AppWindowDoubleClickZoomPolicyTest.swift"

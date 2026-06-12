@@ -188,6 +188,8 @@ final class AppUpdateModel: ObservableObject {
         do {
             let downloaded = try await download(asset: asset)
             downloadFraction = nil
+            progress = "正在校验安装包..."
+            try AppUpdateSecurity.verifySHA256(fileURL: downloaded, expectedSHA256: asset.expectedSHA256)
             progress = "正在解压安装包..."
             let extractedApp = try await extractApp(from: downloaded)
             progress = "正在准备重启并安装..."
@@ -300,7 +302,8 @@ final class AppUpdateModel: ObservableObject {
                 GitHubRelease.Asset(
                     name: manifest.asset,
                     browserDownloadURL: manifest.downloadURL,
-                    size: manifest.size ?? 0
+                    size: manifest.size ?? 0,
+                    expectedSHA256: manifest.sha256
                 )
             ],
             publishedAt: manifest.publishedAt
@@ -512,11 +515,13 @@ private struct GitHubRelease: Decodable {
         var name: String
         var browserDownloadURL: String
         var size: Int
+        var expectedSHA256: String
 
         enum CodingKeys: String, CodingKey {
             case name
             case browserDownloadURL = "browser_download_url"
             case size
+            case expectedSHA256 = "sha256"
         }
     }
 
