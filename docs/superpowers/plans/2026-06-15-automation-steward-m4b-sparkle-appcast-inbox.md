@@ -30,7 +30,7 @@ This plan does not implement vendor-specific online checks, appcast signature va
 - Create `native/MacSoftwareSteward/AppUpdateInboxFactory.swift`: convert ordinary app updates into inbox items.
 - Modify `native/MacSoftwareSteward/StewardModel.swift`: accept `regularAppNetworkPolicy` and `inboxStore` during scans.
 - Modify `native/MacSoftwareSteward/App.swift`, `native/MacSoftwareSteward/ContentView.swift` and `native/MacSoftwareSteward/Views/InboxView.swift`: pass settings/inbox into startup scan, main scan and rescan actions.
-- Modify `scripts/build-native.sh`: include `SparkleAppcastChecker.swift` and `AppUpdateInboxFactory.swift` in Agent compilation.
+- Modify `scripts/build-native.sh`: include `AutomationProfileStore.swift` and `SparkleAppcastChecker.swift` in Agent compilation because `Scanner.swift` now depends on them.
 - Modify `scripts/test-native.sh`: add tests and source dependencies.
 - Create `tests/SparkleAppcastCheckerTest.swift`.
 - Create `tests/ScannerSparkleAppcastPolicyTest.swift`.
@@ -637,8 +637,8 @@ git commit -m "feat: write app updates to inbox during scans"
 In `scripts/build-native.sh`, add before `Scanner.swift`:
 
 ```bash
+  "$ROOT_DIR"/native/MacSoftwareSteward/AutomationProfileStore.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/SparkleAppcastChecker.swift \
-  "$ROOT_DIR"/native/MacSoftwareSteward/AppUpdateInboxFactory.swift \
 ```
 
 - [ ] **Step 2: Add tests to script**

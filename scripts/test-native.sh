@@ -86,6 +86,12 @@ run_test InboxStoreTest \
   "$SRC/InboxStore.swift" \
   "$TESTS/InboxStoreTest.swift"
 
+run_test AppUpdateInboxFactoryTest \
+  "$SRC/Models.swift" \
+  "$SRC/InboxStore.swift" \
+  "$SRC/AppUpdateInboxFactory.swift" \
+  "$TESTS/AppUpdateInboxFactoryTest.swift"
+
 run_test InspectionReportStoreTest \
   "$SRC/InspectionReportStore.swift" \
   "$TESTS/InspectionReportStoreTest.swift"
@@ -103,6 +109,11 @@ run_test RegularAppUpdateDiscoveryTest \
   "$SRC/Models.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
   "$TESTS/RegularAppUpdateDiscoveryTest.swift"
+
+run_test SparkleAppcastCheckerTest \
+  "$SRC/Models.swift" \
+  "$SRC/SparkleAppcastChecker.swift" \
+  "$TESTS/SparkleAppcastCheckerTest.swift"
 
 run_test RiskAssessorTest \
   "$SRC/Models.swift" \
@@ -125,31 +136,49 @@ run_test PackageProgressParserTest \
 run_test ScannerBrewListFallbackTest \
   "$SRC/CommandRunner.swift" \
   "$SRC/Models.swift" \
+  "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
+  "$SRC/SparkleAppcastChecker.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerBrewListFallbackTest.swift"
 
 run_test ScannerAppUpdateCapabilityTest \
   "$SRC/CommandRunner.swift" \
   "$SRC/Models.swift" \
+  "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
+  "$SRC/SparkleAppcastChecker.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerAppUpdateCapabilityTest.swift"
+
+run_test ScannerSparkleAppcastPolicyTest \
+  "$SRC/CommandRunner.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/AutomationProfileStore.swift" \
+  "$SRC/RegularAppUpdateDiscovery.swift" \
+  "$SRC/SparkleAppcastChecker.swift" \
+  "$SRC/Scanner.swift" \
+  "$TESTS/ScannerSparkleAppcastPolicyTest.swift"
 
 run_test ScannerNormalizeTokenTest \
   "$SRC/CommandRunner.swift" \
   "$SRC/Models.swift" \
+  "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
+  "$SRC/SparkleAppcastChecker.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerNormalizeTokenTest.swift"
 
 run_test StewardModelScanGuardTest \
   "$SRC/CommandRunner.swift" \
   "$SRC/Models.swift" \
+  "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
+  "$SRC/SparkleAppcastChecker.swift" \
   "$SRC/Scanner.swift" \
   "$SRC/SoftwareScanning.swift" \
   "$SRC/InboxStore.swift" \
+  "$SRC/AppUpdateInboxFactory.swift" \
   "$SRC/UpgradePolicyStore.swift" \
   "$SRC/RiskAssessor.swift" \
   "$SRC/UpgradePlanner.swift" \

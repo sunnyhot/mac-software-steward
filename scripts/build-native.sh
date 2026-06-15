@@ -75,6 +75,7 @@ run_or_explain "Building ${APP_NAME}Agent" xcrun swiftc \
   -sdk "$SDK_PATH" \
   "$ROOT_DIR"/native/MacSoftwareSteward/CommandRunner.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/Models.swift \
+  "$ROOT_DIR"/native/MacSoftwareSteward/AutomationProfileStore.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/UpgradePolicyStore.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/RiskAssessor.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/UpgradePlanner.swift \
@@ -82,6 +83,7 @@ run_or_explain "Building ${APP_NAME}Agent" xcrun swiftc \
   "$ROOT_DIR"/native/MacSoftwareSteward/InspectionReportStore.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/InspectionReportBuilder.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/RegularAppUpdateDiscovery.swift \
+  "$ROOT_DIR"/native/MacSoftwareSteward/SparkleAppcastChecker.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/Scanner.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/SoftwareScanning.swift \
   "$ROOT_DIR"/native/MacSoftwareStewardAgent/*.swift \
