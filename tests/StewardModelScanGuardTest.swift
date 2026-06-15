@@ -58,6 +58,43 @@ struct StewardModelScanGuardTest {
         precondition(inboxStore.pendingItems[0].kind == .failureRecovery)
         precondition(inboxStore.pendingItems[0].actions.map(\.kind).contains(.retryPackage))
 
+        let repairScanner = DelayedScanner()
+        let repairModel = StewardModel(scanner: repairScanner)
+        repairModel.packageProgress["brew:formula:missing"] = PackageUpgradeProgress(
+            packageID: "brew:formula:missing",
+            packageName: "missing",
+            status: .failed,
+            detail: "所需的文件或工具未找到。",
+            failureSummary: "所需的文件或工具未找到。",
+            recoverySuggestion: "请点击「重新扫描」刷新软件列表后再试。",
+            recoveryAction: .rescan
+        )
+        var autoRepairProfile = AutomationProfile.manualDefault
+        autoRepairProfile.advancedModeEnabled = true
+        autoRepairProfile.autoRepairPolicy = .allowLowRisk
+
+        let repairTask = Task {
+            await repairModel.performAutomaticRepairIfAllowed(
+                profile: autoRepairProfile,
+                inboxStore: inboxStore,
+                packageIDs: ["brew:formula:missing"]
+            )
+        }
+        while repairScanner.callCount == 0 {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        repairScanner.finish()
+        let repairedPackageIDs = await repairTask.value
+        precondition(repairedPackageIDs == ["brew:formula:missing"])
+
+        let secondRepair = await repairModel.performAutomaticRepairIfAllowed(
+            profile: autoRepairProfile,
+            inboxStore: inboxStore,
+            packageIDs: ["brew:formula:missing"]
+        )
+        precondition(secondRepair.isEmpty)
+        precondition(repairScanner.callCount == 1)
+
         let sparkleApp = AppItem(
             id: "sparkle",
             name: "Sparkle",

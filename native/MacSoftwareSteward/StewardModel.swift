@@ -49,6 +49,7 @@ final class StewardModel: ObservableObject {
     private var downloadMonitorTasks: [String: Task<Void, Never>] = [:]
     private var downloadSizeTasks: [String: Task<Void, Never>] = [:]
     private var downloadExpectedSizes: [String: Int64] = [:]
+    private var autoRepairAttemptedPackageIDs: Set<String> = []
     @Published var upgradeProgress: UpgradeProgress?
     /// 用户关闭过的失败任务 ID，关闭后不再显示失败通知（直到新任务失败）
     @Published var dismissedFailureJobID: UUID?
@@ -198,6 +199,34 @@ final class StewardModel: ObservableObject {
         for item in RecoveryInboxFactory.items(from: Array(progresses)) {
             inboxStore.add(item)
         }
+    }
+
+    func performAutomaticRepairIfAllowed(
+        profile: AutomationProfile,
+        inboxStore: InboxStore?,
+        packageIDs: Set<String>
+    ) async -> Set<String> {
+        var repairedPackageIDs: Set<String> = []
+        let progresses = packageProgress.values.filter { packageIDs.contains($0.packageID) }
+
+        for progress in progresses {
+            guard let action = AutoRepairDecider.automaticAction(
+                for: progress,
+                profile: profile,
+                attemptedPackageIDs: autoRepairAttemptedPackageIDs
+            ) else { continue }
+
+            autoRepairAttemptedPackageIDs.insert(progress.packageID)
+            switch action.kind {
+            case .rescan:
+                repairedPackageIDs.insert(progress.packageID)
+                await scanSoftware(inboxStore: inboxStore)
+            case .retryPackage, .openUpdates, .openJobs, .openStorageSettings, .copyTerminalCommand:
+                break
+            }
+        }
+
+        return repairedPackageIDs
     }
 
     func cancelJob(_ id: UUID) {
