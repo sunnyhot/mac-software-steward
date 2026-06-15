@@ -85,6 +85,57 @@ enum PackageUpgradeStatus: String, Hashable {
     case warning = "需确认"
 }
 
+enum AppUpdateDetectorKind: String, Codable, Hashable {
+    case none
+    case sparkle
+    case chromeKeystone
+    case adobeUpdater
+    case jetBrainsToolbox
+    case microsoftAutoUpdate
+    case unknownUpdater
+
+    var title: String {
+        switch self {
+        case .none: return "无"
+        case .sparkle: return "Sparkle"
+        case .chromeKeystone: return "Chrome Keystone"
+        case .adobeUpdater: return "Adobe"
+        case .jetBrainsToolbox: return "JetBrains"
+        case .microsoftAutoUpdate: return "Microsoft"
+        case .unknownUpdater: return "内置更新器"
+        }
+    }
+}
+
+enum DetectionConfidence: String, Codable, Hashable {
+    case none
+    case low
+    case medium
+    case high
+}
+
+struct AppUpdateCapability: Codable, Hashable {
+    var detector: AppUpdateDetectorKind
+    var confidence: DetectionConfidence
+    var feedURLString: String
+    var installedVersion: String
+    var summary: String
+    var diagnostic: String
+
+    static let none = AppUpdateCapability(
+        detector: .none,
+        confidence: .none,
+        feedURLString: "",
+        installedVersion: "",
+        summary: "",
+        diagnostic: ""
+    )
+
+    var hasManualAction: Bool {
+        detector != .none
+    }
+}
+
 struct AppItem: Identifiable, Hashable {
     var id: String
     var name: String
@@ -97,6 +148,7 @@ struct AppItem: Identifiable, Hashable {
     var managedBy: String
     var updateState: String
     var relatedPackageID: String
+    var updateCapability: AppUpdateCapability = .none
 }
 
 struct BrewPackage: Identifiable, Hashable {
