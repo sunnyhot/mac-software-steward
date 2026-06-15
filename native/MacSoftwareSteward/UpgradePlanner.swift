@@ -18,6 +18,9 @@ struct UpgradePlanRow: Identifiable, Hashable {
     var riskLabels: [String]
     var skipReason: String
     var package: UpdatablePackage?
+    var riskLevel: RiskLevel = .low
+    var riskSummary: String = ""
+    var automationDecision: AutomationDecision = .allowAutomatic
 
     var id: String { packageID }
 
@@ -58,18 +61,24 @@ enum UpgradePlanner {
         guard package.outdated || package.upgradeable else { return nil }
 
         let policy = policyStore.effectivePolicy(for: package, includeGreedy: includeGreedy)
-        let selectable = isSelectable(package, scan: scan, includeGreedy: includeGreedy)
+        let risk = RiskAssessor.assess(package: package, scan: scan, includeGreedy: includeGreedy)
+        let selectable = risk.automationDecision != .blockExecution
         let selection: UpgradePlanSelection
         let skipReason: String
 
         if !selectable {
             selection = .notSelectable
-            skipReason = nonSelectableReason(for: package, scan: scan)
+            skipReason = nonSelectableReason(for: package, scan: scan, risk: risk)
         } else {
             switch policy {
             case .automatic, .askFirst:
-                selection = .selected
-                skipReason = ""
+                if risk.automationDecision == .requireConfirmation {
+                    selection = .notSelected
+                    skipReason = "需确认：\(risk.summary)"
+                } else {
+                    selection = .selected
+                    skipReason = ""
+                }
             case .remindOnly:
                 selection = .notSelected
                 skipReason = "策略设置为仅提醒"
@@ -88,60 +97,13 @@ enum UpgradePlanner {
             commandDisplay: commandDisplay(for: package, includeGreedy: includeGreedy),
             policy: policy,
             selection: selection,
-            riskLabels: riskLabels(for: package, scan: scan, includeGreedy: includeGreedy),
+            riskLabels: risk.labels,
             skipReason: skipReason,
-            package: selectable ? package : nil
+            package: selectable ? package : nil,
+            riskLevel: risk.level,
+            riskSummary: risk.summary,
+            automationDecision: risk.automationDecision
         )
-    }
-
-    private static func isSelectable(_ package: UpdatablePackage, scan: ScanResult, includeGreedy: Bool) -> Bool {
-        guard !isSourceUnavailable(package, scan: scan), !package.isPinned else {
-            return false
-        }
-
-        return package.upgradeable || canRunGreedyCask(package, includeGreedy: includeGreedy)
-    }
-
-    private static func canRunGreedyCask(_ package: UpdatablePackage, includeGreedy: Bool) -> Bool {
-        guard includeGreedy, case .brew(let brew) = package else {
-            return false
-        }
-
-        return brew.kind == "cask" && brew.outdated
-    }
-
-    private static func riskLabels(for package: UpdatablePackage, scan: ScanResult, includeGreedy: Bool) -> [String] {
-        var labels: [String] = []
-
-        switch package {
-        case .brew(let brew):
-            if brew.kind == "cask", includeGreedy {
-                labels.append("greedy cask")
-            }
-            if brew.autoUpdates {
-                labels.append("auto_updates")
-            }
-            if brew.pinned {
-                labels.append("pinned")
-            }
-            if brew.kind == "cask", scan.applications.items.contains(where: { $0.relatedPackageID == brew.id }) {
-                labels.append("app may be running")
-            }
-            if !scan.brew.error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                labels.append("source warning")
-            }
-
-        case .mas:
-            if !scan.mas.available {
-                labels.append("mas unavailable")
-            }
-        }
-
-        if package.currentVersion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            labels.append("unknown target version")
-        }
-
-        return labels
     }
 
     private static func isSourceUnavailable(_ package: UpdatablePackage, scan: ScanResult) -> Bool {
@@ -153,12 +115,15 @@ enum UpgradePlanner {
         }
     }
 
-    private static func nonSelectableReason(for package: UpdatablePackage, scan: ScanResult) -> String {
+    private static func nonSelectableReason(for package: UpdatablePackage, scan: ScanResult, risk: RiskAssessment) -> String {
         if package.isPinned {
             return "软件包已固定"
         }
         if isSourceUnavailable(package, scan: scan) {
             return "管理来源不可用"
+        }
+        if !risk.summary.isEmpty {
+            return risk.summary
         }
         if !package.upgradeable {
             return package.outdated ? "需要手动处理" : "无需升级"

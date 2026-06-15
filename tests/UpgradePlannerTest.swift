@@ -64,12 +64,17 @@ struct UpgradePlannerTest {
 
         precondition(formulaRow?.selection == .notSelected)
         precondition(formulaRow?.skipReason == "策略设置为跳过")
+        precondition(formulaRow?.riskLevel == .high)
         precondition(pinnedRow?.riskLabels.contains("pinned") == true)
         precondition(pinnedRow?.selection == .notSelectable)
+        precondition(pinnedRow?.automationDecision == .blockExecution)
         precondition(caskRow?.riskLabels.contains("greedy cask") == true)
         precondition(caskRow?.riskLabels.contains("auto_updates") == true)
-        precondition(caskRow?.selection == .selected)
+        precondition(caskRow?.selection == .notSelected)
+        precondition(caskRow?.automationDecision == .requireConfirmation)
+        precondition(caskRow?.skipReason.hasPrefix("需确认") == true)
         precondition(masRow?.riskLabels.contains("mas unavailable") == true)
         precondition(masRow?.selection == .notSelectable)
+        precondition(masRow?.automationDecision == .blockExecution)
     }
 }
