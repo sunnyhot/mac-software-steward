@@ -39,6 +39,7 @@ final class StewardModel: ObservableObject {
 
     let policyStore = UpgradePolicyStore()
     let historyStore = UpgradeHistoryStore()
+    let inspectionReportStore = InspectionReportStore()
 
     private let scanner: SoftwareScanning
     private var activeJobCount = 0
