@@ -43,5 +43,18 @@ struct RecoveryActionPlannerTest {
             detail: "执行命令"
         )
         precondition(RecoveryActionPlanner.actions(for: running).isEmpty)
+
+        let rescan = PackageUpgradeProgress(
+            packageID: "brew:formula:missing",
+            packageName: "missing",
+            status: .failed,
+            detail: "所需的文件或工具未找到。",
+            failureSummary: "所需的文件或工具未找到。",
+            recoverySuggestion: "请点击「重新扫描」刷新软件列表后再试。",
+            recoveryAction: .rescan
+        )
+        let rescanAction = RecoveryActionPlanner.actions(for: rescan)[0]
+        precondition(rescanAction.kind == .rescan)
+        precondition(rescanAction.allowsAutomaticRepair == true)
     }
 }

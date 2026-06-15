@@ -22,7 +22,12 @@ enum RecoveryActionPlanner {
         case .repairPerms:
             return RecoveryAction(kind: .retryPackage, title: "重试", systemImage: "lock.shield")
         case .rescan:
-            return RecoveryAction(kind: .rescan, title: "重新扫描", systemImage: "arrow.clockwise")
+            return RecoveryAction(
+                kind: .rescan,
+                title: "重新扫描",
+                systemImage: "arrow.clockwise",
+                allowsAutomaticRepair: true
+            )
         case .checkNetwork:
             return RecoveryAction(kind: .retryPackage, title: "重试", systemImage: "wifi")
         case .freeDisk:
