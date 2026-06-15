@@ -97,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct MacSoftwareStewardApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
     @AppStorage("dockIconVisible") private var dockIconVisible = true
     @StateObject private var model = StewardModel()
@@ -135,6 +136,11 @@ struct MacSoftwareStewardApp: App {
                 }
                 .onChange(of: dockIconVisible) {
                     applyDockIconPolicy()
+                }
+                .onChange(of: scenePhase) {
+                    guard scenePhase == .active else { return }
+                    inboxStore.reload()
+                    model.inspectionReportStore.reload()
                 }
         }
         .windowStyle(.titleBar)
