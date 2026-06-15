@@ -333,6 +333,22 @@ enum FailureActionType: String, Hashable {
     case retryInTerminal /// 在终端中手动运行
 }
 
+enum RecoveryActionKind: String, Codable, Hashable {
+    case retryPackage
+    case openUpdates
+    case openJobs
+    case rescan
+    case openStorageSettings
+    case copyTerminalCommand
+}
+
+struct RecoveryAction: Codable, Hashable {
+    var kind: RecoveryActionKind
+    var title: String
+    var systemImage: String
+    var allowsAutomaticRepair: Bool = false
+}
+
 struct PackageUpgradeProgress: Hashable {
     var packageID: String
     var packageName: String
