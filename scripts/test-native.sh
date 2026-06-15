@@ -110,6 +110,12 @@ run_test AppUpdateInboxFactoryTest \
   "$SRC/AppUpdateInboxFactory.swift" \
   "$TESTS/AppUpdateInboxFactoryTest.swift"
 
+run_test SourceIssueInboxFactoryTest \
+  "$SRC/Models.swift" \
+  "$SRC/InboxStore.swift" \
+  "$SRC/SourceIssueInboxFactory.swift" \
+  "$TESTS/SourceIssueInboxFactoryTest.swift"
+
 run_test DailyInspectionInboxPublisherTest \
   "$SRC/Models.swift" \
   "$SRC/UpgradePolicyStore.swift" \
@@ -118,6 +124,7 @@ run_test DailyInspectionInboxPublisherTest \
   "$SRC/InboxStore.swift" \
   "$SRC/RiskInboxFactory.swift" \
   "$SRC/AppUpdateInboxFactory.swift" \
+  "$SRC/SourceIssueInboxFactory.swift" \
   "$SRC/DailyInspectionInboxPublisher.swift" \
   "$TESTS/DailyInspectionInboxPublisherTest.swift"
 
@@ -238,6 +245,7 @@ run_test StewardModelScanGuardTest \
   "$SRC/SoftwareScanning.swift" \
   "$SRC/InboxStore.swift" \
   "$SRC/AppUpdateInboxFactory.swift" \
+  "$SRC/SourceIssueInboxFactory.swift" \
   "$SRC/UpgradePolicyStore.swift" \
   "$SRC/RiskAssessor.swift" \
   "$SRC/UpgradePlanner.swift" \

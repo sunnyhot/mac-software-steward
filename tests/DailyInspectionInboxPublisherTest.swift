@@ -80,5 +80,22 @@ struct DailyInspectionInboxPublisherTest {
         precondition(secondIDs.count == 2)
         precondition(store.items.count == 2)
         precondition(Set(store.items.map(\.id)) == Set(secondIDs))
+
+        let sourceURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("daily-inspection-source-inbox-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+        let sourceStore = InboxStore(fileURL: sourceURL)
+        let sourceScan = ScanResult(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            includeGreedy: false,
+            summary: ScanSummary(applications: 0, brewFormulae: 0, brewCasks: 0, masApps: 0, outdated: 0, actionable: 0, scanMs: 1),
+            applications: ApplicationsScan(source: "test", ok: true, error: "", items: []),
+            brew: BrewScan(available: false, path: "", prefix: "", version: "", error: "brew not found", includeGreedy: false, formulae: [], casks: []),
+            mas: MasScan(available: true, path: "/opt/homebrew/bin/mas", error: "", apps: [])
+        )
+        let sourceIDs = DailyInspectionInboxPublisher.publish(scan: sourceScan, rows: [], to: sourceStore)
+        precondition(sourceIDs.count == 1)
+        precondition(sourceStore.items[0].kind == .sourceIssue)
+        precondition(sourceStore.items[0].sourceID == "source:homebrew")
     }
 }

@@ -162,7 +162,11 @@ struct StewardModelScanGuardTest {
             notificationPolicy: .decisionsAndFailures,
             inboxStore: notificationInboxStore
         )
-        precondition(notificationDispatcher.decisions.map(\.title) == ["有 1 项需要处理"])
+        precondition(notificationDispatcher.decisions.map(\.title) == ["有 3 项需要处理"])
+        precondition(notificationInboxStore.items.filter { $0.kind == .sourceIssue }.count == 2)
+        precondition(notificationInboxStore.items.contains { $0.kind == .appUpdate })
+        precondition(notificationInboxStore.items.contains { $0.sourceID == "source:homebrew" })
+        precondition(notificationInboxStore.items.contains { $0.sourceID == "source:mas" })
 
         await notificationModel.scanSoftware(
             notificationPolicy: .decisionsAndFailures,

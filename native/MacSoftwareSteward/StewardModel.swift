@@ -157,7 +157,9 @@ final class StewardModel: ObservableObject {
         recomputeDerivedData()
         var newInboxItems: [InboxItem] = []
         if let inboxStore {
-            for item in AppUpdateInboxFactory.items(from: result.applications.items) {
+            let inboxItems = SourceIssueInboxFactory.items(from: result)
+                + AppUpdateInboxFactory.items(from: result.applications.items)
+            for item in inboxItems {
                 if inboxStore.add(item) {
                     newInboxItems.append(item)
                 }
