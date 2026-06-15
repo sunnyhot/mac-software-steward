@@ -1,8 +1,17 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct RulesView: View {
     @EnvironmentObject private var model: StewardModel
     @EnvironmentObject private var automationProfile: AutomationProfileStore
+    @State private var transferMessage: RulesTransferMessage?
+
+    private static let exportDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter
+    }()
 
     private var sections: [RulesConsoleSection] {
         RulesConsolePresenter.sections(
@@ -15,6 +24,7 @@ struct RulesView: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
                 policyControls
+                dataTransferControls
 
                 ForEach(sections, id: \.title) { section in
                     RulesSectionView(section: section)
@@ -68,6 +78,127 @@ struct RulesView: View {
                 isOn: $model.includeGreedy
             )
         }
+    }
+
+    private var dataTransferControls: some View {
+        SettingsGroupBox {
+            SettingsGroupHeader(title: "导入导出", symbol: "square.and.arrow.up.on.square")
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("自动化数据")
+                        .font(.body)
+                    Text("包含自动化配置、单包策略和巡检报告归档。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 16)
+
+                Button {
+                    exportAutomationData()
+                } label: {
+                    Label("导出", systemImage: "square.and.arrow.up")
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    importAutomationData()
+                } label: {
+                    Label("导入", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(.bordered)
+            }
+
+            if let transferMessage {
+                SettingsDivider()
+                RulesTransferMessageView(message: transferMessage)
+            }
+        }
+    }
+
+    private func exportAutomationData() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = "mac-software-steward-automation-\(Self.exportDateFormatter.string(from: Date())).json"
+
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+
+            do {
+                let bundle = AutomationDataBundleService.makeBundle(
+                    profile: automationProfile.profile,
+                    upgradePolicyOverrides: model.policyStore.overrides,
+                    inspectionReports: model.inspectionReportStore.reports
+                )
+                let data = try AutomationDataBundleService.encode(bundle)
+                try data.write(to: url, options: .atomic)
+                transferMessage = .success("已导出 \(bundle.inspectionReports.count) 条报告")
+            } catch {
+                transferMessage = .failure("导出失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func importAutomationData() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+
+            do {
+                let data = try Data(contentsOf: url)
+                let bundle = try AutomationDataBundleService.decode(data)
+                guard confirmImport(bundle) else { return }
+
+                automationProfile.replace(with: bundle.automationProfile)
+                model.policyStore.replaceOverrides(bundle.upgradePolicyOverrides)
+                model.inspectionReportStore.replaceReports(bundle.inspectionReports)
+                transferMessage = .success("已导入 \(bundle.inspectionReports.count) 条报告")
+            } catch {
+                transferMessage = .failure("导入失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func confirmImport(_ bundle: AutomationDataBundle) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "导入自动化数据？"
+        alert.informativeText = "这会替换本机自动化配置、单包策略和 \(bundle.inspectionReports.count) 条巡检报告。"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "导入")
+        alert.addButton(withTitle: "取消")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+}
+
+private struct RulesTransferMessage {
+    var text: String
+    var symbol: String
+    var color: Color
+
+    static func success(_ text: String) -> RulesTransferMessage {
+        RulesTransferMessage(text: text, symbol: "checkmark.circle.fill", color: .green)
+    }
+
+    static func failure(_ text: String) -> RulesTransferMessage {
+        RulesTransferMessage(text: text, symbol: "exclamationmark.triangle.fill", color: .red)
+    }
+}
+
+private struct RulesTransferMessageView: View {
+    var message: RulesTransferMessage
+
+    var body: some View {
+        Label(message.text, systemImage: message.symbol)
+            .font(.caption)
+            .foregroundStyle(message.color)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
     }
 }
 
