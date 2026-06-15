@@ -144,6 +144,10 @@ final class InboxStore: ObservableObject {
         save()
     }
 
+    func reload() {
+        items = Self.load(from: fileURL)
+    }
+
     private func sortNewestFirst() {
         items.sort { lhs, rhs in
             lhs.createdAt > rhs.createdAt

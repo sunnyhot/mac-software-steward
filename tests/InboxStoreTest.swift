@@ -54,5 +54,28 @@ struct InboxStoreTest {
 
         reloaded.clearResolved()
         precondition(reloaded.items.map(\.id) == [secondID])
+
+        let foregroundStore = InboxStore(fileURL: url)
+        precondition(foregroundStore.items.map(\.id) == [secondID])
+
+        let externalID = UUID()
+        let externalItem = InboxItem(
+            id: externalID,
+            kind: .appUpdate,
+            severity: .info,
+            title: "Sparkle 可更新",
+            summary: "后台巡检发现普通 App 更新。",
+            sourceID: "app:/Applications/Sparkle.app",
+            createdAt: Date(timeIntervalSince1970: 30),
+            status: .pending,
+            actions: [
+                InboxAction(title: "查看应用", systemImage: "macwindow", kind: .openApplications)
+            ]
+        )
+        let externalStore = InboxStore(fileURL: url)
+        precondition(externalStore.add(externalItem) == true)
+
+        foregroundStore.reload()
+        precondition(foregroundStore.items.map(\.id) == [externalID, secondID])
     }
 }
