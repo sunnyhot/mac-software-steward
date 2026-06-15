@@ -327,6 +327,30 @@ final class StewardModel: ObservableObject {
         }
     }
 
+    func performUpdateAction(_ action: AppUpdateAction, for app: AppItem) {
+        switch action.kind {
+        case .openApp:
+            open(app)
+        case .revealInFinder:
+            reveal(app)
+        case .openUpdater:
+            guard let path = RegularAppUpdateActionResolver.firstExistingUpdaterPath(for: app.updateCapability.detector) else {
+                errorMessage = "未找到 \(app.updateCapability.detector.title) 更新器。"
+                return
+            }
+            NSWorkspace.shared.openApplication(
+                at: URL(fileURLWithPath: path),
+                configuration: NSWorkspace.OpenConfiguration()
+            ) { _, error in
+                if let error {
+                    Task { @MainActor in
+                        self.errorMessage = "打开更新器失败：\(error.localizedDescription)"
+                    }
+                }
+            }
+        }
+    }
+
     func refreshDailyInspectionStatus() {
         let config = DailyInspectionScheduler.currentConfig()
         dailyInspectionEnabled = config.enabled

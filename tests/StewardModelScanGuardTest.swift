@@ -39,6 +39,31 @@ struct StewardModelScanGuardTest {
 
         let scanner = DelayedScanner()
         let model = StewardModel(scanner: scanner)
+        let sparkleApp = AppItem(
+            id: "sparkle",
+            name: "Sparkle",
+            version: "1.0",
+            availableVersion: "",
+            path: "/tmp/Sparkle.app",
+            source: "Third Party",
+            obtainedFrom: "",
+            architecture: "arm64",
+            managedBy: "manual",
+            updateState: "checkable",
+            relatedPackageID: "",
+            updateCapability: AppUpdateCapability(
+                detector: .sparkle,
+                confidence: .high,
+                feedURLString: "",
+                installedVersion: "1.0",
+                summary: "可通过 Sparkle 检查更新",
+                actions: [AppUpdateAction(kind: .openUpdater, title: "打开更新器", systemImage: "arrow.down.app")],
+                diagnostic: ""
+            )
+        )
+
+        model.performUpdateAction(sparkleApp.updateCapability.actions[0], for: sparkleApp)
+        precondition(model.errorMessage == "未找到 Sparkle 更新器。")
 
         let first = Task { await model.scanSoftware() }
 

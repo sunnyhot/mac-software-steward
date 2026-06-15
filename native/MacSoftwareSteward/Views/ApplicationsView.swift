@@ -72,13 +72,15 @@ struct ApplicationRow: View {
                 ManagementBadge(app: app)
 
                 if app.updateCapability.hasManualAction && app.managedBy == "manual" {
-                    Button {
-                        model.open(app)
-                    } label: {
-                        Image(systemName: "play.circle")
+                    ForEach(app.updateCapability.actions, id: \.self) { action in
+                        Button {
+                            model.performUpdateAction(action, for: app)
+                        } label: {
+                            Image(systemName: action.systemImage)
+                        }
+                        .buttonStyle(.borderless)
+                        .help(action.title)
                     }
-                    .buttonStyle(.borderless)
-                    .help("打开应用检查更新")
                 }
 
                 Button {
