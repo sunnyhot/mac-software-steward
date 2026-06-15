@@ -78,7 +78,7 @@ enum SoftwareScanner {
             if items.isEmpty {
                 return await scanApplicationsByFind(reason: "system_profiler did not return application data.")
             }
-            return ApplicationsScan(source: "system_profiler", ok: true, error: "", items: items)
+            return ApplicationsScan(source: "system_profiler", ok: true, error: "", items: attachUpdateCapabilities(to: items))
         } catch {
             return await scanApplicationsByFind(reason: "system_profiler JSON parse failed: \(error.localizedDescription)")
         }
@@ -276,7 +276,7 @@ enum SoftwareScanner {
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
         let error = result.ok ? reason : [reason, result.stderr].filter { !$0.isEmpty }.joined(separator: "\n")
-        return ApplicationsScan(source: "find", ok: result.ok, error: error, items: items)
+        return ApplicationsScan(source: "find", ok: result.ok, error: error, items: attachUpdateCapabilities(to: items))
     }
 
     private static func normalize(_ item: SystemProfilerApp) -> AppItem? {
@@ -462,6 +462,22 @@ enum SoftwareScanner {
         app.outdated = true
         app.upgradeable = true
         return app
+    }
+
+    static func attachUpdateCapabilities(to apps: [AppItem]) -> [AppItem] {
+        apps.map { app in
+            var next = app
+            let capability = RegularAppUpdateDiscovery.discover(appPath: app.path)
+            next.updateCapability = capability
+            if next.managedBy == "manual", capability.hasManualAction, next.updateState == "unknown" {
+                next.updateState = "checkable"
+            }
+            return next
+        }
+    }
+
+    static func classifyForTesting(_ apps: [AppItem], brew: BrewScan, mas: MasScan) -> [AppItem] {
+        classify(apps, brew: brew, mas: mas)
     }
 
     private static func classify(_ apps: [AppItem], brew: BrewScan, mas: MasScan) -> [AppItem] {
