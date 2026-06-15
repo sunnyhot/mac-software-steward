@@ -35,6 +35,17 @@ struct AutomationProfileStoreTest {
         precondition(reloaded.profile.regularAppNetworkPolicy == .localOnly)
         precondition(reloaded.profile.autoRepairPolicy == .allowLowRisk)
 
+        var importedProfile = AutomationProfile.manualDefault
+        importedProfile.onboardingCompleted = true
+        importedProfile.advancedModeEnabled = true
+        importedProfile.notificationPolicy = .silent
+        importedProfile.regularAppNetworkPolicy = .aggressive
+        importedProfile.autoRepairPolicy = .allowLowRisk
+        reloaded.replace(with: importedProfile)
+
+        let importedReloaded = AutomationProfileStore(fileURL: url)
+        precondition(importedReloaded.profile == importedProfile)
+
         reloaded.setAutomationEnabled(false)
         precondition(reloaded.profile.automationEnabled == false)
         precondition(reloaded.profile.lowRiskAutoUpgradeEnabled == false)

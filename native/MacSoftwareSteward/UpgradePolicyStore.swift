@@ -54,6 +54,11 @@ final class UpgradePolicyStore: ObservableObject {
         save()
     }
 
+    func replaceOverrides(_ newOverrides: [String: UpgradePolicy]) {
+        overrides = newOverrides
+        save()
+    }
+
     func effectivePolicy(for package: UpdatablePackage, includeGreedy: Bool) -> UpgradePolicy {
         if let override = overrides[package.id] {
             return override

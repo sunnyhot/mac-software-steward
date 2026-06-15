@@ -102,6 +102,12 @@ final class InspectionReportStore: ObservableObject {
         save()
     }
 
+    func replaceReports(_ newReports: [InspectionReportRecord]) {
+        reports = newReports
+        trimToLimit()
+        save()
+    }
+
     private func sortNewestFirst() {
         reports.sort { lhs, rhs in
             lhs.startedAt > rhs.startedAt

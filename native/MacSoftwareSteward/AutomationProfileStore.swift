@@ -141,6 +141,11 @@ final class AutomationProfileStore: ObservableObject {
         save()
     }
 
+    func replace(with newProfile: AutomationProfile) {
+        profile = newProfile
+        save()
+    }
+
     private static func load(from fileURL: URL) -> AutomationProfile {
         guard let data = try? Data(contentsOf: fileURL) else {
             return .manualDefault

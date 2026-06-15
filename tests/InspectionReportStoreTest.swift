@@ -51,5 +51,12 @@ struct InspectionReportStoreTest {
 
         reloaded.clear()
         precondition(reloaded.reports.isEmpty)
+
+        let replacementStore = InspectionReportStore(fileURL: url, limit: 1)
+        replacementStore.replaceReports([first, second])
+        precondition(replacementStore.reports.map(\.id) == [second.id])
+
+        let replacementReloaded = InspectionReportStore(fileURL: url, limit: 5)
+        precondition(replacementReloaded.reports.map(\.id) == [second.id])
     }
 }

@@ -89,5 +89,15 @@ struct UpgradePolicyStoreTest {
 
         store.set(.automatic, forPackageID: formula.id)
         precondition(store.policyOverride(forPackageID: formula.id) == .automatic)
+
+        store.replaceOverrides([
+            "brew:cask:arc": .askFirst,
+            "mas:123": .remindOnly
+        ])
+        precondition(store.policyOverride(forPackageID: formula.id) == nil)
+        precondition(store.policyOverride(forPackageID: "brew:cask:arc") == .askFirst)
+
+        let importedPolicies = UpgradePolicyStore(fileURL: tempURL)
+        precondition(importedPolicies.policyOverride(forPackageID: "mas:123") == .remindOnly)
     }
 }
