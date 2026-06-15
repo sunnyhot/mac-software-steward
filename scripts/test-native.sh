@@ -110,6 +110,12 @@ run_test InboxStoreTest \
   "$SRC/InboxStore.swift" \
   "$TESTS/InboxStoreTest.swift"
 
+run_test InboxHistoryRecorderTest \
+  "$SRC/InboxStore.swift" \
+  "$SRC/UpgradeHistoryStore.swift" \
+  "$SRC/InboxHistoryRecorder.swift" \
+  "$TESTS/InboxHistoryRecorderTest.swift"
+
 run_test InboxFilterPresenterTest \
   "$SRC/InboxStore.swift" \
   "$SRC/InboxFilterPresenter.swift" \
