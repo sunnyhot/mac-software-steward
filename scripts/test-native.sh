@@ -110,6 +110,11 @@ run_test RegularAppUpdateDiscoveryTest \
   "$SRC/RegularAppUpdateDiscovery.swift" \
   "$TESTS/RegularAppUpdateDiscoveryTest.swift"
 
+run_test RegularAppUpdateActionResolverTest \
+  "$SRC/Models.swift" \
+  "$SRC/RegularAppUpdateActionResolver.swift" \
+  "$TESTS/RegularAppUpdateActionResolverTest.swift"
+
 run_test SparkleAppcastCheckerTest \
   "$SRC/Models.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
@@ -174,6 +179,7 @@ run_test StewardModelScanGuardTest \
   "$SRC/Models.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
+  "$SRC/RegularAppUpdateActionResolver.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
   "$SRC/Scanner.swift" \
   "$SRC/SoftwareScanning.swift" \
