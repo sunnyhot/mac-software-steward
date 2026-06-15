@@ -2,6 +2,7 @@ import SwiftUI
 
 struct UpgradePlanView: View {
     @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var inboxStore: InboxStore
     @Environment(\.dismiss) private var dismiss
 
     private var selectedCount: Int {
@@ -41,7 +42,7 @@ struct UpgradePlanView: View {
                 }
                 .disabled(model.isConfirmingUpgradePlan)
                 Button {
-                    Task { await model.confirmUpgradePlan() }
+                    Task { await model.confirmUpgradePlan(inboxStore: inboxStore) }
                 } label: {
                     Label(model.isConfirmingUpgradePlan ? "准备中" : "执行升级", systemImage: model.isConfirmingUpgradePlan ? "hourglass" : "bolt.fill")
                 }

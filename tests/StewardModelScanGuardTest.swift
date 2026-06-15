@@ -39,6 +39,25 @@ struct StewardModelScanGuardTest {
 
         let scanner = DelayedScanner()
         let model = StewardModel(scanner: scanner)
+        let inboxURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recovery-inbox-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: inboxURL) }
+        let inboxStore = InboxStore(fileURL: inboxURL)
+        model.packageProgress["brew:cask:broken"] = PackageUpgradeProgress(
+            packageID: "brew:cask:broken",
+            packageName: "Broken",
+            status: .failed,
+            detail: "下载失败",
+            failureSummary: "下载失败",
+            recoverySuggestion: "请重试。",
+            recoveryAction: .retry,
+            lastFailedCommand: "brew upgrade --cask broken"
+        )
+        model.publishFailureRecoveryItems(to: inboxStore, packageIDs: ["brew:cask:broken"])
+        precondition(inboxStore.pendingItems.count == 1)
+        precondition(inboxStore.pendingItems[0].kind == .failureRecovery)
+        precondition(inboxStore.pendingItems[0].actions.map(\.kind).contains(.retryPackage))
+
         let sparkleApp = AppItem(
             id: "sparkle",
             name: "Sparkle",

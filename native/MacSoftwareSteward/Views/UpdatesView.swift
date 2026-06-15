@@ -123,6 +123,7 @@ struct UpdatesView: View {
 
 struct UpdateRow: View {
     @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var inboxStore: InboxStore
     var package: UpdatablePackage
 
     @State private var isHovered = false
@@ -232,7 +233,7 @@ struct UpdateRow: View {
     private var actionButton: some View {
         if progress?.status == .failed {
             Button {
-                Task { await model.retryPackage(package.id) }
+                Task { await model.retryPackage(package.id, inboxStore: inboxStore) }
             } label: {
                 Label("重试", systemImage: "arrow.clockwise")
             }
@@ -240,7 +241,7 @@ struct UpdateRow: View {
             .disabled(packageActionDisabled)
         } else {
             Button {
-                Task { await model.upgrade(package) }
+                Task { await model.upgrade(package, inboxStore: inboxStore) }
             } label: {
                 Label("升级", systemImage: "play")
             }
@@ -370,6 +371,7 @@ struct PackageProgressBadge: View {
 
 struct PackageProgressDetail: View {
     @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var inboxStore: InboxStore
     var progress: PackageUpgradeProgress
 
     private var packageActionDisabled: Bool {
@@ -531,7 +533,7 @@ struct PackageProgressDetail: View {
         switch action {
         case .retry, .quitAndRetry, .reimport, .cleanup, .repairPerms:
             Button {
-                Task { await model.retryPackage(progress.packageID) }
+                Task { await model.retryPackage(progress.packageID, inboxStore: inboxStore) }
             } label: {
                 Label(actionLabel(for: action), systemImage: actionIcon(for: action))
             }
@@ -541,7 +543,7 @@ struct PackageProgressDetail: View {
 
         case .rescan:
             Button {
-                Task { await model.scanSoftware() }
+                Task { await model.scanSoftware(inboxStore: inboxStore) }
             } label: {
                 Label("重新扫描", systemImage: "arrow.clockwise")
             }
@@ -561,7 +563,7 @@ struct PackageProgressDetail: View {
 
         case .checkNetwork:
             Button {
-                Task { await model.retryPackage(progress.packageID) }
+                Task { await model.retryPackage(progress.packageID, inboxStore: inboxStore) }
             } label: {
                 Label("重试", systemImage: "wifi")
             }

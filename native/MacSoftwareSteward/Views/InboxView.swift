@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct InboxView: View {
@@ -227,6 +228,25 @@ private struct InboxItemRow: View {
                     regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
                     inboxStore: inboxStore
                 )
+            }
+        case .retryPackage:
+            guard let packageID = item.sourceID else { return }
+            Task {
+                await model.retryPackage(packageID, inboxStore: inboxStore)
+            }
+        case .copyRecoveryCommand:
+            guard
+                let packageID = item.sourceID,
+                let progress = model.packageProgress[packageID]
+            else { return }
+            let command = progress.lastFailedCommand.isEmpty ? progress.copyText : progress.lastFailedCommand
+            guard !command.isEmpty else { return }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(command, forType: .string)
+            open(tab: .jobs)
+        case .openStorageSettings:
+            if let url = URL(string: "x-apple.systempreferences:com.apple.settings.Storage") {
+                NSWorkspace.shared.open(url)
             }
         }
     }
