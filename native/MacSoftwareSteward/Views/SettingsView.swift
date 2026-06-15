@@ -266,15 +266,20 @@ struct MaxConcurrentUpgradesRow: View {
 
 struct DailyInspectionToggleRow: View {
     @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
+
+    private var access: AutomationMaintenanceAccess {
+        AutomationMaintenanceAccessPresenter.dailyInspectionAccess(for: automationProfile.profile)
+    }
 
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("启用每日巡检")
                     .font(.body)
-                Text("定时扫描可管理来源，发现可升级项后自动执行升级")
+                Text(access.caption)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(access.canEnable || model.dailyInspectionEnabled ? Color.secondary : .orange)
             }
             Spacer()
             Toggle("", isOn: Binding(
@@ -282,8 +287,11 @@ struct DailyInspectionToggleRow: View {
                 set: { enabled in
                     Task {
                         if enabled {
+                            guard access.canEnable else { return }
+                            automationProfile.setDailyInspectionEnabled(true)
                             await model.enableDailyInspection()
                         } else {
+                            automationProfile.setDailyInspectionEnabled(false)
                             await model.disableDailyInspection()
                         }
                     }
@@ -291,6 +299,8 @@ struct DailyInspectionToggleRow: View {
             ))
             .toggleStyle(.switch)
             .labelsHidden()
+            .disabled(!access.canEnable && !model.dailyInspectionEnabled)
+            .help(access.disabledReason ?? access.caption)
         }
     }
 }
