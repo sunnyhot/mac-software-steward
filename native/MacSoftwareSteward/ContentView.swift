@@ -148,6 +148,7 @@ private struct HeaderView: View {
                 Task {
                     await model.scanSoftware(
                         regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
+                        notificationPolicy: automationProfile.profile.notificationPolicy,
                         inboxStore: inboxStore
                     )
                 }

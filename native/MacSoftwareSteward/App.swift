@@ -121,6 +121,7 @@ struct MacSoftwareStewardApp: App {
                     if model.scan == nil {
                         await model.scanSoftware(
                             regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
+                            notificationPolicy: automationProfile.profile.notificationPolicy,
                             inboxStore: inboxStore
                         )
                     }
@@ -142,6 +143,7 @@ struct MacSoftwareStewardApp: App {
         MenuBarExtra(menuBarTitle, systemImage: menuBarSymbol) {
             MenuBarUpgradeMenu()
                 .environmentObject(model)
+                .environmentObject(automationProfile)
                 .environmentObject(inboxStore)
         }
         .menuBarExtraStyle(.menu)
@@ -151,6 +153,7 @@ struct MacSoftwareStewardApp: App {
                     Task {
                         await model.scanSoftware(
                             regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
+                            notificationPolicy: automationProfile.profile.notificationPolicy,
                             inboxStore: inboxStore
                         )
                     }
@@ -204,6 +207,7 @@ struct MacSoftwareStewardApp: App {
 
 private struct MenuBarUpgradeMenu: View {
     @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
     @EnvironmentObject private var inboxStore: InboxStore
     @Environment(\.openWindow) private var openWindow
 
@@ -219,7 +223,13 @@ private struct MenuBarUpgradeMenu: View {
         Divider()
 
         Button {
-            Task { await model.scanSoftware() }
+            Task {
+                await model.scanSoftware(
+                    regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
+                    notificationPolicy: automationProfile.profile.notificationPolicy,
+                    inboxStore: inboxStore
+                )
+            }
         } label: {
             Label(model.isScanning ? "扫描中..." : "扫描更新", systemImage: "arrow.clockwise")
         }

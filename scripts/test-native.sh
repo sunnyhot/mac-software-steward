@@ -212,6 +212,8 @@ run_test StewardModelScanGuardTest \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
   "$SRC/RegularAppUpdateActionResolver.swift" \
+  "$SRC/AutomationNotificationDecider.swift" \
+  "$SRC/AutomationNotificationDispatcher.swift" \
   "$SRC/RecoveryActionPlanner.swift" \
   "$SRC/RecoveryInboxFactory.swift" \
   "$SRC/AutoRepairDecider.swift" \

@@ -226,6 +226,7 @@ private struct InboxItemRow: View {
             Task {
                 await model.scanSoftware(
                     regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
+                    notificationPolicy: automationProfile.profile.notificationPolicy,
                     inboxStore: inboxStore
                 )
             }

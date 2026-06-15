@@ -2,6 +2,7 @@ import SwiftUI
 
 struct UpdatesView: View {
     @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
     @State private var selectedFilter: UpdateFilter = .all
 
     var updates: [UpdatablePackage] {
@@ -378,6 +379,7 @@ struct PackageProgressBadge: View {
 
 struct PackageProgressDetail: View {
     @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
     @EnvironmentObject private var inboxStore: InboxStore
     var progress: PackageUpgradeProgress
 
@@ -550,7 +552,13 @@ struct PackageProgressDetail: View {
 
         case .rescan:
             Button {
-                Task { await model.scanSoftware(inboxStore: inboxStore) }
+                Task {
+                    await model.scanSoftware(
+                        regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
+                        notificationPolicy: automationProfile.profile.notificationPolicy,
+                        inboxStore: inboxStore
+                    )
+                }
             } label: {
                 Label("重新扫描", systemImage: "arrow.clockwise")
             }

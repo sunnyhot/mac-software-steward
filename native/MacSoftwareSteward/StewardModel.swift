@@ -42,6 +42,7 @@ final class StewardModel: ObservableObject {
     let inspectionReportStore = InspectionReportStore()
 
     private let scanner: SoftwareScanning
+    private let notificationDispatcher: AutomationNotificationDelivering
     private var activeJobCount = 0
     private var pendingJobQueue: [(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool, inboxStore: InboxStore?, autoRepairProfile: AutomationProfile?)] = []
     private var debounceTask: Task<Void, Never>?
@@ -54,8 +55,12 @@ final class StewardModel: ObservableObject {
     /// 用户关闭过的失败任务 ID，关闭后不再显示失败通知（直到新任务失败）
     @Published var dismissedFailureJobID: UUID?
 
-    init(scanner: SoftwareScanning = LiveSoftwareScanning()) {
+    init(
+        scanner: SoftwareScanning = LiveSoftwareScanning(),
+        notificationDispatcher: AutomationNotificationDelivering? = nil
+    ) {
         self.scanner = scanner
+        self.notificationDispatcher = notificationDispatcher ?? UserNotificationDispatcher()
         refreshDailyInspectionStatus()
     }
 
@@ -127,6 +132,7 @@ final class StewardModel: ObservableObject {
 
     func scanSoftware(
         regularAppNetworkPolicy: RegularAppNetworkPolicy = .declaredSourcesOnly,
+        notificationPolicy: NotificationPolicy = .silent,
         inboxStore: InboxStore? = nil
     ) async {
         guard !isScanning else { return }
@@ -149,10 +155,20 @@ final class StewardModel: ObservableObject {
         scan = result
         prunePackageProgress(keeping: result)
         recomputeDerivedData()
+        var newInboxItems: [InboxItem] = []
         if let inboxStore {
             for item in AppUpdateInboxFactory.items(from: result.applications.items) {
-                inboxStore.add(item)
+                if inboxStore.add(item) {
+                    newInboxItems.append(item)
+                }
             }
+        }
+        if let decision = AutomationNotificationDecider.decision(
+            policy: notificationPolicy,
+            newInboxItems: newInboxItems,
+            automaticUpgradeCount: 0
+        ) {
+            await notificationDispatcher.deliver(decision)
         }
     }
 

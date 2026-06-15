@@ -31,6 +31,33 @@ final class DelayedScanner: SoftwareScanning {
     }
 }
 
+@MainActor
+final class StaticScanner: SoftwareScanning {
+    private let result: ScanResult
+
+    init(result: ScanResult) {
+        self.result = result
+    }
+
+    func scanAll(
+        includeGreedy: Bool,
+        regularAppNetworkPolicy: RegularAppNetworkPolicy,
+        onPhaseChange: ((ScanPhase) -> Void)?
+    ) async -> ScanResult {
+        onPhaseChange?(.systemProfiler)
+        return result
+    }
+}
+
+@MainActor
+final class RecordingNotificationDispatcher: AutomationNotificationDelivering {
+    private(set) var decisions: [AutomationNotificationDecision] = []
+
+    func deliver(_ decision: AutomationNotificationDecision) async {
+        decisions.append(decision)
+    }
+}
+
 @main
 struct StewardModelScanGuardTest {
     @MainActor
@@ -121,6 +148,28 @@ struct StewardModelScanGuardTest {
         model.performUpdateAction(sparkleApp.updateCapability.actions[0], for: sparkleApp)
         precondition(model.errorMessage == "未找到 Sparkle 更新器。")
 
+        let notificationDispatcher = RecordingNotificationDispatcher()
+        let notificationModel = StewardModel(
+            scanner: StaticScanner(result: appUpdateScanResult()),
+            notificationDispatcher: notificationDispatcher
+        )
+        let notificationInboxURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("notification-inbox-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: notificationInboxURL) }
+        let notificationInboxStore = InboxStore(fileURL: notificationInboxURL)
+
+        await notificationModel.scanSoftware(
+            notificationPolicy: .decisionsAndFailures,
+            inboxStore: notificationInboxStore
+        )
+        precondition(notificationDispatcher.decisions.map(\.title) == ["有 1 项需要处理"])
+
+        await notificationModel.scanSoftware(
+            notificationPolicy: .decisionsAndFailures,
+            inboxStore: notificationInboxStore
+        )
+        precondition(notificationDispatcher.decisions.count == 1)
+
         let first = Task { await model.scanSoftware() }
 
         while scanner.callCount == 0 {
@@ -136,5 +185,39 @@ struct StewardModelScanGuardTest {
         await first.value
 
         precondition(model.isScanning == false, "Expected scan flag to reset after completion")
+    }
+
+    private static func appUpdateScanResult() -> ScanResult {
+        let app = AppItem(
+            id: "app:/Applications/Sparkle.app",
+            name: "Sparkle",
+            version: "1.0",
+            availableVersion: "2.0",
+            path: "/Applications/Sparkle.app",
+            source: "Developer",
+            obtainedFrom: "Identified Developer",
+            architecture: "arm64",
+            managedBy: "manual",
+            updateState: "outdated",
+            relatedPackageID: "",
+            updateCapability: AppUpdateCapability(
+                detector: .sparkle,
+                confidence: .high,
+                feedURLString: "https://example.com/appcast.xml",
+                installedVersion: "1.0",
+                summary: "Sparkle 发现新版本 2.0",
+                actions: [AppUpdateAction(kind: .openUpdater, title: "打开更新器", systemImage: "arrow.down.app")],
+                diagnostic: "ok"
+            )
+        )
+
+        return ScanResult(
+            scannedAt: Date(timeIntervalSince1970: 0),
+            includeGreedy: false,
+            summary: ScanSummary(applications: 1, brewFormulae: 0, brewCasks: 0, masApps: 0, outdated: 1, actionable: 0, scanMs: 1),
+            applications: ApplicationsScan(source: "test", ok: true, error: "", items: [app]),
+            brew: BrewScan(available: false, path: "", prefix: "", version: "", error: "", includeGreedy: false, formulae: [], casks: []),
+            mas: MasScan(available: false, path: "", error: "", apps: [])
+        )
     }
 }
