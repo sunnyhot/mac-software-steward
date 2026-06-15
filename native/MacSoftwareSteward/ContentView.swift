@@ -52,6 +52,7 @@ struct ContentView: View {
 
 private struct HeaderView: View {
     @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var inboxStore: InboxStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -153,7 +154,7 @@ private struct HeaderView: View {
                 isProminent: true,
                 isLoading: model.hasRunningJob || model.isConfirmingUpgradePlan
             ) {
-                model.prepareUpgradePlan()
+                model.prepareUpgradePlan(inboxStore: inboxStore)
             }
             .disabled(model.availableUpdates.isEmpty || model.hasRunningJob || model.isConfirmingUpgradePlan)
             .help(model.upgradeAllHelpText)

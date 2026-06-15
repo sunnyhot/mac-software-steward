@@ -139,6 +139,7 @@ struct MacSoftwareStewardApp: App {
         MenuBarExtra(menuBarTitle, systemImage: menuBarSymbol) {
             MenuBarUpgradeMenu()
                 .environmentObject(model)
+                .environmentObject(inboxStore)
         }
         .menuBarExtraStyle(.menu)
         .commands {
@@ -150,7 +151,7 @@ struct MacSoftwareStewardApp: App {
                 .disabled(model.isScanning)
 
                 Button("一键升级可管理软件") {
-                    model.prepareUpgradePlan()
+                    model.prepareUpgradePlan(inboxStore: inboxStore)
                 }
                 .keyboardShortcut("u", modifiers: [.command, .shift])
                 .disabled(model.availableUpdates.isEmpty || model.hasRunningJob || model.isConfirmingUpgradePlan)
@@ -195,6 +196,7 @@ struct MacSoftwareStewardApp: App {
 
 private struct MenuBarUpgradeMenu: View {
     @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var inboxStore: InboxStore
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -217,7 +219,7 @@ private struct MenuBarUpgradeMenu: View {
 
         Button {
             openMainWindowOnce()
-            model.prepareUpgradePlan()
+            model.prepareUpgradePlan(inboxStore: inboxStore)
         } label: {
             Label(model.isConfirmingUpgradePlan ? "准备中" : "一键升级", systemImage: model.isConfirmingUpgradePlan ? "hourglass" : "bolt.fill")
         }

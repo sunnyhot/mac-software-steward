@@ -192,7 +192,7 @@ final class StewardModel: ObservableObject {
         }
     }
 
-    func prepareUpgradePlan() {
+    func prepareUpgradePlan(inboxStore: InboxStore? = nil) {
         guard !isConfirmingUpgradePlan else { return }
         guard let scan else {
             errorMessage = "请先扫描软件。"
@@ -200,6 +200,11 @@ final class StewardModel: ObservableObject {
         }
         let rows = UpgradePlanner.makePlan(scan: scan, policyStore: policyStore, includeGreedy: includeGreedy)
         upgradePlanRows = rows
+        if let inboxStore {
+            for item in RiskInboxFactory.items(from: rows) {
+                inboxStore.add(item)
+            }
+        }
         selectedPlanIDs = Set(rows.filter { $0.selection == .selected }.map(\.packageID))
         showingUpgradePlan = true
     }

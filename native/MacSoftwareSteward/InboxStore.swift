@@ -105,6 +105,11 @@ final class InboxStore: ObservableObject {
     }
 
     func add(_ item: InboxItem) {
+        if let sourceID = item.sourceID, !sourceID.isEmpty {
+            items.removeAll { existing in
+                existing.kind == item.kind && existing.sourceID == sourceID
+            }
+        }
         items.removeAll { $0.id == item.id }
         items.append(item)
         sortNewestFirst()
