@@ -50,6 +50,11 @@ run_test AutomationProfileStoreTest \
   "$SRC/AutomationProfileStore.swift" \
   "$TESTS/AutomationProfileStoreTest.swift"
 
+run_test RulesConsolePresenterTest \
+  "$SRC/AutomationProfileStore.swift" \
+  "$SRC/RulesConsolePresenter.swift" \
+  "$TESTS/RulesConsolePresenterTest.swift"
+
 run_test AutomationNotificationDeciderTest \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/InboxStore.swift" \

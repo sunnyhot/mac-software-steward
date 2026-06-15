@@ -30,6 +30,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case updates = "可升级"
     case applications = "本机应用"
     case sources = "管理来源"
+    case rules = "规则"
     case history = "历史"
     case jobs = "任务日志"
     case settings = "设置"
@@ -38,7 +39,7 @@ enum AppTab: String, CaseIterable, Identifiable {
 
     static func visibleTabs(advancedModeEnabled: Bool) -> [AppTab] {
         if advancedModeEnabled {
-            return [.inbox, .updates, .applications, .sources, .history, .jobs, .settings]
+            return [.inbox, .updates, .applications, .sources, .rules, .history, .jobs, .settings]
         }
         return [.inbox, .applications, .history, .settings]
     }
@@ -49,6 +50,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .updates: return "arrow.triangle.2.circlepath"
         case .applications: return "macwindow"
         case .sources: return "tray.full"
+        case .rules: return "list.bullet.clipboard"
         case .history: return "clock.arrow.circlepath"
         case .settings: return "gearshape"
         case .jobs: return "terminal"
@@ -59,7 +61,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .updates, .applications, .sources:
             return true
-        case .inbox, .history, .settings, .jobs:
+        case .inbox, .rules, .history, .settings, .jobs:
             return false
         }
     }
