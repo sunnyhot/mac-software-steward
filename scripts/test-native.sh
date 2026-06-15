@@ -104,6 +104,11 @@ run_test InboxStoreTest \
   "$SRC/InboxStore.swift" \
   "$TESTS/InboxStoreTest.swift"
 
+run_test InboxFilterPresenterTest \
+  "$SRC/InboxStore.swift" \
+  "$SRC/InboxFilterPresenter.swift" \
+  "$TESTS/InboxFilterPresenterTest.swift"
+
 run_test AppUpdateInboxFactoryTest \
   "$SRC/Models.swift" \
   "$SRC/InboxStore.swift" \
