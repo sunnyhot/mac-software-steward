@@ -99,6 +99,11 @@ run_test InspectionReportBuilderTest \
   "$SRC/UpgradePlanner.swift" \
   "$TESTS/InspectionReportBuilderTest.swift"
 
+run_test RegularAppUpdateDiscoveryTest \
+  "$SRC/Models.swift" \
+  "$SRC/RegularAppUpdateDiscovery.swift" \
+  "$TESTS/RegularAppUpdateDiscoveryTest.swift"
+
 run_test RiskAssessorTest \
   "$SRC/Models.swift" \
   "$SRC/RiskAssessor.swift" \
@@ -120,18 +125,28 @@ run_test PackageProgressParserTest \
 run_test ScannerBrewListFallbackTest \
   "$SRC/CommandRunner.swift" \
   "$SRC/Models.swift" \
+  "$SRC/RegularAppUpdateDiscovery.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerBrewListFallbackTest.swift"
+
+run_test ScannerAppUpdateCapabilityTest \
+  "$SRC/CommandRunner.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/RegularAppUpdateDiscovery.swift" \
+  "$SRC/Scanner.swift" \
+  "$TESTS/ScannerAppUpdateCapabilityTest.swift"
 
 run_test ScannerNormalizeTokenTest \
   "$SRC/CommandRunner.swift" \
   "$SRC/Models.swift" \
+  "$SRC/RegularAppUpdateDiscovery.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerNormalizeTokenTest.swift"
 
 run_test StewardModelScanGuardTest \
   "$SRC/CommandRunner.swift" \
   "$SRC/Models.swift" \
+  "$SRC/RegularAppUpdateDiscovery.swift" \
   "$SRC/Scanner.swift" \
   "$SRC/SoftwareScanning.swift" \
   "$SRC/InboxStore.swift" \
