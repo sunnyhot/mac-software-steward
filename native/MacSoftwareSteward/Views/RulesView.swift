@@ -6,6 +6,8 @@ struct RulesView: View {
     @EnvironmentObject private var model: StewardModel
     @EnvironmentObject private var automationProfile: AutomationProfileStore
     @State private var transferMessage: RulesTransferMessage?
+    @State private var rulesQuery = ""
+    @State private var categoryFilter: RulesConsoleCategory = .all
 
     private static let exportDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -16,7 +18,9 @@ struct RulesView: View {
     private var sections: [RulesConsoleSection] {
         RulesConsolePresenter.sections(
             profile: automationProfile.profile,
-            includeGreedy: model.includeGreedy
+            includeGreedy: model.includeGreedy,
+            category: categoryFilter,
+            query: rulesQuery
         )
     }
 
@@ -25,9 +29,18 @@ struct RulesView: View {
             VStack(alignment: .leading, spacing: 16) {
                 policyControls
                 dataTransferControls
+                rulesFilterControls
 
-                ForEach(sections, id: \.title) { section in
-                    RulesSectionView(section: section)
+                if sections.isEmpty {
+                    EmptyStateView(
+                        symbol: "line.3.horizontal.decrease.circle",
+                        title: "没有匹配的规则",
+                        text: "调整分类或搜索词后再查看。"
+                    )
+                } else {
+                    ForEach(sections, id: \.title) { section in
+                        RulesSectionView(section: section)
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -87,7 +100,7 @@ struct RulesView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("自动化数据")
                         .font(.body)
-                    Text("包含自动化配置、单包策略和巡检报告归档。")
+                    Text("包含自动化配置、单包策略、巡检报告和升级/待办历史。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -129,11 +142,13 @@ struct RulesView: View {
                 let bundle = AutomationDataBundleService.makeBundle(
                     profile: automationProfile.profile,
                     upgradePolicyOverrides: model.policyStore.overrides,
-                    inspectionReports: model.inspectionReportStore.reports
+                    inspectionReports: model.inspectionReportStore.reports,
+                    upgradeHistoryRecords: model.historyStore.records
                 )
                 let data = try AutomationDataBundleService.encode(bundle)
                 try data.write(to: url, options: .atomic)
-                transferMessage = .success("已导出 \(bundle.inspectionReports.count) 条报告")
+                let summary = AutomationDataBundleService.summary(for: bundle)
+                transferMessage = .success("已导出 \(summary.policyCount) 条策略、\(summary.inspectionReportCount) 条报告、\(summary.upgradeHistoryCount) 条历史")
             } catch {
                 transferMessage = .failure("导出失败：\(error.localizedDescription)")
             }
@@ -158,9 +173,29 @@ struct RulesView: View {
                 automationProfile.replace(with: bundle.automationProfile)
                 model.policyStore.replaceOverrides(bundle.upgradePolicyOverrides)
                 model.inspectionReportStore.replaceReports(bundle.inspectionReports)
-                transferMessage = .success("已导入 \(bundle.inspectionReports.count) 条报告")
+                model.historyStore.replaceRecords(bundle.upgradeHistoryRecords)
+                let summary = AutomationDataBundleService.summary(for: bundle)
+                transferMessage = .success("已导入 \(summary.policyCount) 条策略、\(summary.inspectionReportCount) 条报告、\(summary.upgradeHistoryCount) 条历史")
             } catch {
                 transferMessage = .failure("导入失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    private var rulesFilterControls: some View {
+        SettingsGroupBox {
+            SettingsGroupHeader(title: "规则筛选", symbol: "line.3.horizontal.decrease.circle")
+            HStack(spacing: 12) {
+                TextField("搜索规则、状态或说明", text: $rulesQuery)
+                    .textFieldStyle(.roundedBorder)
+
+                Picker("分类", selection: $categoryFilter) {
+                    ForEach(RulesConsoleCategory.allCases) { category in
+                        Text(category.title).tag(category)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 140)
             }
         }
     }
@@ -168,7 +203,8 @@ struct RulesView: View {
     private func confirmImport(_ bundle: AutomationDataBundle) -> Bool {
         let alert = NSAlert()
         alert.messageText = "导入自动化数据？"
-        alert.informativeText = "这会替换本机自动化配置、单包策略和 \(bundle.inspectionReports.count) 条巡检报告。"
+        let summary = AutomationDataBundleService.summary(for: bundle)
+        alert.informativeText = "文件版本 \(summary.schemaVersion)。这会替换本机自动化配置、\(summary.policyCount) 条单包策略、\(summary.inspectionReportCount) 条巡检报告和 \(summary.upgradeHistoryCount) 条升级/待办历史。"
         alert.alertStyle = .warning
         alert.addButton(withTitle: "导入")
         alert.addButton(withTitle: "取消")
@@ -235,30 +271,44 @@ private struct RulesConsoleRowView: View {
     var row: RulesConsoleRow
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(statusColor.opacity(0.12))
-                    .frame(width: 32, height: 32)
-
-                Image(systemName: row.symbol)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(statusColor)
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(row.detailItems, id: \.self) { item in
+                    Label(item, systemImage: "checkmark.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            .padding(.top, 6)
+            .padding(.leading, 44)
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(statusColor.opacity(0.12))
+                        .frame(width: 32, height: 32)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(row.title)
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(.primary)
-                Text(row.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    Image(systemName: row.symbol)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(statusColor)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(row.title)
+                        .font(.system(.body, design: .rounded))
+                        .foregroundStyle(.primary)
+                    Text(row.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 12)
+
+                Badge(text: row.category.title, color: .blue)
+                Badge(text: row.status, color: statusColor)
             }
-
-            Spacer(minLength: 12)
-
-            Badge(text: row.status, color: statusColor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)

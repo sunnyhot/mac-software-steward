@@ -59,6 +59,7 @@ run_test AutomationDataBundleTest \
   "$SRC/Models.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/UpgradePolicyStore.swift" \
+  "$SRC/UpgradeHistoryStore.swift" \
   "$SRC/InspectionReportStore.swift" \
   "$SRC/AutomationDataBundle.swift" \
   "$TESTS/AutomationDataBundleTest.swift"
@@ -67,6 +68,12 @@ run_test RulesConsolePresenterTest \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RulesConsolePresenter.swift" \
   "$TESTS/RulesConsolePresenterTest.swift"
+
+run_test HistoryPresenterTest \
+  "$SRC/InspectionReportStore.swift" \
+  "$SRC/UpgradeHistoryStore.swift" \
+  "$SRC/HistoryPresenter.swift" \
+  "$TESTS/HistoryPresenterTest.swift"
 
 run_test AutomationNotificationDeciderTest \
   "$SRC/AutomationProfileStore.swift" \

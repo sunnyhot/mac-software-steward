@@ -5,7 +5,7 @@
 原生 macOS 应用，扫描本机软件并管理升级。覆盖 `/Applications`、Homebrew（formula/cask）和 Mac App Store（通过 `mas` CLI）。SwiftUI + AppKit，arm64-only，macOS 14.0+。仓库没有 Xcode 工程文件，构建由脚本直接调用 `xcrun swiftc`。
 
 - **Bundle ID**: `local.codex.MacSoftwareSteward`
-- **版本**: 0.13.19（`package.json` 与 `native/Info.plist` 需要同步）
+- **版本**: 0.13.20（`package.json` 与 `native/Info.plist` 需要同步）
 - **GitHub 仓库**: `sunnyhot/mac-software-steward`
 
 ## 文件结构
@@ -53,7 +53,7 @@
 
 ### 测试 (`tests/`)
 
-`tests/` 目前包含 21 个 Swift 单文件测试，覆盖应用外观策略、单实例策略、更新弹框布局、自更新 SHA-256 校验、安装脚本回滚、扫描 token 规范化、扫描防重入、升级策略/计划/历史、失败分析、下载监控、进度解析和升级校验等核心逻辑。
+`tests/` 目前包含 40+ 个 Swift 单文件测试，覆盖应用外观策略、单实例策略、更新弹框布局、自更新 SHA-256 校验、安装脚本回滚、普通 App 更新诊断、规则/历史 presenter、导入导出 bundle、扫描 token 规范化、扫描防重入、升级策略/计划/历史、失败分析、下载监控、进度解析和升级校验等核心逻辑。
 
 ## 架构与数据流
 

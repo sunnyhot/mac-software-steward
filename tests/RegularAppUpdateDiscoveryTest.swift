@@ -35,6 +35,34 @@ struct RegularAppUpdateDiscoveryTest {
         precondition(chromeCapability.detector == .chromeKeystone)
         precondition(chromeCapability.actions.map(\.kind) == [.openApp, .revealInFinder])
 
+        let keystoneMetadataCapability = RegularAppUpdateDiscovery.discover(plist: [
+            "CFBundleIdentifier": "com.example.browser",
+            "CFBundleShortVersionString": "1.0",
+            "KSProductID": "com.google.Chrome",
+            "KSUpdateURL": "https://tools.google.com/service/update2"
+        ])
+        precondition(keystoneMetadataCapability.detector == .chromeKeystone)
+        precondition(keystoneMetadataCapability.confidence == .medium)
+        precondition(keystoneMetadataCapability.diagnostic.contains("KSProductID"))
+
+        let adobeMetadataCapability = RegularAppUpdateDiscovery.discover(plist: [
+            "CFBundleIdentifier": "com.example.editor",
+            "CFBundleShortVersionString": "25.0",
+            "AdobeUpdaterEnabled": "true"
+        ])
+        precondition(adobeMetadataCapability.detector == .adobeUpdater)
+        precondition(adobeMetadataCapability.confidence == .medium)
+        precondition(adobeMetadataCapability.diagnostic.contains("AdobeUpdaterEnabled"))
+
+        let jetBrainsMetadataCapability = RegularAppUpdateDiscovery.discover(plist: [
+            "CFBundleIdentifier": "com.example.idea",
+            "CFBundleShortVersionString": "2024.1",
+            "JetBrainsToolboxApp": "JetBrains Toolbox"
+        ])
+        precondition(jetBrainsMetadataCapability.detector == .jetBrainsToolbox)
+        precondition(jetBrainsMetadataCapability.confidence == .medium)
+        precondition(jetBrainsMetadataCapability.diagnostic.contains("JetBrainsToolboxApp"))
+
         let microsoft = try makeApp(
             root: root,
             name: "Word",
@@ -46,6 +74,15 @@ struct RegularAppUpdateDiscoveryTest {
         let microsoftCapability = RegularAppUpdateDiscovery.discover(appPath: microsoft.path)
         precondition(microsoftCapability.detector == .microsoftAutoUpdate)
         precondition(microsoftCapability.actions.map(\.kind) == [.openUpdater, .openApp, .revealInFinder])
+
+        let microsoftMetadataCapability = RegularAppUpdateDiscovery.discover(plist: [
+            "CFBundleIdentifier": "com.example.word",
+            "CFBundleShortVersionString": "16.0",
+            "MAUApplicationID": "MSWD2019"
+        ])
+        precondition(microsoftMetadataCapability.detector == .microsoftAutoUpdate)
+        precondition(microsoftMetadataCapability.confidence == .medium)
+        precondition(microsoftMetadataCapability.diagnostic.contains("MAUApplicationID"))
 
         let unknown = try makeApp(
             root: root,

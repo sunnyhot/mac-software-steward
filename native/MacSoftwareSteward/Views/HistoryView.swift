@@ -18,8 +18,26 @@ private struct HistoryContentView: View {
     @ObservedObject var historyStore: UpgradeHistoryStore
     @ObservedObject var inspectionReportStore: InspectionReportStore
 
+    @State private var kindFilter: HistoryKindFilter = .all
+    @State private var statusFilter: HistoryStatusFilter = .all
+    @State private var query = ""
+
+    private var hasAnyHistory: Bool {
+        !historyStore.records.isEmpty || !inspectionReportStore.reports.isEmpty
+    }
+
+    private var entries: [HistoryEntry] {
+        HistoryPresenter.entries(
+            reports: inspectionReportStore.reports,
+            records: historyStore.records,
+            kind: kindFilter,
+            status: statusFilter,
+            query: query
+        )
+    }
+
     var body: some View {
-        if historyStore.records.isEmpty && inspectionReportStore.reports.isEmpty {
+        if !hasAnyHistory {
             EmptyStateView(
                 symbol: "clock.arrow.circlepath",
                 title: "暂无历史记录",
@@ -28,18 +46,21 @@ private struct HistoryContentView: View {
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
-                    if !inspectionReportStore.reports.isEmpty {
-                        HistorySectionTitle(title: "巡检报告")
-                        ForEach(inspectionReportStore.reports) { report in
-                            InspectionReportRow(report: report)
-                        }
-                    }
+                    HistoryFilterBar(
+                        kindFilter: $kindFilter,
+                        statusFilter: $statusFilter,
+                        query: $query
+                    )
 
-                    if !historyStore.records.isEmpty {
-                        HistorySectionTitle(title: "升级历史")
-                            .padding(.top, inspectionReportStore.reports.isEmpty ? 0 : 8)
-                        ForEach(historyStore.records) { record in
-                            HistoryRecordRow(record: record)
+                    if entries.isEmpty {
+                        EmptyStateView(
+                            symbol: "line.3.horizontal.decrease.circle",
+                            title: "没有匹配的历史",
+                            text: "调整分类、状态或搜索词后再查看。"
+                        )
+                    } else {
+                        ForEach(entries) { entry in
+                            HistoryEntryRow(entry: entry)
                         }
                     }
                 }
@@ -48,109 +69,94 @@ private struct HistoryContentView: View {
     }
 }
 
-private struct HistorySectionTitle: View {
-    var title: String
+private struct HistoryFilterBar: View {
+    @Binding var kindFilter: HistoryKindFilter
+    @Binding var statusFilter: HistoryStatusFilter
+    @Binding var query: String
 
     var body: some View {
-        Text(title)
-            .font(.system(size: 13, weight: .semibold, design: .rounded))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 2)
-    }
-}
+        HStack(spacing: 10) {
+            TextField("搜索历史、命令、失败原因", text: $query)
+                .textFieldStyle(.roundedBorder)
 
-private struct InspectionReportRow: View {
-    var report: InspectionReportRecord
-
-    private var statusColor: Color {
-        report.status == .succeeded ? .green : .orange
-    }
-
-    private var statusSymbol: String {
-        report.status == .succeeded ? "checkmark.circle" : "exclamationmark.triangle"
-    }
-
-    private var scanText: String {
-        let homebrewCount = report.scanSummary.brewFormulae + report.scanSummary.brewCasks
-        return "应用 \(report.scanSummary.applications)，Homebrew \(homebrewCount)，MAS \(report.scanSummary.masApps)，可操作 \(report.scanSummary.actionable)"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: statusSymbol)
-                    .foregroundStyle(statusColor)
-
-                Text(report.trigger.title)
-                    .font(.system(.headline, design: .rounded))
-                    .lineLimit(1)
-
-                Spacer()
-
-                Badge(text: report.status.title, color: statusColor)
-            }
-
-            Text(scanText)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-
-            HStack(spacing: 8) {
-                Text(report.startedAt, style: .date)
-                Text(report.startedAt, style: .time)
-                Text("自动 \(report.automaticUpgrades.count)")
-                Text("跳过 \(report.skippedItems.count)")
-                if !report.failures.isEmpty {
-                    Text("失败 \(report.failures.count)")
+            Picker("分类", selection: $kindFilter) {
+                ForEach(HistoryKindFilter.allCases) { filter in
+                    Text(filter.title).tag(filter)
                 }
             }
-            .font(.caption)
-            .foregroundStyle(.tertiary)
+            .pickerStyle(.menu)
+            .frame(width: 120)
+
+            Picker("状态", selection: $statusFilter) {
+                ForEach(HistoryStatusFilter.allCases) { filter in
+                    Text(filter.title).tag(filter)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(width: 120)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.primary.opacity(0.06), lineWidth: 1)
         )
     }
 }
 
-private struct HistoryRecordRow: View {
-    var record: UpgradeHistoryRecord
+private struct HistoryEntryRow: View {
+    var entry: HistoryEntry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: record.status == "完成" ? "checkmark.circle" : "exclamationmark.triangle")
-                    .foregroundStyle(record.status == "完成" ? .green : .orange)
-
-                Text(record.label)
-                    .font(.system(.headline, design: .rounded))
-                    .lineLimit(1)
-
-                Spacer()
-
-                Badge(text: record.status, color: record.status == "完成" ? .green : .orange)
-            }
-
-            Text(record.summary)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-
-            HStack(spacing: 8) {
-                if let startedAt = record.startedAt {
-                    Text(startedAt, style: .date)
-                    Text(startedAt, style: .time)
-                }
-                if let exitCode = record.exitCode {
-                    Text("退出码 \(exitCode)")
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 7) {
+                ForEach(entry.detailItems, id: \.self) { item in
+                    HStack(alignment: .top, spacing: 7) {
+                        Image(systemName: item.symbol)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 16)
+                        Text(item.title)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                        Text(item.value)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
-            .font(.caption)
-            .foregroundStyle(.tertiary)
+            .padding(.top, 6)
+            .padding(.leading, 26)
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: entry.kind.symbol)
+                        .foregroundStyle(statusColor(entry.status))
+
+                    Text(entry.title)
+                        .font(.system(.headline, design: .rounded))
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    Badge(text: entry.kind.title, color: .blue)
+                    Badge(text: entry.status.title, color: statusColor(entry.status))
+                }
+
+                Text(entry.summary)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+
+                HStack(spacing: 8) {
+                    Text(entry.timestamp, style: .date)
+                    Text(entry.timestamp, style: .time)
+                }
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+            }
         }
         .padding(14)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -158,5 +164,18 @@ private struct HistoryRecordRow: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.primary.opacity(0.06), lineWidth: 1)
         )
+    }
+}
+
+private func statusColor(_ status: HistoryEntryStatus) -> Color {
+    switch status {
+    case .succeeded:
+        return .green
+    case .failed:
+        return .orange
+    case .ignored:
+        return .secondary
+    case .pending:
+        return .blue
     }
 }

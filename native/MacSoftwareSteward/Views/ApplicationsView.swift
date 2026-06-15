@@ -170,6 +170,7 @@ private struct AppDiagnosticDetail: View {
                 Text("诊断详情")
                     .font(.caption)
                     .fontWeight(.semibold)
+                Badge(text: row.reasonTitle, color: diagnosticColor(row.severity))
                 Badge(text: row.detectorTitle, color: .blue)
                 Badge(text: row.stateTitle, color: diagnosticColor(row.severity))
                 Spacer(minLength: 0)
@@ -179,6 +180,31 @@ private struct AppDiagnosticDetail: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
+
+            Text(row.actionHint)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), alignment: .leading)], alignment: .leading, spacing: 6) {
+                ForEach(row.detailItems, id: \.self) { item in
+                    HStack(spacing: 5) {
+                        Image(systemName: item.symbol)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 14)
+                        Text(item.title)
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                        Text(item.value)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+            }
 
             if !row.feedURLString.isEmpty {
                 HStack(spacing: 6) {

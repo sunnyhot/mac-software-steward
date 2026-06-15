@@ -33,5 +33,24 @@ struct RulesConsolePresenterTest {
                 && row.status == "仅低风险"
                 && row.detail.contains("重新扫描")
         })
+
+        let filtered = RulesConsolePresenter.sections(
+            profile: profile,
+            includeGreedy: true,
+            category: .risk,
+            query: "greedy"
+        )
+        precondition(filtered.map(\.title) == ["风险规则"])
+        precondition(filtered[0].rows.map(\.title) == ["greedy 扫描范围"])
+        precondition(filtered[0].rows[0].category == .risk)
+        precondition(filtered[0].rows[0].detailItems.contains("开启后只扩大扫描可见性，不绕过升级风险策略。"))
+
+        let noMatches = RulesConsolePresenter.sections(
+            profile: profile,
+            includeGreedy: true,
+            category: .recovery,
+            query: "Sparkle"
+        )
+        precondition(noMatches.isEmpty)
     }
 }

@@ -37,6 +37,12 @@ final class UpgradeHistoryStore: ObservableObject {
         save()
     }
 
+    func replaceRecords(_ newRecords: [UpgradeHistoryRecord]) {
+        records = newRecords
+        trimToLimit()
+        save()
+    }
+
     private func save() {
         do {
             try FileManager.default.createDirectory(
@@ -52,11 +58,27 @@ final class UpgradeHistoryStore: ObservableObject {
         }
     }
 
+    private func sortNewestFirst() {
+        records.sort { lhs, rhs in
+            (lhs.startedAt ?? .distantPast) > (rhs.startedAt ?? .distantPast)
+        }
+    }
+
+    private func trimToLimit() {
+        sortNewestFirst()
+        if records.count > limit {
+            records.removeLast(records.count - limit)
+        }
+    }
+
     private static func load(from url: URL) -> [UpgradeHistoryRecord] {
         guard let data = try? Data(contentsOf: url) else { return [] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([UpgradeHistoryRecord].self, from: data)) ?? []
+        let records = (try? decoder.decode([UpgradeHistoryRecord].self, from: data)) ?? []
+        return records.sorted { lhs, rhs in
+            (lhs.startedAt ?? .distantPast) > (rhs.startedAt ?? .distantPast)
+        }
     }
 
     static var defaultFileURL: URL {

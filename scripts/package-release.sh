@@ -28,6 +28,13 @@ else
   {
     echo "## Mac 软件管家 v$VERSION"
     echo ""
+    echo "### 高级诊断与控制面板"
+    echo "- 普通 App 高级诊断展示更新源异常、无法确认版本、识别器、置信度、安装/可用版本、Feed URL 和处理建议"
+    echo "- 普通 App 更新能力识别补充 Chrome Keystone、Adobe、JetBrains Toolbox、Microsoft AutoUpdate 的 Info.plist 元数据证据"
+    echo "- 规则页支持分类和搜索筛选，规则行可展开查看生效约束"
+    echo "- 历史页统一巡检、升级、待办处理记录，支持分类、状态和搜索筛选"
+    echo "- 自动化数据导入导出升级到 schema v2，纳入升级/待办历史，并兼容 schema v1 文件"
+    echo ""
     echo "### 安全与发布可靠性"
     echo "- 自更新下载完成后校验 release manifest 中的 SHA-256，缺失或不匹配会中止安装"
     echo "- 自更新安装脚本改为临时 app + 旧版本备份的替换流程，失败时自动回滚"
