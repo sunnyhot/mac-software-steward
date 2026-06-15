@@ -36,10 +36,22 @@ struct DailyPolicyFilteringTest {
             outdated: true,
             upgradeable: false
         )
+        let risky = BrewPackage(
+            id: "brew:formula:node-major",
+            kind: "formula",
+            name: "node-major",
+            installedVersion: "20",
+            currentVersion: "21",
+            pinned: false,
+            autoUpdates: false,
+            outdated: true,
+            upgradeable: true
+        )
         let rows = [
             UpgradePlanRow(packageID: formula.id, packageName: formula.name, source: "Brew Formula", installedVersion: "1", currentVersion: "2", commandDisplay: "brew upgrade node", policy: .automatic, selection: .selected, riskLabels: [], skipReason: "", package: .brew(formula), riskLevel: .low, riskSummary: "", automationDecision: .allowAutomatic),
             UpgradePlanRow(packageID: cask.id, packageName: cask.name, source: "Brew Cask", installedVersion: "1", currentVersion: "2", commandDisplay: "brew upgrade --cask --greedy warp", policy: .askFirst, selection: .notSelected, riskLabels: ["greedy cask"], skipReason: "需确认：greedy cask", package: .brew(cask), riskLevel: .medium, riskSummary: "greedy cask", automationDecision: .requireConfirmation),
-            UpgradePlanRow(packageID: pinned.id, packageName: pinned.name, source: "Brew Formula", installedVersion: "1", currentVersion: "2", commandDisplay: "brew upgrade ruby", policy: .automatic, selection: .notSelectable, riskLabels: ["pinned"], skipReason: "软件包已固定", package: nil, riskLevel: .high, riskSummary: "软件包已固定", automationDecision: .blockExecution)
+            UpgradePlanRow(packageID: pinned.id, packageName: pinned.name, source: "Brew Formula", installedVersion: "1", currentVersion: "2", commandDisplay: "brew upgrade ruby", policy: .automatic, selection: .notSelectable, riskLabels: ["pinned"], skipReason: "软件包已固定", package: nil, riskLevel: .high, riskSummary: "软件包已固定", automationDecision: .blockExecution),
+            UpgradePlanRow(packageID: risky.id, packageName: risky.name, source: "Brew Formula", installedVersion: "20", currentVersion: "21", commandDisplay: "brew upgrade node-major", policy: .automatic, selection: .notSelected, riskLabels: ["major version"], skipReason: "需确认：检测到 major 版本变化", package: .brew(risky), riskLevel: .high, riskSummary: "检测到 major 版本变化", automationDecision: .requireConfirmation)
         ]
 
         let automatic = DailyUpgradePolicy.automaticPackages(from: rows)

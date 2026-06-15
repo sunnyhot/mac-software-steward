@@ -62,6 +62,7 @@ run_test CommandRunnerControlTest \
 run_test DailyPolicyFilteringTest \
   "$SRC/Models.swift" \
   "$SRC/UpgradePolicyStore.swift" \
+  "$SRC/RiskAssessor.swift" \
   "$SRC/UpgradePlanner.swift" \
   "$SRC/DailyUpgradePolicy.swift" \
   "$TESTS/DailyPolicyFilteringTest.swift"
@@ -101,6 +102,7 @@ run_test StewardModelScanGuardTest \
   "$SRC/Scanner.swift" \
   "$SRC/SoftwareScanning.swift" \
   "$SRC/UpgradePolicyStore.swift" \
+  "$SRC/RiskAssessor.swift" \
   "$SRC/UpgradePlanner.swift" \
   "$SRC/DailyUpgradePolicy.swift" \
   "$SRC/DailyInspectionScheduler.swift" \
@@ -132,6 +134,7 @@ run_test UpgradeHistoryStoreTest \
 run_test UpgradePlannerTest \
   "$SRC/Models.swift" \
   "$SRC/UpgradePolicyStore.swift" \
+  "$SRC/RiskAssessor.swift" \
   "$SRC/UpgradePlanner.swift" \
   "$TESTS/UpgradePlannerTest.swift"
 
