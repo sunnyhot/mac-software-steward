@@ -124,7 +124,10 @@ final class StewardModel: ObservableObject {
         return false
     }
 
-    func scanSoftware() async {
+    func scanSoftware(
+        regularAppNetworkPolicy: RegularAppNetworkPolicy = .declaredSourcesOnly,
+        inboxStore: InboxStore? = nil
+    ) async {
         guard !isScanning else { return }
         isScanning = true
         errorMessage = ""
@@ -134,7 +137,10 @@ final class StewardModel: ObservableObject {
             isScanning = false
         }
 
-        let result = await scanner.scanAll(includeGreedy: includeGreedy) { [weak self] phase in
+        let result = await scanner.scanAll(
+            includeGreedy: includeGreedy,
+            regularAppNetworkPolicy: regularAppNetworkPolicy
+        ) { [weak self] phase in
             Task { @MainActor in
                 self?.scanPhase = phase
             }
@@ -142,6 +148,11 @@ final class StewardModel: ObservableObject {
         scan = result
         prunePackageProgress(keeping: result)
         recomputeDerivedData()
+        if let inboxStore {
+            for item in AppUpdateInboxFactory.items(from: result.applications.items) {
+                inboxStore.add(item)
+            }
+        }
     }
 
     func upgrade(_ package: UpdatablePackage) async {

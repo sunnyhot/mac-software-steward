@@ -5,7 +5,11 @@ final class DelayedScanner: SoftwareScanning {
     private(set) var callCount = 0
     private var continuation: CheckedContinuation<Void, Never>?
 
-    func scanAll(includeGreedy: Bool, onPhaseChange: ((ScanPhase) -> Void)?) async -> ScanResult {
+    func scanAll(
+        includeGreedy: Bool,
+        regularAppNetworkPolicy: RegularAppNetworkPolicy,
+        onPhaseChange: ((ScanPhase) -> Void)?
+    ) async -> ScanResult {
         callCount += 1
         onPhaseChange?(.brewInfo)
         await withCheckedContinuation { continuation in

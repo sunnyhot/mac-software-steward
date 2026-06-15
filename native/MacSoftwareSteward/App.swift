@@ -119,7 +119,10 @@ struct MacSoftwareStewardApp: App {
                     AppAppearanceResolver.apply(currentAppearanceMode)
                     applyDockIconPolicy()
                     if model.scan == nil {
-                        await model.scanSoftware()
+                        await model.scanSoftware(
+                            regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
+                            inboxStore: inboxStore
+                        )
                     }
                     await updater.autoCheckIfNeeded()
                 }
@@ -145,7 +148,12 @@ struct MacSoftwareStewardApp: App {
         .commands {
             CommandGroup(after: .newItem) {
                 Button("扫描软件") {
-                    Task { await model.scanSoftware() }
+                    Task {
+                        await model.scanSoftware(
+                            regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
+                            inboxStore: inboxStore
+                        )
+                    }
                 }
                 .keyboardShortcut("r", modifiers: [.command])
                 .disabled(model.isScanning)

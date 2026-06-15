@@ -52,6 +52,7 @@ struct ContentView: View {
 
 private struct HeaderView: View {
     @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
     @EnvironmentObject private var inboxStore: InboxStore
 
     var body: some View {
@@ -144,7 +145,12 @@ private struct HeaderView: View {
                 isProminent: false,
                 isLoading: model.isScanning
             ) {
-                Task { await model.scanSoftware() }
+                Task {
+                    await model.scanSoftware(
+                        regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
+                        inboxStore: inboxStore
+                    )
+                }
             }
             .disabled(model.isScanning)
 

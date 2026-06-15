@@ -222,7 +222,12 @@ private struct InboxItemRow: View {
         case .openSettings:
             open(tab: .settings)
         case .rescan:
-            Task { await model.scanSoftware() }
+            Task {
+                await model.scanSoftware(
+                    regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
+                    inboxStore: inboxStore
+                )
+            }
         }
     }
 
