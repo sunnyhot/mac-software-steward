@@ -127,6 +127,13 @@ run_test RecoveryInboxFactoryTest \
   "$SRC/RecoveryInboxFactory.swift" \
   "$TESTS/RecoveryInboxFactoryTest.swift"
 
+run_test AutoRepairDeciderTest \
+  "$SRC/Models.swift" \
+  "$SRC/AutomationProfileStore.swift" \
+  "$SRC/RecoveryActionPlanner.swift" \
+  "$SRC/AutoRepairDecider.swift" \
+  "$TESTS/AutoRepairDeciderTest.swift"
+
 run_test SparkleAppcastCheckerTest \
   "$SRC/Models.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
@@ -194,6 +201,7 @@ run_test StewardModelScanGuardTest \
   "$SRC/RegularAppUpdateActionResolver.swift" \
   "$SRC/RecoveryActionPlanner.swift" \
   "$SRC/RecoveryInboxFactory.swift" \
+  "$SRC/AutoRepairDecider.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
   "$SRC/Scanner.swift" \
   "$SRC/SoftwareScanning.swift" \
