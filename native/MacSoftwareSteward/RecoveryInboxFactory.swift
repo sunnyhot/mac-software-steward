@@ -7,7 +7,7 @@ enum RecoveryInboxFactory {
             .filter { !$0.failureSummary.isEmpty || $0.recoveryAction != nil }
             .map { progress in
                 InboxItem(
-                    kind: .failureRecovery,
+                    kind: kind(for: progress),
                     severity: severity(for: progress),
                     title: "\(progress.packageName) 升级失败",
                     summary: summary(for: progress),
@@ -40,6 +40,15 @@ enum RecoveryInboxFactory {
 
     private static func severity(for progress: PackageUpgradeProgress) -> InboxSeverity {
         progress.status == .timedOut ? .warning : .critical
+    }
+
+    private static func kind(for progress: PackageUpgradeProgress) -> InboxItemKind {
+        switch progress.recoveryAction {
+        case .repairPerms:
+            return .permissionIssue
+        default:
+            return .failureRecovery
+        }
     }
 
     private static func summary(for progress: PackageUpgradeProgress) -> String {

@@ -24,6 +24,24 @@ struct RecoveryInboxFactoryTest {
         precondition(items[0].summary.contains("下载的文件校验不通过"))
         precondition(items[0].actions.map(\.kind) == [.retryPackage, .openUpdates, .openJobs])
 
+        let permissionFailure = PackageUpgradeProgress(
+            packageID: "brew:cask:secured-app",
+            packageName: "Secured App",
+            status: .failed,
+            detail: "Permission denied",
+            failureSummary: "没有写入权限，无法完成安装。",
+            recoverySuggestion: "请尝试点击「重试」。如果仍然失败，可在「系统设置 > 隐私与安全性」中检查 Homebrew 的磁盘访问权限。",
+            recoveryAction: .repairPerms,
+            lastFailedCommand: "brew upgrade --cask secured-app"
+        )
+
+        let permissionItems = RecoveryInboxFactory.items(from: [permissionFailure])
+        precondition(permissionItems.count == 1)
+        precondition(permissionItems[0].kind == .permissionIssue)
+        precondition(permissionItems[0].severity == .critical)
+        precondition(permissionItems[0].sourceID == permissionFailure.packageID)
+        precondition(permissionItems[0].actions.map(\.kind) == [.retryPackage, .openUpdates, .openJobs])
+
         let running = PackageUpgradeProgress(
             packageID: "brew:formula:jq",
             packageName: "jq",
