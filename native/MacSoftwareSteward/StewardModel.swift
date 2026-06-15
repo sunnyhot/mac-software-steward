@@ -302,6 +302,20 @@ final class StewardModel: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
+    func open(_ app: AppItem) {
+        let configuration = NSWorkspace.OpenConfiguration()
+        NSWorkspace.shared.openApplication(
+            at: URL(fileURLWithPath: app.path),
+            configuration: configuration
+        ) { _, error in
+            if let error {
+                Task { @MainActor in
+                    self.errorMessage = "打开 \(app.name) 失败：\(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
     func refreshDailyInspectionStatus() {
         let config = DailyInspectionScheduler.currentConfig()
         dailyInspectionEnabled = config.enabled

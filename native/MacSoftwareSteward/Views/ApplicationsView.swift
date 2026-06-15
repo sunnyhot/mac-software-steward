@@ -5,7 +5,7 @@ struct ApplicationsView: View {
 
     var apps: [AppItem] {
         filter(model.scan?.applications.items ?? [], query: model.query) {
-            "\($0.name) \($0.version) \($0.source) \($0.managedBy) \($0.path)"
+            "\($0.name) \($0.version) \($0.source) \($0.managedBy) \($0.path) \($0.updateCapability.detector.title) \($0.updateCapability.summary)"
         }
     }
 
@@ -65,9 +65,21 @@ struct ApplicationRow: View {
                     PackageProgressBadge(progress: progress)
                 } else if app.updateState == "outdated" {
                     Badge(text: "可升级", color: .orange)
+                } else if app.updateState == "checkable" {
+                    Badge(text: "可检查", color: .blue)
                 }
 
                 ManagementBadge(app: app)
+
+                if app.updateCapability.hasManualAction && app.managedBy == "manual" {
+                    Button {
+                        model.open(app)
+                    } label: {
+                        Image(systemName: "play.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("打开应用检查更新")
+                }
 
                 Button {
                     model.reveal(app)
@@ -102,6 +114,11 @@ struct ApplicationRow: View {
             }
             .padding(.leading, 40)
 
+            if app.updateCapability.hasManualAction && app.managedBy == "manual" {
+                AppUpdateCapabilityLine(capability: app.updateCapability)
+                    .padding(.leading, 40)
+            }
+
             if let progress {
                 PackageProgressDetail(progress: progress)
             }
@@ -124,7 +141,35 @@ struct ApplicationRow: View {
     private var rowTint: Color {
         if progress != nil { return Color.accentColor.opacity(0.04) }
         if app.updateState == "outdated" { return Color.orange.opacity(0.03) }
+        if app.updateState == "checkable" { return Color.blue.opacity(0.03) }
         return .clear
+    }
+}
+
+private struct AppUpdateCapabilityLine: View {
+    var capability: AppUpdateCapability
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.down.app")
+                .font(.caption)
+                .foregroundStyle(.blue)
+            Text(capability.detector.title)
+                .font(.caption)
+                .fontWeight(.semibold)
+            Text(capability.summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            if !capability.feedURLString.isEmpty {
+                Text(capability.feedURLString)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer()
+        }
     }
 }
 
