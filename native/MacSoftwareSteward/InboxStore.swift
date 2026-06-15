@@ -35,6 +35,9 @@ enum InboxActionKind: String, Codable, CaseIterable, Identifiable {
     case openJobs
     case openSettings
     case rescan
+    case retryPackage
+    case copyRecoveryCommand
+    case openStorageSettings
 
     var id: String { rawValue }
 }
