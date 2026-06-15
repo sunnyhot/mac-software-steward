@@ -86,6 +86,19 @@ run_test InboxStoreTest \
   "$SRC/InboxStore.swift" \
   "$TESTS/InboxStoreTest.swift"
 
+run_test InspectionReportStoreTest \
+  "$SRC/InspectionReportStore.swift" \
+  "$TESTS/InspectionReportStoreTest.swift"
+
+run_test InspectionReportBuilderTest \
+  "$SRC/Models.swift" \
+  "$SRC/InspectionReportStore.swift" \
+  "$SRC/InspectionReportBuilder.swift" \
+  "$SRC/UpgradePolicyStore.swift" \
+  "$SRC/RiskAssessor.swift" \
+  "$SRC/UpgradePlanner.swift" \
+  "$TESTS/InspectionReportBuilderTest.swift"
+
 run_test RiskAssessorTest \
   "$SRC/Models.swift" \
   "$SRC/RiskAssessor.swift" \
@@ -127,6 +140,7 @@ run_test StewardModelScanGuardTest \
   "$SRC/UpgradePlanner.swift" \
   "$SRC/RiskInboxFactory.swift" \
   "$SRC/DailyUpgradePolicy.swift" \
+  "$SRC/InspectionReportStore.swift" \
   "$SRC/DailyInspectionScheduler.swift" \
   "$SRC/UpgradeHistoryStore.swift" \
   "$SRC/BrewCaskCleanupDetector.swift" \
