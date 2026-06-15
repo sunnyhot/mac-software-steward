@@ -8,6 +8,7 @@ enum InspectionReportBuilder {
         scan: ScanResult,
         rows: [UpgradePlanRow],
         automaticPackages: [UpdatablePackage],
+        inboxItemIDs: [UUID] = [],
         failure: InspectionFailureRecord? = nil
     ) -> InspectionReportRecord {
         let automaticIDs = Set(automaticPackages.map(\.id))
@@ -41,7 +42,7 @@ enum InspectionReportBuilder {
             automaticUpgrades: automaticPackages.map(packageRecord),
             skippedItems: skippedItems,
             failures: failure.map { [$0] } ?? [],
-            inboxItemIDs: []
+            inboxItemIDs: inboxItemIDs
         )
     }
 

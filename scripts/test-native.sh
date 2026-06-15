@@ -110,6 +110,17 @@ run_test AppUpdateInboxFactoryTest \
   "$SRC/AppUpdateInboxFactory.swift" \
   "$TESTS/AppUpdateInboxFactoryTest.swift"
 
+run_test DailyInspectionInboxPublisherTest \
+  "$SRC/Models.swift" \
+  "$SRC/UpgradePolicyStore.swift" \
+  "$SRC/RiskAssessor.swift" \
+  "$SRC/UpgradePlanner.swift" \
+  "$SRC/InboxStore.swift" \
+  "$SRC/RiskInboxFactory.swift" \
+  "$SRC/AppUpdateInboxFactory.swift" \
+  "$SRC/DailyInspectionInboxPublisher.swift" \
+  "$TESTS/DailyInspectionInboxPublisherTest.swift"
+
 run_test InspectionReportStoreTest \
   "$SRC/InspectionReportStore.swift" \
   "$TESTS/InspectionReportStoreTest.swift"
