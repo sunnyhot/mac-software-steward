@@ -50,6 +50,12 @@ run_test AutomationProfileStoreTest \
   "$SRC/AutomationProfileStore.swift" \
   "$TESTS/AutomationProfileStoreTest.swift"
 
+run_test AutomationNotificationDeciderTest \
+  "$SRC/AutomationProfileStore.swift" \
+  "$SRC/InboxStore.swift" \
+  "$SRC/AutomationNotificationDecider.swift" \
+  "$TESTS/AutomationNotificationDeciderTest.swift"
+
 run_test BrewCaskCleanupDetectorTest \
   "$SRC/Models.swift" \
   "$SRC/BrewCaskCleanupDetector.swift" \
@@ -80,6 +86,20 @@ run_test InboxStoreTest \
   "$SRC/InboxStore.swift" \
   "$TESTS/InboxStoreTest.swift"
 
+run_test RiskAssessorTest \
+  "$SRC/Models.swift" \
+  "$SRC/RiskAssessor.swift" \
+  "$TESTS/RiskAssessorTest.swift"
+
+run_test RiskInboxFactoryTest \
+  "$SRC/Models.swift" \
+  "$SRC/InboxStore.swift" \
+  "$SRC/RiskAssessor.swift" \
+  "$SRC/UpgradePolicyStore.swift" \
+  "$SRC/UpgradePlanner.swift" \
+  "$SRC/RiskInboxFactory.swift" \
+  "$TESTS/RiskInboxFactoryTest.swift"
+
 run_test PackageProgressParserTest \
   "$SRC/PackageProgressParser.swift" \
   "$TESTS/PackageProgressParserTest.swift"
@@ -101,9 +121,11 @@ run_test StewardModelScanGuardTest \
   "$SRC/Models.swift" \
   "$SRC/Scanner.swift" \
   "$SRC/SoftwareScanning.swift" \
+  "$SRC/InboxStore.swift" \
   "$SRC/UpgradePolicyStore.swift" \
   "$SRC/RiskAssessor.swift" \
   "$SRC/UpgradePlanner.swift" \
+  "$SRC/RiskInboxFactory.swift" \
   "$SRC/DailyUpgradePolicy.swift" \
   "$SRC/DailyInspectionScheduler.swift" \
   "$SRC/UpgradeHistoryStore.swift" \

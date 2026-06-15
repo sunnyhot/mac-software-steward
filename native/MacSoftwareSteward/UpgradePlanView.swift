@@ -114,6 +114,8 @@ private struct UpgradePlanRowView: View {
 
             Spacer(minLength: 12)
 
+            Badge(text: row.riskLevel.title, color: riskColor(row.riskLevel))
+
             Text(row.policy.title)
                 .font(.caption.bold())
                 .lineLimit(1)
@@ -130,4 +132,12 @@ private struct UpgradePlanRowView: View {
 private func targetVersionText(_ value: String) -> String {
     let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
     return trimmed.isEmpty ? "未知" : trimmed
+}
+
+private func riskColor(_ level: RiskLevel) -> Color {
+    switch level {
+    case .low: return .green
+    case .medium: return .orange
+    case .high: return .red
+    }
 }
