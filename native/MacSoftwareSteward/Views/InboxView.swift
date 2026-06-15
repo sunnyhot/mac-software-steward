@@ -7,6 +7,7 @@ struct InboxView: View {
     @EnvironmentObject private var inboxStore: InboxStore
     @State private var kindFilter: InboxKindFilter = .all
     @State private var severityFilter: InboxSeverityFilter = .all
+    @State private var statusFilter: InboxStatusFilter = .pending
 
     private var pendingItems: [InboxItem] {
         inboxStore.pendingItems
@@ -14,7 +15,16 @@ struct InboxView: View {
 
     private var visibleItems: [InboxItem] {
         guard automationProfile.profile.advancedModeEnabled else { return pendingItems }
-        return InboxFilterPresenter.items(from: pendingItems, kind: kindFilter, severity: severityFilter)
+        return InboxFilterPresenter.items(
+            from: inboxStore.items,
+            kind: kindFilter,
+            severity: severityFilter,
+            status: statusFilter
+        )
+    }
+
+    private var hasAnyVisibleScopeItems: Bool {
+        automationProfile.profile.advancedModeEnabled ? !inboxStore.items.isEmpty : !pendingItems.isEmpty
     }
 
     var body: some View {
@@ -29,11 +39,15 @@ struct InboxView: View {
                 .environmentObject(automationProfile)
                 .environmentObject(inboxStore)
 
-            if automationProfile.profile.advancedModeEnabled && !pendingItems.isEmpty {
-                InboxFilterBar(kindFilter: $kindFilter, severityFilter: $severityFilter)
+            if automationProfile.profile.advancedModeEnabled && !inboxStore.items.isEmpty {
+                InboxFilterBar(
+                    kindFilter: $kindFilter,
+                    severityFilter: $severityFilter,
+                    statusFilter: $statusFilter
+                )
             }
 
-            if pendingItems.isEmpty {
+            if !hasAnyVisibleScopeItems {
                 EmptyStateView(
                     symbol: "checkmark.circle",
                     title: "暂无待处理事项",
@@ -64,11 +78,19 @@ struct InboxView: View {
 private struct InboxFilterBar: View {
     @Binding var kindFilter: InboxKindFilter
     @Binding var severityFilter: InboxSeverityFilter
+    @Binding var statusFilter: InboxStatusFilter
 
     var body: some View {
         HStack(spacing: 10) {
             Picker("类型", selection: $kindFilter) {
                 ForEach(InboxKindFilter.allCases) { filter in
+                    Text(filter.title).tag(filter)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Picker("状态", selection: $statusFilter) {
+                ForEach(InboxStatusFilter.allCases) { filter in
                     Text(filter.title).tag(filter)
                 }
             }
