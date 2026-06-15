@@ -236,14 +236,14 @@ private struct InboxItemRow: View {
                 Spacer()
 
                 Button {
-                    inboxStore.updateStatus(id: item.id, status: .resolved)
+                    mark(status: .resolved)
                 } label: {
                     Label("完成", systemImage: "checkmark.circle")
                 }
                 .buttonStyle(.borderless)
 
                 Button {
-                    inboxStore.updateStatus(id: item.id, status: .ignored)
+                    mark(status: .ignored)
                 } label: {
                     Label("忽略", systemImage: "xmark.circle")
                 }
@@ -306,6 +306,11 @@ private struct InboxItemRow: View {
             automationProfile.setAdvancedMode(true)
         }
         model.selectedTab = tab
+    }
+
+    private func mark(status: InboxStatus) {
+        inboxStore.updateStatus(id: item.id, status: status)
+        model.historyStore.append(InboxHistoryRecorder.record(for: item, status: status))
     }
 }
 
