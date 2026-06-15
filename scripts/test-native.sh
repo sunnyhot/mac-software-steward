@@ -74,6 +74,12 @@ run_test AutomationNotificationDeciderTest \
   "$SRC/AutomationNotificationDecider.swift" \
   "$TESTS/AutomationNotificationDeciderTest.swift"
 
+run_test AutomationIssueInboxFactoryTest \
+  "$SRC/AutomationProfileStore.swift" \
+  "$SRC/InboxStore.swift" \
+  "$SRC/AutomationIssueInboxFactory.swift" \
+  "$TESTS/AutomationIssueInboxFactoryTest.swift"
+
 run_test BrewCaskCleanupDetectorTest \
   "$SRC/Models.swift" \
   "$SRC/BrewCaskCleanupDetector.swift" \
