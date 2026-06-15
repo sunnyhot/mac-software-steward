@@ -11,6 +11,23 @@ struct AutomationNotificationDeciderTest {
             sourceID: "upgrade:node",
             actions: []
         )
+        let appUpdate = InboxItem(
+            kind: .appUpdate,
+            severity: .info,
+            title: "Sparkle 可更新",
+            summary: "需要手动打开更新器。",
+            sourceID: "app:/Applications/Sparkle.app",
+            actions: [
+                InboxAction(title: "查看应用", systemImage: "macwindow", kind: .openApplications)
+            ]
+        )
+
+        let appUpdateDecision = AutomationNotificationDecider.decision(
+            policy: .decisionsAndFailures,
+            newInboxItems: [appUpdate],
+            automaticUpgradeCount: 0
+        )
+        precondition(appUpdateDecision?.title == "有 1 项需要处理")
 
         precondition(AutomationNotificationDecider.decision(policy: .silent, newInboxItems: [warning], automaticUpgradeCount: 2) == nil)
 

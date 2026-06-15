@@ -12,8 +12,8 @@ enum AutomationNotificationDecider {
         newInboxItems: [InboxItem],
         automaticUpgradeCount: Int
     ) -> AutomationNotificationDecision? {
-        let urgentItems = newInboxItems.filter { item in
-            item.status == .pending && (item.severity == .warning || item.severity == .critical)
+        let actionableItems = newInboxItems.filter { item in
+            item.status == .pending && (item.severity != .info || !item.actions.isEmpty)
         }
 
         switch policy {
@@ -21,12 +21,12 @@ enum AutomationNotificationDecider {
             return nil
 
         case .decisionsAndFailures:
-            guard !urgentItems.isEmpty else { return nil }
-            return pendingDecision(count: urgentItems.count)
+            guard !actionableItems.isEmpty else { return nil }
+            return pendingDecision(count: actionableItems.count)
 
         case .everyInspection:
-            if !urgentItems.isEmpty {
-                return pendingDecision(count: urgentItems.count)
+            if !actionableItems.isEmpty {
+                return pendingDecision(count: actionableItems.count)
             }
             return AutomationNotificationDecision(
                 title: "巡检完成",
@@ -35,8 +35,8 @@ enum AutomationNotificationDecider {
             )
 
         case .everyAction:
-            if !urgentItems.isEmpty {
-                return pendingDecision(count: urgentItems.count)
+            if !actionableItems.isEmpty {
+                return pendingDecision(count: actionableItems.count)
             }
             guard automaticUpgradeCount > 0 else { return nil }
             return AutomationNotificationDecision(

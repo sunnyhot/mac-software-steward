@@ -38,8 +38,9 @@ struct InboxStoreTest {
 
         let store = InboxStore(fileURL: url)
         precondition(store.items.isEmpty)
-        store.add(first)
-        store.add(second)
+        precondition(store.add(first) == true)
+        precondition(store.add(second) == true)
+        precondition(store.add(second) == false)
         precondition(store.items.map(\.id) == [secondID, firstID])
         precondition(store.pendingItems.count == 2)
 

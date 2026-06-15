@@ -107,16 +107,24 @@ final class InboxStore: ObservableObject {
         items.filter { $0.status == .pending }
     }
 
-    func add(_ item: InboxItem) {
+    @discardableResult
+    func add(_ item: InboxItem) -> Bool {
+        let replacesExisting: Bool
         if let sourceID = item.sourceID, !sourceID.isEmpty {
+            replacesExisting = items.contains { existing in
+                existing.kind == item.kind && existing.sourceID == sourceID
+            }
             items.removeAll { existing in
                 existing.kind == item.kind && existing.sourceID == sourceID
             }
+        } else {
+            replacesExisting = items.contains { $0.id == item.id }
         }
         items.removeAll { $0.id == item.id }
         items.append(item)
         sortNewestFirst()
         save()
+        return !replacesExisting
     }
 
     func updateStatus(id: UUID, status: InboxStatus) {
