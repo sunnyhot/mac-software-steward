@@ -43,7 +43,7 @@ final class StewardModel: ObservableObject {
 
     private let scanner: SoftwareScanning
     private var activeJobCount = 0
-    private var pendingJobQueue: [(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool, inboxStore: InboxStore?)] = []
+    private var pendingJobQueue: [(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool, inboxStore: InboxStore?, autoRepairProfile: AutomationProfile?)] = []
     private var debounceTask: Task<Void, Never>?
     private var activeCancellationTokens: [UUID: CommandCancellationToken] = [:]
     private var downloadMonitorTasks: [String: Task<Void, Never>] = [:]
@@ -156,14 +156,18 @@ final class StewardModel: ObservableObject {
         }
     }
 
-    func upgrade(_ package: UpdatablePackage, inboxStore: InboxStore? = nil) async {
+    func upgrade(
+        _ package: UpdatablePackage,
+        inboxStore: InboxStore? = nil,
+        autoRepairProfile: AutomationProfile? = nil
+    ) async {
         guard !isConfirmingUpgradePlan, !isPackageActive(package.id) else { return }
         do {
             let command = try await command(for: package)
             guard !isConfirmingUpgradePlan, !isPackageActive(package.id) else { return }
             enqueueJob(label: "升级 \(package.name)", steps: [
                 UpgradeStep(command: command, packageID: package.id, packageName: package.name)
-            ], rescanAfterSuccess: true, inboxStore: inboxStore)
+            ], rescanAfterSuccess: true, inboxStore: inboxStore, autoRepairProfile: autoRepairProfile)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -265,7 +269,7 @@ final class StewardModel: ObservableObject {
         }
     }
 
-    func confirmUpgradePlan(inboxStore: InboxStore? = nil) async {
+    func confirmUpgradePlan(inboxStore: InboxStore? = nil, autoRepairProfile: AutomationProfile? = nil) async {
         guard !isConfirmingUpgradePlan else { return }
         let selectedRows = upgradePlanRows.filter { row in
             guard selectedPlanIDs.contains(row.packageID), row.canExecute, let package = row.package else {
@@ -280,7 +284,7 @@ final class StewardModel: ObservableObject {
         }
         isConfirmingUpgradePlan = true
         defer { isConfirmingUpgradePlan = false }
-        await upgradeSelectedPlanRows(selectedRows, inboxStore: inboxStore)
+        await upgradeSelectedPlanRows(selectedRows, inboxStore: inboxStore, autoRepairProfile: autoRepairProfile)
         showingUpgradePlan = false
     }
 
@@ -288,7 +292,11 @@ final class StewardModel: ObservableObject {
         prepareUpgradePlan()
     }
 
-    private func upgradeSelectedPlanRows(_ rows: [UpgradePlanRow], inboxStore: InboxStore? = nil) async {
+    private func upgradeSelectedPlanRows(
+        _ rows: [UpgradePlanRow],
+        inboxStore: InboxStore? = nil,
+        autoRepairProfile: AutomationProfile? = nil
+    ) async {
         do {
             var steps: [UpgradeStep] = []
 
@@ -322,7 +330,13 @@ final class StewardModel: ObservableObject {
             }
 
             steps.append(contentsOf: packageSteps)
-            enqueueJob(label: "一键升级可管理软件", steps: steps, rescanAfterSuccess: true, inboxStore: inboxStore)
+            enqueueJob(
+                label: "一键升级可管理软件",
+                steps: steps,
+                rescanAfterSuccess: true,
+                inboxStore: inboxStore,
+                autoRepairProfile: autoRepairProfile
+            )
             selectedTab = .updates
         } catch {
             errorMessage = error.localizedDescription
@@ -457,12 +471,30 @@ final class StewardModel: ObservableObject {
         }
     }
 
-    private func startJob(label: String, commands: [UpgradeCommand], rescanAfterSuccess: Bool = false, inboxStore: InboxStore? = nil) {
+    private func startJob(
+        label: String,
+        commands: [UpgradeCommand],
+        rescanAfterSuccess: Bool = false,
+        inboxStore: InboxStore? = nil,
+        autoRepairProfile: AutomationProfile? = nil
+    ) {
         let steps = commands.map { UpgradeStep(command: $0, packageID: nil, packageName: nil) }
-        startJob(label: label, steps: steps, rescanAfterSuccess: rescanAfterSuccess, inboxStore: inboxStore)
+        startJob(
+            label: label,
+            steps: steps,
+            rescanAfterSuccess: rescanAfterSuccess,
+            inboxStore: inboxStore,
+            autoRepairProfile: autoRepairProfile
+        )
     }
 
-    private func startJob(label: String, steps: [UpgradeStep], rescanAfterSuccess: Bool = false, inboxStore: InboxStore? = nil) {
+    private func startJob(
+        label: String,
+        steps: [UpgradeStep],
+        rescanAfterSuccess: Bool = false,
+        inboxStore: InboxStore? = nil,
+        autoRepairProfile: AutomationProfile? = nil
+    ) {
         let job = UpgradeJob(label: label, commands: steps.map(\.command.display))
         jobs.insert(job, at: 0)
         let id = job.id
@@ -479,23 +511,47 @@ final class StewardModel: ObservableObject {
         )
 
         Task {
-            await runJob(id: id, steps: steps, rescanAfterSuccess: rescanAfterSuccess, inboxStore: inboxStore)
+            await runJob(
+                id: id,
+                steps: steps,
+                rescanAfterSuccess: rescanAfterSuccess,
+                inboxStore: inboxStore,
+                autoRepairProfile: autoRepairProfile
+            )
             activeJobCount -= 1
             scheduleRescanAfterJobCompletion(rescanAfterSuccess: rescanAfterSuccess, inboxStore: inboxStore)
             dequeueNext()
         }
     }
 
-    private func enqueueJob(label: String, steps: [UpgradeStep], rescanAfterSuccess: Bool = false, inboxStore: InboxStore? = nil) {
+    private func enqueueJob(
+        label: String,
+        steps: [UpgradeStep],
+        rescanAfterSuccess: Bool = false,
+        inboxStore: InboxStore? = nil,
+        autoRepairProfile: AutomationProfile? = nil
+    ) {
         let maxSlots = maxConcurrentUpgrades <= 0 ? Int.max : maxConcurrentUpgrades
         if activeJobCount < maxSlots {
-            startJob(label: label, steps: steps, rescanAfterSuccess: rescanAfterSuccess, inboxStore: inboxStore)
+            startJob(
+                label: label,
+                steps: steps,
+                rescanAfterSuccess: rescanAfterSuccess,
+                inboxStore: inboxStore,
+                autoRepairProfile: autoRepairProfile
+            )
         } else {
             let job = UpgradeJob(label: label, commands: steps.map(\.command.display))
             jobs.insert(job, at: 0)
             markQueued(steps)
             recomputeDerivedData()
-            pendingJobQueue.append((id: job.id, steps: steps, rescanAfterSuccess: rescanAfterSuccess, inboxStore: inboxStore))
+            pendingJobQueue.append((
+                id: job.id,
+                steps: steps,
+                rescanAfterSuccess: rescanAfterSuccess,
+                inboxStore: inboxStore,
+                autoRepairProfile: autoRepairProfile
+            ))
         }
     }
 
@@ -507,7 +563,13 @@ final class StewardModel: ObservableObject {
         // Update the queued job's steps — markQueued was already called
         activeJobCount += 1
         Task {
-            await runJob(id: next.id, steps: next.steps, rescanAfterSuccess: next.rescanAfterSuccess, inboxStore: next.inboxStore)
+            await runJob(
+                id: next.id,
+                steps: next.steps,
+                rescanAfterSuccess: next.rescanAfterSuccess,
+                inboxStore: next.inboxStore,
+                autoRepairProfile: next.autoRepairProfile
+            )
             activeJobCount -= 1
             scheduleRescanAfterJobCompletion(rescanAfterSuccess: next.rescanAfterSuccess, inboxStore: next.inboxStore)
             dequeueNext()
@@ -519,7 +581,13 @@ final class StewardModel: ObservableObject {
         Task { await scanSoftware(inboxStore: inboxStore) }
     }
 
-    private func runJob(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool, inboxStore: InboxStore?) async {
+    private func runJob(
+        id: UUID,
+        steps: [UpgradeStep],
+        rescanAfterSuccess: Bool,
+        inboxStore: InboxStore?,
+        autoRepairProfile: AutomationProfile?
+    ) async {
         updateJob(id) {
             $0.status = .running
             $0.startedAt = Date()
@@ -591,8 +659,22 @@ final class StewardModel: ObservableObject {
             ))
         }
 
+        let failedPackageIDs = Set(packageSteps.compactMap(\.packageID))
+        let automaticallyRepairedPackageIDs: Set<String>
+        if let autoRepairProfile {
+            automaticallyRepairedPackageIDs = await performAutomaticRepairIfAllowed(
+                profile: autoRepairProfile,
+                inboxStore: inboxStore,
+                packageIDs: failedPackageIDs
+            )
+        } else {
+            automaticallyRepairedPackageIDs = []
+        }
         if let inboxStore {
-            publishFailureRecoveryItems(to: inboxStore, packageIDs: Set(packageSteps.compactMap(\.packageID)))
+            publishFailureRecoveryItems(
+                to: inboxStore,
+                packageIDs: failedPackageIDs.subtracting(automaticallyRepairedPackageIDs)
+            )
         }
 
         upgradeProgress = nil

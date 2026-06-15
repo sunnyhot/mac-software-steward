@@ -124,6 +124,7 @@ struct UpdatesView: View {
 struct UpdateRow: View {
     @EnvironmentObject private var model: StewardModel
     @EnvironmentObject private var inboxStore: InboxStore
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
     var package: UpdatablePackage
 
     @State private var isHovered = false
@@ -241,7 +242,13 @@ struct UpdateRow: View {
             .disabled(packageActionDisabled)
         } else {
             Button {
-                Task { await model.upgrade(package, inboxStore: inboxStore) }
+                Task {
+                    await model.upgrade(
+                        package,
+                        inboxStore: inboxStore,
+                        autoRepairProfile: automationProfile.profile
+                    )
+                }
             } label: {
                 Label("升级", systemImage: "play")
             }
