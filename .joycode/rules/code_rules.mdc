@@ -1,0 +1,59 @@
+---
+description: Mac Software Steward coding and verification rules
+globs:
+  - "**/*.swift"
+  - "scripts/*.sh"
+  - "package.json"
+alwaysApply: true
+---
+
+# Code Rules
+
+## General Style
+
+- Keep production code in Swift unless the existing script or release workflow is shell-based.
+- Use English identifiers and Chinese user-facing UI text, matching the current codebase.
+- Prefer focused pure helpers and small stores over adding more responsibility to `StewardModel.swift`.
+- Prefer existing models, stores, presenters, factories, and policy helpers over introducing new framework layers.
+- Add comments only for non-obvious behavior, edge cases, or operational constraints.
+
+## SwiftUI And State
+
+- Keep UI state changes on the main actor through existing `@MainActor` models and `ObservableObject` stores.
+- Use native SwiftUI controls and existing settings/page row styles before creating custom controls.
+- For icon-bearing buttons and labels, use SF Symbols through `Image(systemName:)` / `Label` consistently.
+- Default mode should stay simple; advanced controls belong behind the existing advanced mode/profile patterns.
+
+## Scanning And Upgrading
+
+- Do not claim universal automatic upgrades for ordinary `.app` bundles. Use existing manual App update capability and Inbox patterns.
+- Respect package upgrade policy, risk assessment, and automation decision helpers before executing automatic work.
+- Keep failure recovery and auto-repair allowlisted and low-risk.
+- Do not run destructive shell commands, package upgrades, or LaunchAgent mutations from tests.
+
+## Persistence
+
+- JSON stores should follow existing patterns: focused model types, deterministic sorting where user-facing, `JSONEncoder` pretty-printed/sorted keys when already established, and atomic writes.
+- When replacing or importing local stores, preserve the explicit replace APIs and avoid ad hoc file edits.
+- Deduplicate Inbox items through `InboxStore.add(_:)` with stable `kind` + `sourceID` where possible.
+
+## Tests
+
+- Add or update a standalone Swift test in `tests/` for new pure logic, presenters, stores, factories, policy decisions, parsers, and regressions.
+- Add new tests to `scripts/test-native.sh` with only the source files they need.
+- Prefer deterministic tests with temporary files under `FileManager.default.temporaryDirectory`.
+- Avoid sleeps, live network calls, package managers, LaunchAgent writes, and real app bundle mutation in tests.
+- Run `npm test` after code changes that affect Swift logic.
+- Run `npm run build` after SwiftUI, app entry, helper agent, build script, or cross-target dependency changes.
+- After `npm run build`, restore generated AppIcon PNGs unless icon changes are intentional:
+
+```bash
+git restore native/Resources/AppIcon.iconset/*.png
+```
+
+## Git Hygiene
+
+- Do not stage or commit `build/`, `release/`, `code-risk-scanner/`, or local report artifacts.
+- Keep unrelated local user changes intact.
+- Stage explicit paths for commits.
+- If `code-risk-scanner/` appears locally, treat it as a local analysis artifact and leave it ignored unless the user explicitly asks to publish that report.

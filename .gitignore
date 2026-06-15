@@ -2,3 +2,6 @@ node_modules/
 build/
 release/
 .DS_Store
+
+# Local code-risk scanner reports are analysis artifacts, not product source.
+code-risk-scanner/
