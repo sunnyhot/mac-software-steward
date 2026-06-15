@@ -20,7 +20,11 @@ enum SoftwareScanner {
         var error: String
     }
 
-    static func scanAll(includeGreedy: Bool, onPhaseChange: ((ScanPhase) -> Void)? = nil) async -> ScanResult {
+    static func scanAll(
+        includeGreedy: Bool,
+        regularAppNetworkPolicy: RegularAppNetworkPolicy = .declaredSourcesOnly,
+        onPhaseChange: ((ScanPhase) -> Void)? = nil
+    ) async -> ScanResult {
         let started = Date()
 
         onPhaseChange?(.systemProfiler)
@@ -36,6 +40,10 @@ enum SoftwareScanner {
 
         onPhaseChange?(.classifying)
         applications.items = classify(applications.items, brew: brew, mas: mas)
+        applications.items = await enrichRegularAppUpdates(
+            applications.items,
+            networkPolicy: regularAppNetworkPolicy
+        )
 
         let summary = ScanSummary(
             applications: applications.items.count,
@@ -478,6 +486,40 @@ enum SoftwareScanner {
 
     static func classifyForTesting(_ apps: [AppItem], brew: BrewScan, mas: MasScan) -> [AppItem] {
         classify(apps, brew: brew, mas: mas)
+    }
+
+    typealias SparkleChecker = (String, String) async -> SparkleAppcastCheckResult
+
+    static func enrichRegularAppUpdates(
+        _ apps: [AppItem],
+        networkPolicy: RegularAppNetworkPolicy,
+        sparkleChecker: SparkleChecker = SparkleAppcastChecker.check
+    ) async -> [AppItem] {
+        guard networkPolicy != .localOnly else { return apps }
+
+        var enriched: [AppItem] = []
+        for app in apps {
+            var next = app
+            guard next.managedBy == "manual",
+                  next.updateCapability.detector == .sparkle,
+                  !next.updateCapability.feedURLString.isEmpty else {
+                enriched.append(next)
+                continue
+            }
+
+            let installedVersion = next.updateCapability.installedVersion.isEmpty
+                ? next.version
+                : next.updateCapability.installedVersion
+            let result = await sparkleChecker(next.updateCapability.feedURLString, installedVersion)
+            next.updateCapability.diagnostic = result.diagnostic
+            if !result.availableVersion.isEmpty {
+                next.availableVersion = result.availableVersion
+                next.updateState = "outdated"
+                next.updateCapability.summary = "Sparkle 发现新版本 \(result.availableVersion)"
+            }
+            enriched.append(next)
+        }
+        return enriched
     }
 
     private static func classify(_ apps: [AppItem], brew: BrewScan, mas: MasScan) -> [AppItem] {

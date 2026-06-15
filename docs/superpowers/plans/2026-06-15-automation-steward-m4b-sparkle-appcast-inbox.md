@@ -282,6 +282,7 @@ SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
 xcrun swiftc -target arm64-apple-macosx14.0 -sdk "$SDK_PATH" \
   native/MacSoftwareSteward/CommandRunner.swift \
   native/MacSoftwareSteward/Models.swift \
+  native/MacSoftwareSteward/AutomationProfileStore.swift \
   native/MacSoftwareSteward/RegularAppUpdateDiscovery.swift \
   native/MacSoftwareSteward/SparkleAppcastChecker.swift \
   native/MacSoftwareSteward/Scanner.swift \
@@ -355,6 +356,7 @@ SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
 xcrun swiftc -target arm64-apple-macosx14.0 -sdk "$SDK_PATH" \
   native/MacSoftwareSteward/CommandRunner.swift \
   native/MacSoftwareSteward/Models.swift \
+  native/MacSoftwareSteward/AutomationProfileStore.swift \
   native/MacSoftwareSteward/RegularAppUpdateDiscovery.swift \
   native/MacSoftwareSteward/SparkleAppcastChecker.swift \
   native/MacSoftwareSteward/Scanner.swift \
@@ -652,6 +654,7 @@ run_test SparkleAppcastCheckerTest \
 run_test ScannerSparkleAppcastPolicyTest \
   "$SRC/CommandRunner.swift" \
   "$SRC/Models.swift" \
+  "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
   "$SRC/Scanner.swift" \
@@ -664,7 +667,7 @@ run_test AppUpdateInboxFactoryTest \
   "$TESTS/AppUpdateInboxFactoryTest.swift"
 ```
 
-Also add `"$SRC/SparkleAppcastChecker.swift"` to tests that compile `Scanner.swift`, and add `"$SRC/AppUpdateInboxFactory.swift"` to `StewardModelScanGuardTest`.
+Also add `"$SRC/AutomationProfileStore.swift"` and `"$SRC/SparkleAppcastChecker.swift"` to tests that compile `Scanner.swift`, and add `"$SRC/AppUpdateInboxFactory.swift"` to `StewardModelScanGuardTest`.
 
 - [ ] **Step 3: Run full tests**
 
