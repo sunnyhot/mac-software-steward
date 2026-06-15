@@ -346,6 +346,8 @@ private struct MainPanel: View {
                     ApplicationsView()
                 case .sources:
                     SourcesView()
+                case .rules:
+                    RulesView()
                 case .history:
                     HistoryView()
                 case .settings:
