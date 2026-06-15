@@ -119,6 +119,8 @@ struct MacSoftwareStewardApp: App {
                 .task {
                     AppAppearanceResolver.apply(currentAppearanceMode)
                     applyDockIconPolicy()
+                    model.refreshDailyInspectionStatus()
+                    publishAutomationIssues()
                     if model.scan == nil {
                         await model.scanSoftware(
                             regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
@@ -139,8 +141,7 @@ struct MacSoftwareStewardApp: App {
                 }
                 .onChange(of: scenePhase) {
                     guard scenePhase == .active else { return }
-                    inboxStore.reload()
-                    model.inspectionReportStore.reload()
+                    refreshForegroundStores()
                 }
         }
         .windowStyle(.titleBar)
@@ -204,6 +205,21 @@ struct MacSoftwareStewardApp: App {
 
     private var currentAppearanceMode: AppearanceMode {
         AppearanceMode(rawValue: appearanceMode) ?? .system
+    }
+
+    private func refreshForegroundStores() {
+        inboxStore.reload()
+        model.inspectionReportStore.reload()
+        model.refreshDailyInspectionStatus()
+        publishAutomationIssues()
+    }
+
+    private func publishAutomationIssues() {
+        AutomationIssueInboxPublisher.publishDailyInspectionIssue(
+            profile: automationProfile.profile,
+            dailyInspectionEnabled: model.dailyInspectionEnabled,
+            to: inboxStore
+        )
     }
 
     private func applyDockIconPolicy() {
