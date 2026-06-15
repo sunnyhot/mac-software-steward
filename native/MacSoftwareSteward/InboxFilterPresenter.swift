@@ -70,14 +70,48 @@ enum InboxSeverityFilter: String, CaseIterable, Identifiable {
     }
 }
 
+enum InboxStatusFilter: String, CaseIterable, Identifiable {
+    case pending
+    case resolved
+    case ignored
+    case all
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .pending: return "待处理"
+        case .resolved: return "已完成"
+        case .ignored: return "已忽略"
+        case .all: return "全部"
+        }
+    }
+
+    func matches(_ status: InboxStatus) -> Bool {
+        switch self {
+        case .pending:
+            return status == .pending
+        case .resolved:
+            return status == .resolved
+        case .ignored:
+            return status == .ignored
+        case .all:
+            return true
+        }
+    }
+}
+
 enum InboxFilterPresenter {
     static func items(
         from items: [InboxItem],
         kind: InboxKindFilter,
-        severity: InboxSeverityFilter
+        severity: InboxSeverityFilter,
+        status: InboxStatusFilter = .all
     ) -> [InboxItem] {
         items.filter { item in
-            kind.matches(item.kind) && severity.matches(item.severity)
+            kind.matches(item.kind)
+                && severity.matches(item.severity)
+                && status.matches(item.status)
         }
     }
 }
