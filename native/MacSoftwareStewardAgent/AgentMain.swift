@@ -12,7 +12,8 @@ struct MacSoftwareStewardAgent {
         let autoUpgrade = arguments.contains("--auto-upgrade")
         let includeGreedy = arguments.contains("--greedy")
         let runBrewUpdate = arguments.contains("--brew-update")
-        let startedAt = ISO8601DateFormatter().string(from: Date())
+        let startedAtDate = Date()
+        let startedAt = ISO8601DateFormatter().string(from: startedAtDate)
 
         print("[system] \(startedAt) 每日巡检开始")
         let scan = await SoftwareScanner.scanAll(includeGreedy: includeGreedy)
@@ -21,6 +22,21 @@ struct MacSoftwareStewardAgent {
         let policyStore = UpgradePolicyStore()
         let rows = UpgradePlanner.makePlan(scan: scan, policyStore: policyStore, includeGreedy: includeGreedy)
         let automaticPackages = DailyUpgradePolicy.automaticPackages(from: rows)
+        func writeReportAndExit(_ exitCode: Int32, failure: InspectionFailureRecord? = nil) -> Never {
+            InspectionReportStore().append(
+                InspectionReportBuilder.makeReport(
+                    trigger: .dailyAgent,
+                    startedAt: startedAtDate,
+                    finishedAt: Date(),
+                    scan: scan,
+                    rows: rows,
+                    automaticPackages: automaticPackages,
+                    failure: failure
+                )
+            )
+            Foundation.exit(exitCode)
+        }
+
         let formulaUpdates = automaticPackages.compactMap { package -> BrewPackage? in
             if case .brew(let brew) = package, brew.kind == "formula" { return brew }
             return nil
@@ -41,7 +57,7 @@ struct MacSoftwareStewardAgent {
 
         guard !formulaUpdates.isEmpty || !caskUpdates.isEmpty || !masUpdates.isEmpty else {
             print("[system] 未发现可自动升级的软件")
-            Foundation.exit(0)
+            writeReportAndExit(0)
         }
 
         print("[updates] formula: \(formulaUpdates.map(\.name).joined(separator: ", "))")
@@ -50,7 +66,7 @@ struct MacSoftwareStewardAgent {
 
         guard autoUpgrade else {
             print("[system] 已禁用自动升级，仅完成巡检")
-            Foundation.exit(0)
+            writeReportAndExit(0)
         }
 
         var commands: [(String, [String], String)] = []
@@ -58,7 +74,14 @@ struct MacSoftwareStewardAgent {
         if !formulaUpdates.isEmpty || !caskUpdates.isEmpty {
             guard let brew = await CommandRunner.commandPath("brew") else {
                 print("[error] 发现 Homebrew 更新，但找不到 brew")
-                Foundation.exit(1)
+                writeReportAndExit(
+                    1,
+                    failure: InspectionFailureRecord(
+                        message: "发现 Homebrew 更新，但找不到 brew",
+                        commandDisplay: "brew",
+                        exitCode: 1
+                    )
+                )
             }
             if runBrewUpdate {
                 commands.append((brew, ["update"], "brew update"))
@@ -91,11 +114,18 @@ struct MacSoftwareStewardAgent {
             }
             if code != 0 {
                 print("[error] 命令失败：\(command.2)，退出码 \(code)")
-                Foundation.exit(Int32(code))
+                writeReportAndExit(
+                    code,
+                    failure: InspectionFailureRecord(
+                        message: "命令失败",
+                        commandDisplay: command.2,
+                        exitCode: code
+                    )
+                )
             }
         }
 
         print("[system] 每日巡检自动升级完成")
-        Foundation.exit(0)
+        writeReportAndExit(0)
     }
 }
