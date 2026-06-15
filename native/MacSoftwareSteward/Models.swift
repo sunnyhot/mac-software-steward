@@ -114,12 +114,25 @@ enum DetectionConfidence: String, Codable, Hashable {
     case high
 }
 
+enum AppUpdateActionKind: String, Codable, Hashable {
+    case openApp
+    case openUpdater
+    case revealInFinder
+}
+
+struct AppUpdateAction: Codable, Hashable {
+    var kind: AppUpdateActionKind
+    var title: String
+    var systemImage: String
+}
+
 struct AppUpdateCapability: Codable, Hashable {
     var detector: AppUpdateDetectorKind
     var confidence: DetectionConfidence
     var feedURLString: String
     var installedVersion: String
     var summary: String
+    var actions: [AppUpdateAction] = []
     var diagnostic: String
 
     static let none = AppUpdateCapability(
@@ -128,6 +141,7 @@ struct AppUpdateCapability: Codable, Hashable {
         feedURLString: "",
         installedVersion: "",
         summary: "",
+        actions: [],
         diagnostic: ""
     )
 

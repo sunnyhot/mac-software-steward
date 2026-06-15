@@ -27,6 +27,7 @@ enum RegularAppUpdateDiscovery {
                 feedURLString: feedURL,
                 installedVersion: version,
                 summary: "可通过 Sparkle 检查更新",
+                actions: actions(for: .sparkle),
                 diagnostic: "Info.plist 声明了 Sparkle appcast。"
             )
         }
@@ -50,6 +51,7 @@ enum RegularAppUpdateDiscovery {
                 feedURLString: "",
                 installedVersion: version,
                 summary: "检测到内置更新相关配置",
+                actions: actions(for: .unknownUpdater),
                 diagnostic: "Info.plist 中存在 update/appcast 相关键。"
             )
         }
@@ -68,8 +70,27 @@ enum RegularAppUpdateDiscovery {
             feedURLString: "",
             installedVersion: version,
             summary: summary,
+            actions: actions(for: detector),
             diagnostic: "根据 bundle identifier 识别为 \(detector.title) 更新家族。"
         )
+    }
+
+    private static func actions(for detector: AppUpdateDetectorKind) -> [AppUpdateAction] {
+        switch detector {
+        case .adobeUpdater, .jetBrainsToolbox, .microsoftAutoUpdate:
+            return [
+                AppUpdateAction(kind: .openUpdater, title: "打开更新器", systemImage: "arrow.down.app"),
+                AppUpdateAction(kind: .openApp, title: "打开应用", systemImage: "play.circle"),
+                AppUpdateAction(kind: .revealInFinder, title: "Finder", systemImage: "arrow.up.forward.app")
+            ]
+        case .sparkle, .chromeKeystone, .unknownUpdater:
+            return [
+                AppUpdateAction(kind: .openApp, title: "打开应用", systemImage: "play.circle"),
+                AppUpdateAction(kind: .revealInFinder, title: "Finder", systemImage: "arrow.up.forward.app")
+            ]
+        case .none:
+            return []
+        }
     }
 
     private static func sparkleFeedURL(from plist: [String: Any]) -> String? {

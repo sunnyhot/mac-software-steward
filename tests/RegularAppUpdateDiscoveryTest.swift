@@ -21,6 +21,7 @@ struct RegularAppUpdateDiscoveryTest {
         precondition(sparkleCapability.confidence == .high)
         precondition(sparkleCapability.feedURLString == "https://example.com/appcast.xml")
         precondition(sparkleCapability.installedVersion == "1.2.3")
+        precondition(sparkleCapability.actions.map(\.kind) == [.openApp, .revealInFinder])
 
         let chrome = try makeApp(
             root: root,
@@ -30,7 +31,9 @@ struct RegularAppUpdateDiscoveryTest {
                 "CFBundleShortVersionString": "120.0"
             ]
         )
-        precondition(RegularAppUpdateDiscovery.discover(appPath: chrome.path).detector == .chromeKeystone)
+        let chromeCapability = RegularAppUpdateDiscovery.discover(appPath: chrome.path)
+        precondition(chromeCapability.detector == .chromeKeystone)
+        precondition(chromeCapability.actions.map(\.kind) == [.openApp, .revealInFinder])
 
         let microsoft = try makeApp(
             root: root,
@@ -40,7 +43,9 @@ struct RegularAppUpdateDiscoveryTest {
                 "CFBundleShortVersionString": "16.0"
             ]
         )
-        precondition(RegularAppUpdateDiscovery.discover(appPath: microsoft.path).detector == .microsoftAutoUpdate)
+        let microsoftCapability = RegularAppUpdateDiscovery.discover(appPath: microsoft.path)
+        precondition(microsoftCapability.detector == .microsoftAutoUpdate)
+        precondition(microsoftCapability.actions.map(\.kind) == [.openUpdater, .openApp, .revealInFinder])
 
         let unknown = try makeApp(
             root: root,
