@@ -50,6 +50,11 @@ run_test AutomationProfileStoreTest \
   "$SRC/AutomationProfileStore.swift" \
   "$TESTS/AutomationProfileStoreTest.swift"
 
+run_test AutomationMaintenanceAccessTest \
+  "$SRC/AutomationProfileStore.swift" \
+  "$SRC/AutomationMaintenanceAccess.swift" \
+  "$TESTS/AutomationMaintenanceAccessTest.swift"
+
 run_test AutomationDataBundleTest \
   "$SRC/Models.swift" \
   "$SRC/AutomationProfileStore.swift" \
