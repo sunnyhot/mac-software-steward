@@ -127,6 +127,12 @@ run_test AppUpdateInboxFactoryTest \
   "$SRC/AppUpdateInboxFactory.swift" \
   "$TESTS/AppUpdateInboxFactoryTest.swift"
 
+run_test AppDiagnosticsPresenterTest \
+  "$SRC/Models.swift" \
+  "$SRC/InboxStore.swift" \
+  "$SRC/AppDiagnosticsPresenter.swift" \
+  "$TESTS/AppDiagnosticsPresenterTest.swift"
+
 run_test SourceIssueInboxFactoryTest \
   "$SRC/Models.swift" \
   "$SRC/InboxStore.swift" \

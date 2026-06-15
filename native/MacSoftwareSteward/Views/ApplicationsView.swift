@@ -36,6 +36,7 @@ struct ApplicationsView: View {
 
 struct ApplicationRow: View {
     @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
     var app: AppItem
 
     @State private var isHovered = false
@@ -121,6 +122,12 @@ struct ApplicationRow: View {
                     .padding(.leading, 40)
             }
 
+            if automationProfile.profile.advancedModeEnabled,
+               let diagnostic = AppDiagnosticsPresenter.row(from: app) {
+                AppDiagnosticDetail(row: diagnostic)
+                    .padding(.leading, 40)
+            }
+
             if let progress {
                 PackageProgressDetail(progress: progress)
             }
@@ -145,6 +152,64 @@ struct ApplicationRow: View {
         if app.updateState == "outdated" { return Color.orange.opacity(0.03) }
         if app.updateState == "checkable" { return Color.blue.opacity(0.03) }
         return .clear
+    }
+}
+
+private struct AppDiagnosticDetail: View {
+    var row: AppDiagnosticRow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Divider()
+                .opacity(0.35)
+
+            HStack(spacing: 6) {
+                Image(systemName: "stethoscope")
+                    .font(.caption)
+                    .foregroundStyle(diagnosticColor(row.severity))
+                Text("诊断详情")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                Badge(text: row.detectorTitle, color: .blue)
+                Badge(text: row.stateTitle, color: diagnosticColor(row.severity))
+                Spacer(minLength: 0)
+            }
+
+            Text(row.summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+
+            if !row.feedURLString.isEmpty {
+                HStack(spacing: 6) {
+                    Text("Feed")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.secondary)
+                    Text(row.feedURLString)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+
+            Text(row.diagnostic)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .lineLimit(3)
+        }
+    }
+}
+
+private func diagnosticColor(_ severity: InboxSeverity) -> Color {
+    switch severity {
+    case .critical:
+        return .red
+    case .warning:
+        return .orange
+    case .info:
+        return .blue
     }
 }
 
