@@ -5,9 +5,16 @@ struct InboxView: View {
     @EnvironmentObject private var model: StewardModel
     @EnvironmentObject private var automationProfile: AutomationProfileStore
     @EnvironmentObject private var inboxStore: InboxStore
+    @State private var kindFilter: InboxKindFilter = .all
+    @State private var severityFilter: InboxSeverityFilter = .all
 
     private var pendingItems: [InboxItem] {
         inboxStore.pendingItems
+    }
+
+    private var visibleItems: [InboxItem] {
+        guard automationProfile.profile.advancedModeEnabled else { return pendingItems }
+        return InboxFilterPresenter.items(from: pendingItems, kind: kindFilter, severity: severityFilter)
     }
 
     var body: some View {
@@ -22,16 +29,26 @@ struct InboxView: View {
                 .environmentObject(automationProfile)
                 .environmentObject(inboxStore)
 
+            if automationProfile.profile.advancedModeEnabled && !pendingItems.isEmpty {
+                InboxFilterBar(kindFilter: $kindFilter, severityFilter: $severityFilter)
+            }
+
             if pendingItems.isEmpty {
                 EmptyStateView(
                     symbol: "checkmark.circle",
                     title: "暂无待处理事项",
                     text: "需要确认的升级、失败恢复和来源异常会出现在这里。"
                 )
+            } else if visibleItems.isEmpty {
+                EmptyStateView(
+                    symbol: "line.3.horizontal.decrease.circle",
+                    title: "当前筛选暂无事项",
+                    text: "调整类型或严重级别筛选后再查看。"
+                )
             } else {
                 ScrollView {
                     LazyVStack(spacing: 8) {
-                        ForEach(pendingItems) { item in
+                        ForEach(visibleItems) { item in
                             InboxItemRow(item: item)
                                 .environmentObject(model)
                                 .environmentObject(automationProfile)
@@ -41,6 +58,37 @@ struct InboxView: View {
                 }
             }
         }
+    }
+}
+
+private struct InboxFilterBar: View {
+    @Binding var kindFilter: InboxKindFilter
+    @Binding var severityFilter: InboxSeverityFilter
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Picker("类型", selection: $kindFilter) {
+                ForEach(InboxKindFilter.allCases) { filter in
+                    Text(filter.title).tag(filter)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Picker("严重级别", selection: $severityFilter) {
+                ForEach(InboxSeverityFilter.allCases) { filter in
+                    Text(filter.title).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
     }
 }
 
