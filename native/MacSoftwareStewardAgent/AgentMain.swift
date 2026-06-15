@@ -22,6 +22,9 @@ struct MacSoftwareStewardAgent {
         let policyStore = UpgradePolicyStore()
         let rows = UpgradePlanner.makePlan(scan: scan, policyStore: policyStore, includeGreedy: includeGreedy)
         let automaticPackages = DailyUpgradePolicy.automaticPackages(from: rows)
+        let inboxStore = InboxStore()
+        let inboxItemIDs = DailyInspectionInboxPublisher.publish(scan: scan, rows: rows, to: inboxStore)
+
         func writeReportAndExit(_ exitCode: Int32, failure: InspectionFailureRecord? = nil) -> Never {
             InspectionReportStore().append(
                 InspectionReportBuilder.makeReport(
@@ -31,6 +34,7 @@ struct MacSoftwareStewardAgent {
                     scan: scan,
                     rows: rows,
                     automaticPackages: automaticPackages,
+                    inboxItemIDs: inboxItemIDs,
                     failure: failure
                 )
             )
