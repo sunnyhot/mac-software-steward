@@ -35,6 +35,31 @@ struct ScannerAppUpdateCapabilityTest {
         precondition(enriched[0].updateCapability.detector == .sparkle)
         precondition(enriched[0].updateState == "checkable")
 
+        let cacheURL = root.appendingPathComponent("regular-app-cache.json")
+        let cache = RegularAppUpdateDiscoveryCache(fileURL: cacheURL, limit: 10)
+        var loaderCalls = 0
+        let cachedFirst = SoftwareScanner.attachUpdateCapabilities(
+            to: [app],
+            cache: cache,
+            capabilityLoader: { path in
+                loaderCalls += 1
+                return RegularAppUpdateDiscovery.discover(appPath: path)
+            }
+        )
+        precondition(cachedFirst[0].updateCapability.detector == .sparkle)
+        precondition(cachedFirst[0].updateState == "checkable")
+        precondition(loaderCalls == 1)
+
+        let cachedSecond = SoftwareScanner.attachUpdateCapabilities(
+            to: [app],
+            cache: cache,
+            capabilityLoader: { _ in
+                preconditionFailure("unchanged Info.plist must use scanner cache")
+            }
+        )
+        precondition(cachedSecond[0].updateCapability.detector == .sparkle)
+        precondition(cachedSecond[0].updateState == "checkable")
+
         let brew = BrewPackage(id: "brew:cask:sparkleapp", kind: "cask", name: "SparkleApp", installedVersion: "1.0", currentVersion: "2.0", pinned: false, autoUpdates: false, outdated: true, upgradeable: true)
         let classified = SoftwareScanner.classifyForTesting(
             enriched,

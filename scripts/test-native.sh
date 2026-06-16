@@ -268,6 +268,7 @@ run_test ScannerBrewListFallbackTest \
   "$SRC/Models.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
+  "$SRC/RegularAppUpdateDiscoveryCache.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerBrewListFallbackTest.swift"
@@ -278,6 +279,7 @@ run_test ScannerAppUpdateCapabilityTest \
   "$SRC/Models.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
+  "$SRC/RegularAppUpdateDiscoveryCache.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerAppUpdateCapabilityTest.swift"
@@ -288,6 +290,7 @@ run_test ScannerSparkleAppcastPolicyTest \
   "$SRC/Models.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
+  "$SRC/RegularAppUpdateDiscoveryCache.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerSparkleAppcastPolicyTest.swift"
@@ -298,6 +301,7 @@ run_test ScannerNormalizeTokenTest \
   "$SRC/Models.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
+  "$SRC/RegularAppUpdateDiscoveryCache.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerNormalizeTokenTest.swift"
@@ -309,6 +313,7 @@ run_test StewardModelScanGuardTest \
   "$SRC/Models.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
+  "$SRC/RegularAppUpdateDiscoveryCache.swift" \
   "$SRC/RegularAppUpdateActionResolver.swift" \
   "$SRC/AutomationNotificationDecider.swift" \
   "$SRC/AutomationNotificationDispatcher.swift" \

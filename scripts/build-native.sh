@@ -89,6 +89,7 @@ run_or_explain "Building ${APP_NAME}Agent" xcrun swiftc \
   "$ROOT_DIR"/native/MacSoftwareSteward/InspectionReportStore.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/InspectionReportBuilder.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/RegularAppUpdateDiscovery.swift \
+  "$ROOT_DIR"/native/MacSoftwareSteward/RegularAppUpdateDiscoveryCache.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/SparkleAppcastChecker.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/Scanner.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/SoftwareScanning.swift \

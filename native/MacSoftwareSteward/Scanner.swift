@@ -20,6 +20,8 @@ enum SoftwareScanner {
         var error: String
     }
 
+    static let regularAppUpdateDiscoveryCache = RegularAppUpdateDiscoveryCache()
+
     private struct TimedValue<Value> {
         var value: Value
         var stage: ScanPerformanceStage
@@ -88,7 +90,7 @@ enum SoftwareScanner {
         applications.items = classificationTimed.value
 
         let discoveryTimed = timedSync(.regularAppDiscovery) {
-            attachUpdateCapabilities(to: applications.items)
+            attachUpdateCapabilities(to: applications.items, cache: regularAppUpdateDiscoveryCache)
         }
         applications.items = discoveryTimed.value
 
@@ -553,10 +555,15 @@ enum SoftwareScanner {
         return app
     }
 
-    static func attachUpdateCapabilities(to apps: [AppItem]) -> [AppItem] {
+    static func attachUpdateCapabilities(
+        to apps: [AppItem],
+        cache: RegularAppUpdateDiscoveryCache? = nil,
+        capabilityLoader: (String) -> AppUpdateCapability = RegularAppUpdateDiscovery.discover
+    ) -> [AppItem] {
         apps.map { app in
             var next = app
-            let capability = RegularAppUpdateDiscovery.discover(appPath: app.path)
+            let capability = cache?.capability(for: app.path, loader: capabilityLoader)
+                ?? capabilityLoader(app.path)
             next.updateCapability = capability
             if next.managedBy == "manual", capability.hasManualAction, next.updateState == "unknown" {
                 next.updateState = "checkable"
