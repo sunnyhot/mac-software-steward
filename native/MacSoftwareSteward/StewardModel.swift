@@ -40,6 +40,7 @@ final class StewardModel: ObservableObject {
     let policyStore = UpgradePolicyStore()
     let historyStore = UpgradeHistoryStore()
     let inspectionReportStore = InspectionReportStore()
+    let scanPerformanceStore: ScanPerformanceStore
 
     private let scanner: SoftwareScanning
     private let notificationDispatcher: AutomationNotificationDelivering
@@ -57,10 +58,12 @@ final class StewardModel: ObservableObject {
 
     init(
         scanner: SoftwareScanning = LiveSoftwareScanning(),
-        notificationDispatcher: AutomationNotificationDelivering? = nil
+        notificationDispatcher: AutomationNotificationDelivering? = nil,
+        scanPerformanceStore: ScanPerformanceStore = ScanPerformanceStore()
     ) {
         self.scanner = scanner
         self.notificationDispatcher = notificationDispatcher ?? UserNotificationDispatcher()
+        self.scanPerformanceStore = scanPerformanceStore
         refreshDailyInspectionStatus()
     }
 
@@ -153,6 +156,7 @@ final class StewardModel: ObservableObject {
             }
         }
         scan = result
+        scanPerformanceStore.append(result.performance)
         prunePackageProgress(keeping: result)
         recomputeDerivedData()
         var newInboxItems: [InboxItem] = []

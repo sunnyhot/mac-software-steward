@@ -293,6 +293,7 @@ run_test ScannerNormalizeTokenTest \
 run_test StewardModelScanGuardTest \
   "$SRC/CommandRunner.swift" \
   "$SRC/ScanPerformance.swift" \
+  "$SRC/ScanPerformanceStore.swift" \
   "$SRC/Models.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \

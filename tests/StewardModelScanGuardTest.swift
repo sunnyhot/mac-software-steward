@@ -168,6 +168,38 @@ struct StewardModelScanGuardTest {
         precondition(notificationInboxStore.items.contains { $0.sourceID == "source:homebrew" })
         precondition(notificationInboxStore.items.contains { $0.sourceID == "source:mas" })
 
+        let performanceURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("scan-performance-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: performanceURL) }
+        let performanceStore = ScanPerformanceStore(fileURL: performanceURL, limit: 10)
+        let performanceSnapshot = ScanPerformanceSnapshot(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000301")!,
+            scannedAt: Date(timeIntervalSince1970: 11),
+            includeGreedy: false,
+            stages: [
+                ScanPerformanceStage(phase: .applications, durationMs: 20),
+                ScanPerformanceStage(phase: .brew, durationMs: 10),
+                ScanPerformanceStage(phase: .total, durationMs: 40)
+            ],
+            applications: 1,
+            brewFormulae: 0,
+            brewCasks: 0,
+            masApps: 0,
+            outdated: 1,
+            actionable: 0,
+            applicationsSource: "test",
+            brewAvailable: false,
+            masAvailable: false
+        )
+        var performanceResult = appUpdateScanResult()
+        performanceResult.performance = performanceSnapshot
+        let performanceModel = StewardModel(
+            scanner: StaticScanner(result: performanceResult),
+            scanPerformanceStore: performanceStore
+        )
+        await performanceModel.scanSoftware()
+        precondition(performanceStore.records.map(\.id) == [performanceSnapshot.id])
+
         await notificationModel.scanSoftware(
             notificationPolicy: .decisionsAndFailures,
             inboxStore: notificationInboxStore
