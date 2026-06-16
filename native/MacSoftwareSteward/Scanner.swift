@@ -569,38 +569,78 @@ enum SoftwareScanner {
         classify(apps, brew: brew, mas: mas)
     }
 
-    typealias SparkleChecker = (String, String) async -> SparkleAppcastCheckResult
+    typealias SparkleChecker = @Sendable (String, String) async -> SparkleAppcastCheckResult
+
+    private struct SparkleEnrichmentCandidate {
+        var index: Int
+        var app: AppItem
+    }
 
     static func enrichRegularAppUpdates(
         _ apps: [AppItem],
         networkPolicy: RegularAppNetworkPolicy,
-        sparkleChecker: SparkleChecker = SparkleAppcastChecker.check
+        sparkleConcurrencyLimit: Int = 4,
+        sparkleChecker: @escaping SparkleChecker = { feed, installed in
+            await SparkleAppcastChecker.check(feedURLString: feed, installedVersion: installed)
+        }
     ) async -> [AppItem] {
         guard networkPolicy != .localOnly else { return apps }
 
-        var enriched: [AppItem] = []
-        for app in apps {
-            var next = app
-            guard next.managedBy == "manual",
-                  next.updateCapability.detector == .sparkle,
-                  !next.updateCapability.feedURLString.isEmpty else {
-                enriched.append(next)
-                continue
+        let candidates = apps.enumerated().compactMap { index, app -> SparkleEnrichmentCandidate? in
+            guard app.managedBy == "manual",
+                  app.updateCapability.detector == .sparkle,
+                  !app.updateCapability.feedURLString.isEmpty else {
+                return nil
+            }
+            return SparkleEnrichmentCandidate(index: index, app: app)
+        }
+        guard !candidates.isEmpty else { return apps }
+
+        let limit = max(1, sparkleConcurrencyLimit)
+        var enriched = apps
+
+        await withTaskGroup(of: (Int, AppItem).self) { group in
+            var nextCandidateIndex = 0
+            let initialCount = min(limit, candidates.count)
+            for _ in 0..<initialCount {
+                let candidate = candidates[nextCandidateIndex]
+                nextCandidateIndex += 1
+                group.addTask {
+                    (candidate.index, await sparkleEnrichedApp(candidate.app, sparkleChecker: sparkleChecker))
+                }
             }
 
-            let installedVersion = next.updateCapability.installedVersion.isEmpty
-                ? next.version
-                : next.updateCapability.installedVersion
-            let result = await sparkleChecker(next.updateCapability.feedURLString, installedVersion)
-            next.updateCapability.diagnostic = result.diagnostic
-            if !result.availableVersion.isEmpty {
-                next.availableVersion = result.availableVersion
-                next.updateState = "outdated"
-                next.updateCapability.summary = "Sparkle 发现新版本 \(result.availableVersion)"
+            while let result = await group.next() {
+                enriched[result.0] = result.1
+                if nextCandidateIndex < candidates.count {
+                    let candidate = candidates[nextCandidateIndex]
+                    nextCandidateIndex += 1
+                    group.addTask {
+                        (candidate.index, await sparkleEnrichedApp(candidate.app, sparkleChecker: sparkleChecker))
+                    }
+                }
             }
-            enriched.append(next)
         }
+
         return enriched
+    }
+
+    private static func sparkleEnrichedApp(
+        _ app: AppItem,
+        sparkleChecker: SparkleChecker
+    ) async -> AppItem {
+        var next = app
+        let installedVersion = next.updateCapability.installedVersion.isEmpty
+            ? next.version
+            : next.updateCapability.installedVersion
+        let result = await sparkleChecker(next.updateCapability.feedURLString, installedVersion)
+        next.updateCapability.diagnostic = result.diagnostic
+        if !result.availableVersion.isEmpty {
+            next.availableVersion = result.availableVersion
+            next.updateState = "outdated"
+            next.updateCapability.summary = "Sparkle 发现新版本 \(result.availableVersion)"
+        }
+        return next
     }
 
     private static func classify(_ apps: [AppItem], brew: BrewScan, mas: MasScan) -> [AppItem] {
