@@ -52,6 +52,11 @@ run_test ScanPerformanceModelTest \
   "$SRC/ScanPerformance.swift" \
   "$TESTS/ScanPerformanceModelTest.swift"
 
+run_test ScanPerformanceStoreTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/ScanPerformanceStore.swift" \
+  "$TESTS/ScanPerformanceStoreTest.swift"
+
 run_test AutomationProfileStoreTest \
   "$SRC/AutomationProfileStore.swift" \
   "$TESTS/AutomationProfileStoreTest.swift"
