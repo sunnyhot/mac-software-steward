@@ -239,6 +239,7 @@ struct ScanResult {
     var applications: ApplicationsScan
     var brew: BrewScan
     var mas: MasScan
+    var performance: ScanPerformanceSnapshot = .empty()
 }
 
 enum UpdatablePackage: Identifiable, Hashable {

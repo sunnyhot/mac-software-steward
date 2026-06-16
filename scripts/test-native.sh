@@ -22,6 +22,7 @@ run_test() {
 }
 
 run_test AppAppearanceResolverTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/AppAppearanceResolver.swift" \
   "$TESTS/AppAppearanceResolverTest.swift"
@@ -43,8 +44,13 @@ run_test AppWindowDoubleClickZoomPolicyTest \
   "$TESTS/AppWindowDoubleClickZoomPolicyTest.swift"
 
 run_test AppTabVisibilityTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$TESTS/AppTabVisibilityTest.swift"
+
+run_test ScanPerformanceModelTest \
+  "$SRC/ScanPerformance.swift" \
+  "$TESTS/ScanPerformanceModelTest.swift"
 
 run_test AutomationProfileStoreTest \
   "$SRC/AutomationProfileStore.swift" \
@@ -56,6 +62,7 @@ run_test AutomationMaintenanceAccessTest \
   "$TESTS/AutomationMaintenanceAccessTest.swift"
 
 run_test AutomationDataBundleTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/UpgradePolicyStore.swift" \
@@ -88,6 +95,7 @@ run_test AutomationIssueInboxFactoryTest \
   "$TESTS/AutomationIssueInboxFactoryTest.swift"
 
 run_test BrewCaskCleanupDetectorTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/BrewCaskCleanupDetector.swift" \
   "$TESTS/BrewCaskCleanupDetectorTest.swift"
@@ -97,6 +105,7 @@ run_test CommandRunnerControlTest \
   "$TESTS/CommandRunnerControlTest.swift"
 
 run_test DailyPolicyFilteringTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/UpgradePolicyStore.swift" \
   "$SRC/RiskAssessor.swift" \
@@ -129,24 +138,28 @@ run_test InboxFilterPresenterTest \
   "$TESTS/InboxFilterPresenterTest.swift"
 
 run_test AppUpdateInboxFactoryTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/InboxStore.swift" \
   "$SRC/AppUpdateInboxFactory.swift" \
   "$TESTS/AppUpdateInboxFactoryTest.swift"
 
 run_test AppDiagnosticsPresenterTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/InboxStore.swift" \
   "$SRC/AppDiagnosticsPresenter.swift" \
   "$TESTS/AppDiagnosticsPresenterTest.swift"
 
 run_test SourceIssueInboxFactoryTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/InboxStore.swift" \
   "$SRC/SourceIssueInboxFactory.swift" \
   "$TESTS/SourceIssueInboxFactoryTest.swift"
 
 run_test DailyInspectionInboxPublisherTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/UpgradePolicyStore.swift" \
   "$SRC/RiskAssessor.swift" \
@@ -163,6 +176,7 @@ run_test InspectionReportStoreTest \
   "$TESTS/InspectionReportStoreTest.swift"
 
 run_test InspectionReportBuilderTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/InspectionReportStore.swift" \
   "$SRC/InspectionReportBuilder.swift" \
@@ -172,21 +186,25 @@ run_test InspectionReportBuilderTest \
   "$TESTS/InspectionReportBuilderTest.swift"
 
 run_test RegularAppUpdateDiscoveryTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
   "$TESTS/RegularAppUpdateDiscoveryTest.swift"
 
 run_test RegularAppUpdateActionResolverTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/RegularAppUpdateActionResolver.swift" \
   "$TESTS/RegularAppUpdateActionResolverTest.swift"
 
 run_test RecoveryActionPlannerTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/RecoveryActionPlanner.swift" \
   "$TESTS/RecoveryActionPlannerTest.swift"
 
 run_test RecoveryInboxFactoryTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/InboxStore.swift" \
   "$SRC/RecoveryActionPlanner.swift" \
@@ -194,6 +212,7 @@ run_test RecoveryInboxFactoryTest \
   "$TESTS/RecoveryInboxFactoryTest.swift"
 
 run_test AutoRepairDeciderTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RecoveryActionPlanner.swift" \
@@ -201,16 +220,19 @@ run_test AutoRepairDeciderTest \
   "$TESTS/AutoRepairDeciderTest.swift"
 
 run_test SparkleAppcastCheckerTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
   "$TESTS/SparkleAppcastCheckerTest.swift"
 
 run_test RiskAssessorTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/RiskAssessor.swift" \
   "$TESTS/RiskAssessorTest.swift"
 
 run_test RiskInboxFactoryTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/InboxStore.swift" \
   "$SRC/RiskAssessor.swift" \
@@ -225,6 +247,7 @@ run_test PackageProgressParserTest \
 
 run_test ScannerBrewListFallbackTest \
   "$SRC/CommandRunner.swift" \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
@@ -234,6 +257,7 @@ run_test ScannerBrewListFallbackTest \
 
 run_test ScannerAppUpdateCapabilityTest \
   "$SRC/CommandRunner.swift" \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
@@ -243,6 +267,7 @@ run_test ScannerAppUpdateCapabilityTest \
 
 run_test ScannerSparkleAppcastPolicyTest \
   "$SRC/CommandRunner.swift" \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
@@ -252,6 +277,7 @@ run_test ScannerSparkleAppcastPolicyTest \
 
 run_test ScannerNormalizeTokenTest \
   "$SRC/CommandRunner.swift" \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
@@ -261,6 +287,7 @@ run_test ScannerNormalizeTokenTest \
 
 run_test StewardModelScanGuardTest \
   "$SRC/CommandRunner.swift" \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
@@ -299,6 +326,7 @@ run_test SelfUpdateInstallScriptTest \
   "$TESTS/SelfUpdateInstallScriptTest.swift"
 
 run_test UpgradeFailureAnalyzerTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/BrewCaskCleanupDetector.swift" \
   "$SRC/UpgradeFailureAnalyzer.swift" \
@@ -309,6 +337,7 @@ run_test UpgradeHistoryStoreTest \
   "$TESTS/UpgradeHistoryStoreTest.swift"
 
 run_test UpgradePlannerTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/UpgradePolicyStore.swift" \
   "$SRC/RiskAssessor.swift" \
@@ -316,16 +345,19 @@ run_test UpgradePlannerTest \
   "$TESTS/UpgradePlannerTest.swift"
 
 run_test UpgradePolicyStoreTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/UpgradePolicyStore.swift" \
   "$TESTS/UpgradePolicyStoreTest.swift"
 
 run_test UpgradeProgressPresenterTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/UpgradeProgressPresenter.swift" \
   "$TESTS/UpgradeProgressPresenterTest.swift"
 
 run_test UpgradeVerifierTest \
+  "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/UpgradeVerifier.swift" \
   "$TESTS/UpgradeVerifierTest.swift"
