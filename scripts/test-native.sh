@@ -201,6 +201,13 @@ run_test RegularAppUpdateDiscoveryTest \
   "$SRC/RegularAppUpdateDiscovery.swift" \
   "$TESTS/RegularAppUpdateDiscoveryTest.swift"
 
+run_test RegularAppUpdateDiscoveryCacheTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/RegularAppUpdateDiscovery.swift" \
+  "$SRC/RegularAppUpdateDiscoveryCache.swift" \
+  "$TESTS/RegularAppUpdateDiscoveryCacheTest.swift"
+
 run_test RegularAppUpdateActionResolverTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
