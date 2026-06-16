@@ -15,12 +15,13 @@
 | 文件 | 行数 | 职责 |
 |------|------|------|
 | `App.swift` | 约 268 | `@main` 入口、窗口/menu bar、命令菜单、全局 model 注入 |
-| `ContentView.swift` | 约 429 | 应用主导航与页面容器，具体页面已拆到 `Views/` |
-| `Views/*.swift` | 约 2321 | 可升级、本机应用、管理来源、设置、任务日志和共享 UI 组件 |
-| `Models.swift` | 约 321 | 扫描结果、包、任务、进度、策略等核心数据模型 |
-| `StewardModel.swift` | 约 1097 | `@MainActor ObservableObject` 核心 ViewModel，负责扫描、升级队列、进度、巡检状态与派生数据 |
+| `ContentView.swift` | 约 454 | 应用主导航与页面容器，具体页面已拆到 `Views/` |
+| `Views/*.swift` | 约 4960 | 可升级、本机应用、管理来源、性能、设置、任务日志和共享 UI 组件 |
+| `Models.swift` | 约 419 | 扫描结果、包、任务、进度、策略等核心数据模型 |
+| `StewardModel.swift` | 约 1296 | `@MainActor ObservableObject` 核心 ViewModel，负责扫描、升级队列、性能记录、进度、巡检状态与派生数据 |
 | `SoftwareScanning.swift` | 约 12 | 扫描协议与线上实现，用于隔离 `StewardModel` 与扫描器并支持测试替身 |
-| `Scanner.swift` | 约 556 | `SoftwareScanner`：扫描 Applications/Homebrew/mas，解析 outdated JSON，并关联管理来源 |
+| `Scanner.swift` | 约 695 | `SoftwareScanner`：扫描 Applications/Homebrew/mas，解析 outdated JSON，记录阶段耗时，并关联管理来源 |
+| `ScanPerformance.swift` / `ScanPerformanceStore.swift` / `ScanPerformancePresenter.swift` | 约 304 | 扫描阶段耗时模型、本机性能历史持久化和性能页展示数据 |
 | `CommandRunner.swift` | 约 398 | `Process` 封装，支持超时、流式输出、PATH 查找和并发安全输出收集 |
 | `UpgradePlanner.swift` / `UpgradePolicyStore.swift` | 约 300 | 一键升级计划、包级策略、跳过原因和选择状态 |
 | `UpgradeProgressPresenter.swift` / `PackageProgressParser.swift` | 约 251 | Homebrew/mas 输出解析与包级阶段展示 |
@@ -107,7 +108,7 @@ xcrun swiftc -O -target arm64-apple-macosx14.0 \
   -o build/MacSoftwareSteward.app/Contents/MacOS/MacSoftwareSteward
 ```
 
-Agent 编译共享 `CommandRunner.swift`、`Models.swift`、`Scanner.swift`、升级策略相关文件和 `SoftwareScanning.swift`，再合并 `native/MacSoftwareStewardAgent/*.swift` 输出到 bundle 内。
+Agent 编译共享 `CommandRunner.swift`、`ScanPerformance.swift`、`Models.swift`、`Scanner.swift`、升级策略相关文件和 `SoftwareScanning.swift`，再合并 `native/MacSoftwareStewardAgent/*.swift` 输出到 bundle 内。
 
 `scripts/build-native.sh` 会在构建前打印 Developer Dir、SDK path/version、Swift 和 Swift compiler 版本。遇到 “this SDK is not supported by the compiler” 时，脚本会追加明确提示：当前 Swift compiler 与 macOS SDK 不匹配，需要切换或安装匹配的 Xcode/Command Line Tools。
 
