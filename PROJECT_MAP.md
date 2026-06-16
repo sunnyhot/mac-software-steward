@@ -20,7 +20,8 @@
 | `Models.swift` | 约 419 | 扫描结果、包、任务、进度、策略等核心数据模型 |
 | `StewardModel.swift` | 约 1296 | `@MainActor ObservableObject` 核心 ViewModel，负责扫描、升级队列、性能记录、进度、巡检状态与派生数据 |
 | `SoftwareScanning.swift` | 约 12 | 扫描协议与线上实现，用于隔离 `StewardModel` 与扫描器并支持测试替身 |
-| `Scanner.swift` | 约 695 | `SoftwareScanner`：扫描 Applications/Homebrew/mas，解析 outdated JSON，记录阶段耗时，并关联管理来源 |
+| `Scanner.swift` | 约 742 | `SoftwareScanner`：扫描 Applications/Homebrew/mas，记录阶段耗时，缓存普通 App 更新能力，并有界并发检查 Sparkle appcast |
+| `RegularAppUpdateDiscovery.swift` / `RegularAppUpdateDiscoveryCache.swift` | 约 415 | 普通 `.app` 更新能力识别和基于 `Info.plist` 元数据的本机缓存 |
 | `ScanPerformance.swift` / `ScanPerformanceStore.swift` / `ScanPerformancePresenter.swift` | 约 304 | 扫描阶段耗时模型、本机性能历史持久化和性能页展示数据 |
 | `CommandRunner.swift` | 约 398 | `Process` 封装，支持超时、流式输出、PATH 查找和并发安全输出收集 |
 | `UpgradePlanner.swift` / `UpgradePolicyStore.swift` | 约 300 | 一键升级计划、包级策略、跳过原因和选择状态 |
@@ -108,7 +109,7 @@ xcrun swiftc -O -target arm64-apple-macosx14.0 \
   -o build/MacSoftwareSteward.app/Contents/MacOS/MacSoftwareSteward
 ```
 
-Agent 编译共享 `CommandRunner.swift`、`ScanPerformance.swift`、`Models.swift`、`Scanner.swift`、升级策略相关文件和 `SoftwareScanning.swift`，再合并 `native/MacSoftwareStewardAgent/*.swift` 输出到 bundle 内。
+Agent 编译共享 `CommandRunner.swift`、`ScanPerformance.swift`、`Models.swift`、`RegularAppUpdateDiscovery.swift`、`RegularAppUpdateDiscoveryCache.swift`、`Scanner.swift`、升级策略相关文件和 `SoftwareScanning.swift`，再合并 `native/MacSoftwareStewardAgent/*.swift` 输出到 bundle 内。
 
 `scripts/build-native.sh` 会在构建前打印 Developer Dir、SDK path/version、Swift 和 Swift compiler 版本。遇到 “this SDK is not supported by the compiler” 时，脚本会追加明确提示：当前 Swift compiler 与 macOS SDK 不匹配，需要切换或安装匹配的 Xcode/Command Line Tools。
 
