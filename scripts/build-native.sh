@@ -74,6 +74,7 @@ run_or_explain "Building ${APP_NAME}Agent" xcrun swiftc \
   -target arm64-apple-macosx14.0 \
   -sdk "$SDK_PATH" \
   "$ROOT_DIR"/native/MacSoftwareSteward/CommandRunner.swift \
+  "$ROOT_DIR"/native/MacSoftwareSteward/ScanPerformance.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/Models.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/AutomationProfileStore.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/UpgradePolicyStore.swift \

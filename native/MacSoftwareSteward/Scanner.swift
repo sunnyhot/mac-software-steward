@@ -20,31 +20,88 @@ enum SoftwareScanner {
         var error: String
     }
 
+    private struct TimedValue<Value> {
+        var value: Value
+        var stage: ScanPerformanceStage
+    }
+
+    private static func elapsedMs(since start: Date) -> Int {
+        max(0, Int(Date().timeIntervalSince(start) * 1000))
+    }
+
+    private static func timed<Value>(
+        _ phase: ScanPerformancePhase,
+        operation: () async -> Value
+    ) async -> TimedValue<Value> {
+        let started = Date()
+        let value = await operation()
+        return TimedValue(
+            value: value,
+            stage: ScanPerformanceStage(phase: phase, durationMs: elapsedMs(since: started))
+        )
+    }
+
+    private static func timedSync<Value>(
+        _ phase: ScanPerformancePhase,
+        operation: () -> Value
+    ) -> TimedValue<Value> {
+        let started = Date()
+        let value = operation()
+        return TimedValue(
+            value: value,
+            stage: ScanPerformanceStage(phase: phase, durationMs: elapsedMs(since: started))
+        )
+    }
+
     static func scanAll(
         includeGreedy: Bool,
         regularAppNetworkPolicy: RegularAppNetworkPolicy = .declaredSourcesOnly,
         onPhaseChange: ((ScanPhase) -> Void)? = nil
     ) async -> ScanResult {
-        let started = Date()
+        let totalStarted = Date()
 
         onPhaseChange?(.systemProfiler)
-        async let applicationsTask = scanApplications()
+        async let applicationsTask = timed(.applications) {
+            await scanApplications()
+        }
         onPhaseChange?(.brewInfo)
-        async let brewTask = scanBrew(includeGreedy: includeGreedy)
+        async let brewTask = timed(.brew) {
+            await scanBrew(includeGreedy: includeGreedy)
+        }
         onPhaseChange?(.appStore)
-        async let masTask = scanMas()
+        async let masTask = timed(.mas) {
+            await scanMas()
+        }
 
-        var applications = await applicationsTask
-        let brew = await brewTask
-        let mas = await masTask
+        let applicationsTimed = await applicationsTask
+        let brewTimed = await brewTask
+        let masTimed = await masTask
+
+        var applications = applicationsTimed.value
+        let brew = brewTimed.value
+        let mas = masTimed.value
 
         onPhaseChange?(.classifying)
-        applications.items = classify(applications.items, brew: brew, mas: mas)
-        applications.items = await enrichRegularAppUpdates(
-            applications.items,
-            networkPolicy: regularAppNetworkPolicy
-        )
+        let classificationTimed = timedSync(.classification) {
+            classify(applications.items, brew: brew, mas: mas)
+        }
+        applications.items = classificationTimed.value
 
+        let discoveryTimed = timedSync(.regularAppDiscovery) {
+            attachUpdateCapabilities(to: applications.items)
+        }
+        applications.items = discoveryTimed.value
+
+        let sparkleTimed = await timed(.sparkleAppcast) {
+            await enrichRegularAppUpdates(
+                applications.items,
+                networkPolicy: regularAppNetworkPolicy
+            )
+        }
+        applications.items = sparkleTimed.value
+
+        let totalMs = elapsedMs(since: totalStarted)
+        let scannedAt = Date()
         let summary = ScanSummary(
             applications: applications.items.count,
             brewFormulae: brew.formulae.count,
@@ -54,16 +111,40 @@ enum SoftwareScanner {
             actionable: brew.formulae.filter(\.upgradeable).count
                 + brew.casks.filter(\.upgradeable).count
                 + mas.apps.filter(\.upgradeable).count,
-            scanMs: Int(Date().timeIntervalSince(started) * 1000)
+            scanMs: totalMs
+        )
+        let performance = ScanPerformanceSnapshot(
+            id: UUID(),
+            scannedAt: scannedAt,
+            includeGreedy: includeGreedy,
+            stages: [
+                applicationsTimed.stage,
+                brewTimed.stage,
+                masTimed.stage,
+                classificationTimed.stage,
+                discoveryTimed.stage,
+                sparkleTimed.stage,
+                ScanPerformanceStage(phase: .total, durationMs: totalMs)
+            ],
+            applications: summary.applications,
+            brewFormulae: summary.brewFormulae,
+            brewCasks: summary.brewCasks,
+            masApps: summary.masApps,
+            outdated: summary.outdated,
+            actionable: summary.actionable,
+            applicationsSource: applications.source,
+            brewAvailable: brew.available,
+            masAvailable: mas.available
         )
 
         return ScanResult(
-            scannedAt: Date(),
+            scannedAt: scannedAt,
             includeGreedy: includeGreedy,
             summary: summary,
             applications: applications,
             brew: brew,
-            mas: mas
+            mas: mas,
+            performance: performance
         )
     }
 
@@ -86,7 +167,7 @@ enum SoftwareScanner {
             if items.isEmpty {
                 return await scanApplicationsByFind(reason: "system_profiler did not return application data.")
             }
-            return ApplicationsScan(source: "system_profiler", ok: true, error: "", items: attachUpdateCapabilities(to: items))
+            return ApplicationsScan(source: "system_profiler", ok: true, error: "", items: items)
         } catch {
             return await scanApplicationsByFind(reason: "system_profiler JSON parse failed: \(error.localizedDescription)")
         }
@@ -284,7 +365,7 @@ enum SoftwareScanner {
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
         let error = result.ok ? reason : [reason, result.stderr].filter { !$0.isEmpty }.joined(separator: "\n")
-        return ApplicationsScan(source: "find", ok: result.ok, error: error, items: attachUpdateCapabilities(to: items))
+        return ApplicationsScan(source: "find", ok: result.ok, error: error, items: items)
     }
 
     private static func normalize(_ item: SystemProfilerApp) -> AppItem? {
