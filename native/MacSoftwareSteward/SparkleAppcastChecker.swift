@@ -6,14 +6,18 @@ struct SparkleAppcastCheckResult: Hashable {
 }
 
 enum SparkleAppcastChecker {
-    static func check(feedURLString: String, installedVersion: String) async -> SparkleAppcastCheckResult {
+    static func check(
+        feedURLString: String,
+        installedVersion: String,
+        timeout: TimeInterval = 8
+    ) async -> SparkleAppcastCheckResult {
         guard let url = URL(string: feedURLString),
               ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
             return SparkleAppcastCheckResult(availableVersion: "", diagnostic: "Sparkle feed URL 无效。")
         }
 
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.shared.data(for: request(for: url, timeout: timeout))
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 return SparkleAppcastCheckResult(availableVersion: "", diagnostic: "Sparkle feed HTTP 状态码 \(http.statusCode)。")
             }
@@ -25,8 +29,19 @@ enum SparkleAppcastChecker {
             }
             return SparkleAppcastCheckResult(availableVersion: "", diagnostic: "Sparkle feed 未发现更新。")
         } catch {
-            return SparkleAppcastCheckResult(availableVersion: "", diagnostic: "Sparkle feed 检查失败：\(error.localizedDescription)")
+            return SparkleAppcastCheckResult(availableVersion: "", diagnostic: diagnostic(for: error))
         }
+    }
+
+    static func request(for url: URL, timeout: TimeInterval = 8) -> URLRequest {
+        URLRequest(url: url, timeoutInterval: timeout)
+    }
+
+    static func diagnostic(for error: Error) -> String {
+        if (error as? URLError)?.code == .timedOut {
+            return "Sparkle feed 检查超时。"
+        }
+        return "Sparkle feed 检查失败：\(error.localizedDescription)"
     }
 
     static func parseLatestVersion(from data: Data) -> String? {

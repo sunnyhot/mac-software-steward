@@ -24,5 +24,16 @@ struct SparkleAppcastCheckerTest {
         precondition(SparkleAppcastChecker.parseLatestVersion(from: Data(fallback.utf8)) == "3.1")
         precondition(SparkleAppcastChecker.isNewerVersion("2.0", than: "1.9"))
         precondition(!SparkleAppcastChecker.isNewerVersion("1.0", than: "1.0"))
+
+        let url = URL(string: "https://example.com/appcast.xml")!
+        let request = SparkleAppcastChecker.request(for: url, timeout: 3.5)
+        precondition(request.url == url)
+        precondition(request.timeoutInterval == 3.5)
+
+        let timeout = URLError(.timedOut)
+        precondition(SparkleAppcastChecker.diagnostic(for: timeout) == "Sparkle feed 检查超时。")
+
+        let cancelled = URLError(.cancelled)
+        precondition(SparkleAppcastChecker.diagnostic(for: cancelled).hasPrefix("Sparkle feed 检查失败："))
     }
 }
