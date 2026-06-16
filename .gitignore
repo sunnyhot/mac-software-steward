@@ -1,6 +1,7 @@
 node_modules/
 build/
 release/
+.worktrees
 .worktrees/
 .DS_Store
 
