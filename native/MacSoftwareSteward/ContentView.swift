@@ -351,6 +351,8 @@ private struct MainPanel: View {
                     RulesView()
                 case .history:
                     HistoryView()
+                case .performance:
+                    PerformanceView()
                 case .settings:
                     SettingsView()
                 case .jobs:

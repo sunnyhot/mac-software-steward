@@ -16,14 +16,17 @@ struct AppTabVisibilityTest {
             .sources,
             .rules,
             .history,
+            .performance,
             .jobs,
             .settings
         ])
         precondition(AppTab.inbox.symbol == "tray.and.arrow.down")
         precondition(AppTab.rules.symbol == "list.bullet.clipboard")
         precondition(AppTab.history.symbol == "clock.arrow.circlepath")
+        precondition(AppTab.performance.symbol == "speedometer")
         precondition(AppTab.inbox.usesSearch == false)
         precondition(AppTab.rules.usesSearch == false)
+        precondition(AppTab.performance.usesSearch == false)
         precondition(AppTab.updates.usesSearch == true)
     }
 }
