@@ -69,6 +69,8 @@ The design should stay quiet and utility-focused.
   - pending update count
   - all clear
 - Use a lightweight pill selection state with an accent-colored leading mark.
+- Make hover state visibly distinct from selected state so the pointer target is
+  obvious before clicking.
 - Use lower emphasis for advanced rows through smaller type, softer color, and
   tighter spacing.
 - Keep settings visually separate from primary work by pinning it near the bottom.
@@ -78,10 +80,16 @@ The design should stay quiet and utility-focused.
 ## Interaction Design
 
 - Sidebar row hover should gently lift or tint the row.
-- Selected row should animate with a spring response.
+- Hover state uses a soft row background, icon tint, and subtle scale so the user
+  can always tell which tab the pointer is over.
+- Selected row uses a stronger pill background, an accent leading mark, bold text,
+  and accent icon color; it must remain clearly different from hover.
+- Selected row should animate with a spring response when it changes.
 - Advanced tools expansion should animate disclosure, opacity, and vertical movement.
 - Tab content transition uses a short fade with subtle vertical movement to avoid
   abrupt switches.
+- Tab switching also animates the selected sidebar indicator and page title so the
+  new active destination is visually confirmed.
 - Status chip should animate changes but avoid constant motion unless scanning or
   upgrading is active.
 - Respect platform availability for symbol effects and avoid relying on macOS 15+
@@ -138,6 +146,9 @@ Test cases:
 - Advanced mode disabled hides advanced-only tabs but keeps the simple-mode tabs.
 - Selecting an unavailable tab falls back to `待处理`.
 - Advanced group active state is true when selected tab belongs to the advanced set.
+- Sidebar hover and selected presentation are separate style states.
+- Tab transition identity changes when `selectedTab` changes, allowing the content
+  transition to run.
 
 Existing verification remains:
 
