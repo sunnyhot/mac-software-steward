@@ -45,9 +45,9 @@ enum SelfUpdateInstallScript {
       /bin/mkdir -p "$(/usr/bin/dirname "$DEST_APP")"
       /bin/rm -rf "$TEMP_APP" "$BACKUP_APP"
       /usr/bin/ditto "$NEW_APP" "$TEMP_APP"
-      /usr/bin/test -d "$TEMP_APP/Contents/MacOS"
+      /bin/test -d "$TEMP_APP/Contents/MacOS"
       EXECUTABLE_NAME="$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$TEMP_APP/Contents/Info.plist")"
-      /usr/bin/test -x "$TEMP_APP/Contents/MacOS/$EXECUTABLE_NAME"
+      /bin/test -x "$TEMP_APP/Contents/MacOS/$EXECUTABLE_NAME"
       if [ -e "$DEST_APP" ]; then
         /bin/mv "$DEST_APP" "$BACKUP_APP"
         RESTORE_NEEDED=1

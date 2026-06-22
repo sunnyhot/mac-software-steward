@@ -26,6 +26,15 @@ struct SelfUpdateInstallScriptTest {
         guard let copyRange = script.range(of: #"/usr/bin/ditto "$NEW_APP" "$TEMP_APP""#) else {
             preconditionFailure("Expected script to copy the new app into a temporary destination")
         }
+        guard let macOSDirectoryTestRange = script.range(of: #"/bin/test -d "$TEMP_APP/Contents/MacOS""#) else {
+            preconditionFailure("Expected script to verify the copied app bundle with macOS /bin/test")
+        }
+        guard let executableTestRange = script.range(of: #"/bin/test -x "$TEMP_APP/Contents/MacOS/$EXECUTABLE_NAME""#) else {
+            preconditionFailure("Expected script to verify the copied app executable with macOS /bin/test")
+        }
+        guard script.range(of: #"/usr/bin/test"#) == nil else {
+            preconditionFailure("macOS does not provide /usr/bin/test; self-update install must use /bin/test")
+        }
         guard let backupMoveRange = script.range(of: #"/bin/mv "$DEST_APP" "$BACKUP_APP""#) else {
             preconditionFailure("Expected script to move the old app to backup before replacement")
         }
@@ -42,6 +51,9 @@ struct SelfUpdateInstallScriptTest {
         precondition(backupRange.lowerBound < backupMoveRange.lowerBound, "Backup path should be defined before backup")
         precondition(trapRange.lowerBound < backupMoveRange.lowerBound, "Rollback trap should be active before moving the old app")
         precondition(copyRange.lowerBound < backupMoveRange.lowerBound, "New app should be copied before old app is moved")
+        precondition(copyRange.lowerBound < macOSDirectoryTestRange.lowerBound, "Copied app should be validated after copy")
+        precondition(macOSDirectoryTestRange.lowerBound < executableTestRange.lowerBound, "Executable check should happen after bundle directory check")
+        precondition(executableTestRange.lowerBound < backupMoveRange.lowerBound, "Copied app should be validated before old app backup")
         precondition(backupMoveRange.lowerBound < replaceRange.lowerBound, "Backup should happen before final replacement")
     }
 }
