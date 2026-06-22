@@ -33,6 +33,7 @@ struct AppTabVisibilityTest {
         precondition(SidebarRowInteractionState.selected.showsSelectionIndicator)
         precondition(!SidebarRowInteractionState.hovered.showsSelectionIndicator)
         precondition(AppTab.inbox.symbol == "tray.and.arrow.down")
+        precondition(AppTab.rules.rawValue == "自动化策略")
         precondition(AppTab.rules.symbol == "list.bullet.clipboard")
         precondition(AppTab.history.symbol == "clock.arrow.circlepath")
         precondition(AppTab.performance.symbol == "speedometer")

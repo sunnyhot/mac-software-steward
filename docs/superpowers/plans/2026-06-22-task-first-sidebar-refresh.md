@@ -45,6 +45,7 @@ precondition(AppTabNavigationPresenter.primaryTabs(advancedModeEnabled: false) =
 precondition(AppTabNavigationPresenter.advancedTabs(advancedModeEnabled: true) == [.sources, .rules, .history, .performance, .jobs])
 precondition(AppTabNavigationPresenter.advancedTabs(advancedModeEnabled: false).isEmpty)
 precondition(AppTabNavigationPresenter.footerTabs == [.settings])
+precondition(AppTab.rules.rawValue == "自动化策略")
 precondition(AppTabNavigationPresenter.fallbackTab(for: .inbox, advancedModeEnabled: true) == .applications)
 precondition(AppTabNavigationPresenter.fallbackTab(for: .sources, advancedModeEnabled: false) == .applications)
 precondition(AppTabNavigationPresenter.isAdvancedTool(.jobs, advancedModeEnabled: true))

@@ -44,7 +44,7 @@ Advanced tools section:
 
 - A single row labeled `高级工具`.
 - The row expands and collapses with a spring animation.
-- Expanded contents include `管理来源`, `规则`, `历史`, `性能`, and `任务日志`.
+- Expanded contents include `管理来源`, `自动化策略`, `历史`, `性能`, and `任务日志`.
 - If one of these advanced tabs is selected while the group is collapsed, the group
   uses the selected row style and shows the active tab title as a short caption.
 

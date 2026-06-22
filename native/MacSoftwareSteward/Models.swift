@@ -30,7 +30,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case updates = "可升级"
     case applications = "本机应用"
     case sources = "管理来源"
-    case rules = "规则"
+    case rules = "自动化策略"
     case history = "历史"
     case performance = "性能"
     case jobs = "任务日志"
