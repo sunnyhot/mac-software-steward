@@ -1,60 +1,31 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @EnvironmentObject private var model: StewardModel
     @EnvironmentObject private var updater: AppUpdateModel
     @EnvironmentObject private var launchAtLogin: LaunchAtLoginModel
-    @EnvironmentObject private var automationProfile: AutomationProfileStore
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 20) {
                 SettingsGroupBox {
-                    SettingsGroupHeader(title: "通用", symbol: "gearshape")
+                    SettingsGroupHeader(
+                        title: SettingsPageGroup.general.title,
+                        symbol: SettingsPageGroup.general.symbol
+                    )
                     AppearanceRow()
                     SettingsDivider()
                     LaunchAtLoginRow()
                     SettingsDivider()
                     DockIconRow()
-                }
-
-                SettingsGroupBox {
-                    SettingsGroupHeader(title: "自动化管家", symbol: "wand.and.stars")
-                    AutomationProfileRow()
                     SettingsDivider()
                     AdvancedModeRow()
-                    SettingsDivider()
-                    NotificationPolicyRow()
-                    if automationProfile.profile.advancedModeEnabled {
-                        SettingsDivider()
-                        RegularAppNetworkPolicyRow()
-                        SettingsDivider()
-                        AutoRepairPolicyRow()
-                    }
                 }
 
                 SettingsGroupBox {
-                    SettingsGroupHeader(title: "扫描与升级策略", symbol: "slider.horizontal.3")
-                    PolicyHelpRow()
-                    SettingsDivider()
-                    GreedyCaskRow()
-                    SettingsDivider()
-                    BrewUpdateRow()
-                    SettingsDivider()
-                    MaxConcurrentUpgradesRow()
-                }
-
-                SettingsGroupBox {
-                    SettingsGroupHeader(title: "每日巡检", symbol: "calendar.badge.clock")
-                    DailyInspectionToggleRow()
-                    if model.dailyInspectionEnabled {
-                        SettingsDivider()
-                        DailyInspectionTimeRow()
-                    }
-                }
-
-                SettingsGroupBox {
-                    SettingsGroupHeader(title: "应用更新", symbol: "arrow.down.app")
+                    SettingsGroupHeader(
+                        title: SettingsPageGroup.appUpdates.title,
+                        symbol: SettingsPageGroup.appUpdates.symbol
+                    )
                     AutoCheckUpdateRow()
                     if updater.automaticChecksEnabled {
                         SettingsDivider()
@@ -520,7 +491,7 @@ struct AdvancedModeRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("高级模式")
                     .font(.body)
-                Text("显示可升级、管理来源、任务日志和高级策略")
+                Text("显示可升级、任务日志和高级策略")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

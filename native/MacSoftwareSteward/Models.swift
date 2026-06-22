@@ -28,7 +28,7 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
 enum AppTab: String, CaseIterable, Identifiable {
     case inbox = "待处理"
     case updates = "可升级"
-    case applications = "本机应用"
+    case applications = "本机软件"
     case sources = "管理来源"
     case rules = "自动化策略"
     case history = "历史"
@@ -40,9 +40,9 @@ enum AppTab: String, CaseIterable, Identifiable {
 
     static func visibleTabs(advancedModeEnabled: Bool) -> [AppTab] {
         if advancedModeEnabled {
-            return [.updates, .applications, .sources, .rules, .history, .performance, .jobs, .settings]
+            return [.updates, .applications, .rules, .jobs, .settings]
         }
-        return [.applications, .history, .settings]
+        return [.applications, .settings]
     }
 
     var symbol: String {
@@ -122,6 +122,7 @@ enum AppUpdateActionKind: String, Codable, Hashable {
     case openApp
     case openUpdater
     case revealInFinder
+    case directReplace
 }
 
 struct AppUpdateAction: Codable, Hashable {
@@ -138,6 +139,7 @@ struct AppUpdateCapability: Codable, Hashable {
     var summary: String
     var actions: [AppUpdateAction] = []
     var diagnostic: String
+    var downloadURLString: String?
 
     static let none = AppUpdateCapability(
         detector: .none,
@@ -146,7 +148,8 @@ struct AppUpdateCapability: Codable, Hashable {
         installedVersion: "",
         summary: "",
         actions: [],
-        diagnostic: ""
+        diagnostic: "",
+        downloadURLString: nil
     )
 
     var hasManualAction: Bool {

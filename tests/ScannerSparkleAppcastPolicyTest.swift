@@ -44,12 +44,17 @@ struct ScannerSparkleAppcastPolicyTest {
             sparkleChecker: { feed, installed in
                 precondition(feed == "https://example.com/appcast.xml")
                 precondition(installed == "1.0")
-                return SparkleAppcastCheckResult(availableVersion: "2.0", diagnostic: "ok")
+                return SparkleAppcastCheckResult(
+                    availableVersion: "2.0",
+                    diagnostic: "ok",
+                    downloadURLString: "https://example.com/app.zip"
+                )
             }
         )
         precondition(checked[0].availableVersion == "2.0")
         precondition(checked[0].updateState == "outdated")
         precondition(checked[0].updateCapability.diagnostic == "ok")
+        precondition(checked[0].updateCapability.downloadURLString == "https://example.com/app.zip")
 
         let plain = AppItem(
             id: "app:/Applications/Plain.app",
@@ -94,11 +99,13 @@ struct ScannerSparkleAppcastPolicyTest {
         let maxActive = await probe.maxActive()
         let observedFeeds = await probe.observedFeeds()
         precondition(maxActive == 2)
-        precondition(observedFeeds == [
+        let expectedFeeds = [
             "https://example.com/one.xml",
             "https://example.com/two.xml",
             "https://example.com/three.xml"
-        ])
+        ]
+        precondition(observedFeeds.count == expectedFeeds.count)
+        precondition(Set(observedFeeds) == Set(expectedFeeds))
         precondition(concurrent.map { $0.id } == apps.map { $0.id })
         precondition(concurrent[0].availableVersion == "2.0-one")
         precondition(concurrent[1].availableVersion.isEmpty)

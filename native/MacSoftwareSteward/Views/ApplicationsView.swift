@@ -2,32 +2,208 @@ import SwiftUI
 
 struct ApplicationsView: View {
     @EnvironmentObject private var model: StewardModel
+    @State private var selectedFilter: LocalSoftwareFilter = .all
 
-    var apps: [AppItem] {
-        filter(model.scan?.applications.items ?? [], query: model.query) {
-            "\($0.name) \($0.version) \($0.source) \($0.managedBy) \($0.path) \($0.updateCapability.detector.title) \($0.updateCapability.summary)"
+    var rows: [LocalSoftwareRow] {
+        guard let scan = model.scan else { return [] }
+        let queried = filter(LocalSoftwarePresenter.rows(from: scan), query: model.query) { row in
+            row.searchText
         }
+        return LocalSoftwarePresenter.filteredRows(queried, filter: selectedFilter)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("本机应用是实际安装的 .app；安装位置说明 App 文件在哪，管理方式说明由 Homebrew、App Store、系统或手动维护。")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                Text("汇总电脑里可人工维护的软件，包括普通 App、Homebrew Formula、Homebrew Cask 和 App Store 应用。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Picker("筛选", selection: $selectedFilter) {
+                    ForEach(LocalSoftwareFilter.allCases) { filter in
+                        Text(filter.rawValue).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 520)
+            }
+
             if let scan = model.scan?.applications, !scan.error.isEmpty {
                 WarningLine(text: scan.error)
             }
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach(apps) { app in
-                        ApplicationRow(app: app)
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .move(edge: .top)),
-                                removal: .opacity
-                            ))
+            if rows.isEmpty {
+                EmptyStateView(
+                    symbol: "checkmark.seal",
+                    title: "暂无可维护软件",
+                    text: "扫描完成后，这里会列出可人工升级或检查更新的软件。"
+                )
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        ForEach(rows) { row in
+                            LocalSoftwareRowView(row: row)
+                                .transition(.asymmetric(
+                                    insertion: .opacity.combined(with: .move(edge: .top)),
+                                    removal: .opacity
+                                ))
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+// MARK: - LocalSoftwareRowView
+
+private struct LocalSoftwareRowView: View {
+    @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var inboxStore: InboxStore
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
+    var row: LocalSoftwareRow
+
+    @State private var isHovered = false
+
+    private var progress: PackageUpgradeProgress? {
+        guard let package = row.package else { return nil }
+        return model.packageProgress[package.id]
+    }
+
+    var body: some View {
+        if let app = row.app {
+            ApplicationRow(app: app)
+        } else {
+            packageRow
+        }
+    }
+
+    private var packageRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(kindColor.opacity(0.12))
+                        .frame(width: 30, height: 30)
+                    Image(systemName: row.kind.symbol)
+                        .font(.system(.callout, weight: .medium))
+                        .foregroundStyle(kindColor)
+                }
+
+                CopyableText(text: row.name)
+
+                Spacer()
+
+                if row.isPinned {
+                    Badge(text: "固定", color: .red)
+                }
+                if row.autoUpdates {
+                    Badge(text: "自更新", color: .blue)
+                }
+
+                Badge(text: row.kind.title, color: kindColor)
+
+                if let progress {
+                    PackageProgressBadge(progress: progress)
+                } else {
+                    Badge(text: statusTitle, color: statusColor)
+                }
+
+                if row.isOutdated, let package = row.package {
+                    Button {
+                        Task {
+                            await model.upgrade(
+                                package,
+                                inboxStore: inboxStore,
+                                autoRepairProfile: automationProfile.profile
+                            )
+                        }
+                    } label: {
+                        Label("升级", systemImage: "play")
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(!row.isUpgradeable || model.isPackageActive(package.id))
+                }
+            }
+
+            HStack(spacing: 8) {
+                Text(row.source)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.08), in: Capsule())
+
+                VersionChangeLabel(
+                    current: row.installedVersion,
+                    available: row.currentVersion
+                )
+
+                if !row.detail.isEmpty {
+                    Text("·")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                    Text(row.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Spacer()
+            }
+            .padding(.leading, 40)
+
+            if let progress {
+                PackageProgressDetail(progress: progress)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(rowTint, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isHovered ? kindColor.opacity(0.20) : Color.primary.opacity(0.06), lineWidth: 1)
+        )
+        .scaleEffect(isHovered && progress == nil ? 1.005 : 1.0)
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isHovered)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+
+    private var kindColor: Color {
+        switch row.kind {
+        case .app: return .blue
+        case .brewFormula: return .orange
+        case .brewCask: return .purple
+        case .appStore: return .blue
+        }
+    }
+
+    private var statusTitle: String {
+        if row.isUpgradeable { return "可升级" }
+        if row.isOutdated { return "需确认" }
+        if row.isCheckable { return "可手动检查" }
+        return "已安装"
+    }
+
+    private var statusColor: Color {
+        if row.isUpgradeable { return .orange }
+        if row.isOutdated { return .secondary }
+        if row.isCheckable { return .blue }
+        return .green
+    }
+
+    private var rowTint: Color {
+        switch progress?.status {
+        case .running, .queued: return Color.accentColor.opacity(0.04)
+        case .succeeded: return Color.green.opacity(0.04)
+        case .failed, .cancelled, .timedOut: return Color.red.opacity(0.04)
+        case .warning: return Color.yellow.opacity(0.04)
+        case nil: return row.isOutdated ? Color.orange.opacity(0.03) : .clear
         }
     }
 }
@@ -43,6 +219,10 @@ struct ApplicationRow: View {
 
     var progress: PackageUpgradeProgress? {
         app.relatedPackageID.isEmpty ? nil : model.packageProgress[app.relatedPackageID]
+    }
+
+    private var updatePresentation: AppManualUpdatePresentation {
+        AppManualUpdatePresenter.presentation(for: app)
     }
 
     var body: some View {
@@ -64,16 +244,23 @@ struct ApplicationRow: View {
 
                 if let progress {
                     PackageProgressBadge(progress: progress)
-                } else if app.updateState == "outdated" {
-                    Badge(text: "可升级", color: .orange)
-                } else if app.updateState == "checkable" {
-                    Badge(text: "可检查", color: .blue)
+                } else if let statusTitle = updatePresentation.statusTitle {
+                    Badge(text: statusTitle, color: statusColor)
                 }
 
                 ManagementBadge(app: app)
 
-                if app.updateCapability.hasManualAction && app.managedBy == "manual" {
-                    ForEach(app.updateCapability.actions, id: \.self) { action in
+                if let primaryAction = updatePresentation.primaryAction {
+                    Button {
+                        model.performUpdateAction(primaryAction, for: app)
+                    } label: {
+                        Label(updatePresentation.primaryTitle, systemImage: primaryAction.systemImage)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help(updatePresentation.primaryTitle)
+
+                    ForEach(updatePresentation.secondaryActions.filter { $0.kind != .directReplace }, id: \.self) { action in
                         Button {
                             model.performUpdateAction(action, for: app)
                         } label: {
@@ -84,13 +271,15 @@ struct ApplicationRow: View {
                     }
                 }
 
-                Button {
-                    model.reveal(app)
-                } label: {
-                    Image(systemName: "arrow.up.forward.app")
+                if updatePresentation.primaryAction == nil {
+                    Button {
+                        model.reveal(app)
+                    } label: {
+                        Image(systemName: "arrow.up.forward.app")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("在 Finder 中显示")
                 }
-                .buttonStyle(.borderless)
-                .help("在 Finder 中显示")
             }
 
             // 次行：路径 + 版本 + 位置
@@ -119,6 +308,8 @@ struct ApplicationRow: View {
 
             if app.updateCapability.hasManualAction && app.managedBy == "manual" {
                 AppUpdateCapabilityLine(capability: app.updateCapability)
+                    .padding(.leading, 40)
+                ManualUpdateActionCallout(app: app, presentation: updatePresentation)
                     .padding(.leading, 40)
             }
 
@@ -152,6 +343,76 @@ struct ApplicationRow: View {
         if app.updateState == "outdated" { return Color.orange.opacity(0.03) }
         if app.updateState == "checkable" { return Color.blue.opacity(0.03) }
         return .clear
+    }
+
+    private var statusColor: Color {
+        if app.updateState == "outdated" { return .orange }
+        if app.updateState == "checkable" { return .blue }
+        return .secondary
+    }
+}
+
+private struct ManualUpdateActionCallout: View {
+    @EnvironmentObject private var model: StewardModel
+    var app: AppItem
+    var presentation: AppManualUpdatePresentation
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "hand.point.up.left.fill")
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .frame(width: 16)
+
+            Text(presentation.guidanceText)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+
+            Spacer(minLength: 12)
+
+            if let primaryAction = presentation.primaryAction {
+                Button {
+                    model.performUpdateAction(primaryAction, for: app)
+                } label: {
+                    Label(presentation.primaryTitle, systemImage: primaryAction.systemImage)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            } else {
+                Button {
+                    model.reveal(app)
+                } label: {
+                    Label("在 Finder 中显示", systemImage: "arrow.up.forward.app")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
+            if let directReplaceAction {
+                Button {
+                    model.performUpdateAction(directReplaceAction, for: app)
+                } label: {
+                    Label(directReplaceAction.title, systemImage: directReplaceAction.systemImage)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(.orange)
+                .help("下载更新包并直接覆盖当前 App，风险自负")
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.orange.opacity(0.18), lineWidth: 1)
+        )
+    }
+
+    private var directReplaceAction: AppUpdateAction? {
+        presentation.secondaryActions.first { $0.kind == .directReplace }
     }
 }
 

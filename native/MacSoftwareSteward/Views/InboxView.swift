@@ -327,7 +327,10 @@ private struct InboxItemRow: View {
         if !visibleTabs.contains(tab) {
             automationProfile.setAdvancedMode(true)
         }
-        model.selectedTab = tab
+        model.selectedTab = AppTabNavigationPresenter.fallbackTab(
+            for: tab,
+            advancedModeEnabled: automationProfile.profile.advancedModeEnabled
+        )
     }
 
     private func mark(status: InboxStatus) {

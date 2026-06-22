@@ -85,7 +85,7 @@ enum UpgradeFailureAnalyzer {
         if lowercased.contains("version conflict") || lowercased.contains("conflicting") || (lowercased.contains("depends on") && lowercased.contains("not installed")) || lowercased.contains("broken") || lowercased.contains("dependency") {
             return FailureHint(
                 summary: "存在依赖关系问题，无法直接升级。",
-                suggestion: "请点击「重试」。如果持续失败，可以先在「管理来源」页面更新 Homebrew 本身，再重新扫描。",
+                suggestion: "请点击「重试」。如果持续失败，可以先在终端更新 Homebrew 本身，再重新扫描。",
                 action: .rescan
             )
         }

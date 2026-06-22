@@ -33,10 +33,13 @@ struct ContentView: View {
     }
 
     private func normalizeSelectedTab() {
-        model.selectedTab = AppTabNavigationPresenter.fallbackTab(
+        let fallbackTab = AppTabNavigationPresenter.fallbackTab(
             for: model.selectedTab,
             advancedModeEnabled: automationProfile.profile.advancedModeEnabled
         )
+        if model.selectedTab != fallbackTab {
+            model.selectedTab = fallbackTab
+        }
     }
 
     @ViewBuilder
@@ -58,24 +61,9 @@ struct ContentView: View {
 private struct TaskFirstSidebar: View {
     @EnvironmentObject private var model: StewardModel
     @EnvironmentObject private var automationProfile: AutomationProfileStore
-    @State private var advancedExpanded = true
 
     private var advancedModeEnabled: Bool {
         automationProfile.profile.advancedModeEnabled
-    }
-
-    private var advancedCaption: String {
-        AppTabNavigationPresenter.advancedCaption(
-            for: model.selectedTab,
-            advancedModeEnabled: advancedModeEnabled
-        )
-    }
-
-    private var advancedActive: Bool {
-        AppTabNavigationPresenter.isAdvancedTool(
-            model.selectedTab,
-            advancedModeEnabled: advancedModeEnabled
-        )
     }
 
     var body: some View {
@@ -94,29 +82,12 @@ private struct TaskFirstSidebar: View {
 
             if advancedModeEnabled {
                 SidebarSection(title: "诊断与控制") {
-                    AdvancedToolsDisclosure(
-                        isExpanded: advancedExpanded,
-                        isActive: advancedActive,
-                        activeCaption: advancedCaption,
-                        action: {
-                            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                                advancedExpanded.toggle()
-                            }
-                        }
-                    )
-
-                    if advancedExpanded {
-                        VStack(spacing: 4) {
-                            ForEach(AppTabNavigationPresenter.advancedTabs(advancedModeEnabled: true), id: \.rawValue) { tab in
-                                SidebarRow(
-                                    tab: tab,
-                                    isSelected: model.selectedTab == tab,
-                                    isCompact: true,
-                                    action: { select(tab) }
-                                )
-                            }
-                        }
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    ForEach(AppTabNavigationPresenter.controlTabs(advancedModeEnabled: advancedModeEnabled), id: \.rawValue) { tab in
+                        SidebarRow(
+                            tab: tab,
+                            isSelected: model.selectedTab == tab,
+                            action: { select(tab) }
+                        )
                     }
                 }
             }
@@ -139,13 +110,6 @@ private struct TaskFirstSidebar: View {
         .padding(.bottom, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.72))
-        .onChange(of: model.selectedTab) {
-            if advancedActive {
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                    advancedExpanded = true
-                }
-            }
-        }
     }
 
     private var sidebarHeader: some View {
@@ -244,73 +208,6 @@ private struct SidebarStatusChip: View {
                 .stroke(status.color.opacity(0.15), lineWidth: 1)
         )
         .animation(.easeOut(duration: 0.18), value: status.title)
-    }
-}
-
-private struct AdvancedToolsDisclosure: View {
-    var isExpanded: Bool
-    var isActive: Bool
-    var activeCaption: String
-    var action: () -> Void
-    @State private var isHovered = false
-
-    private var rowState: SidebarRowInteractionState {
-        isActive && !isExpanded ? .selected : (isHovered ? .hovered : .normal)
-    }
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 9) {
-                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(rowState == .normal ? .secondary : Color.accentColor)
-                    .frame(width: 18)
-                    .animation(.spring(response: 0.24, dampingFraction: 0.82), value: isExpanded)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("高级工具")
-                        .font(.system(size: 14, weight: rowState == .selected ? .semibold : .medium, design: .rounded))
-                    if !isExpanded, !activeCaption.isEmpty {
-                        Text(activeCaption)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 9)
-            .padding(.vertical, activeCaption.isEmpty || isExpanded ? 8 : 7)
-            .background(rowBackground(for: rowState), in: RoundedRectangle(cornerRadius: 8))
-            .overlay(alignment: .leading) {
-                if rowState.showsSelectionIndicator {
-                    Capsule()
-                        .fill(Color.accentColor)
-                        .frame(width: 3)
-                        .padding(.vertical, 8)
-                        .transition(.opacity.combined(with: .scale))
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .scaleEffect(rowState == .hovered ? 1.012 : 1.0)
-        .animation(.spring(response: 0.24, dampingFraction: 0.78), value: rowState)
-        .onHover { hovering in
-            isHovered = hovering
-        }
-        .help(isExpanded ? "收起高级工具" : "展开高级工具")
-    }
-
-    private func rowBackground(for state: SidebarRowInteractionState) -> Color {
-        switch state {
-        case .normal:
-            return Color.clear
-        case .hovered:
-            return Color.primary.opacity(0.055)
-        case .selected:
-            return Color.accentColor.opacity(0.16)
-        }
     }
 }
 
@@ -487,7 +384,7 @@ private struct HeaderView: View {
                     .foregroundStyle(.primary)
             }
 
-            Text("本机应用是实际安装的 .app；Homebrew / App Store 是可执行升级的管理来源。")
+            Text("本机软件汇总可人工维护的 App、Homebrew 和 App Store 软件。")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
@@ -558,11 +455,16 @@ private struct HeaderView: View {
 
     private var metricsRow: some View {
         HStack(spacing: 10) {
-            MetricCard(title: "本机应用", value: model.scan?.summary.applications, symbol: "macwindow", accent: .blue)
-            MetricCard(title: "Brew Formula", value: model.scan?.summary.brewFormulae, symbol: "cube.box", accent: .orange)
-            MetricCard(title: "Brew Cask", value: model.scan?.summary.brewCasks, symbol: "shippingbox", accent: .purple)
-            MetricCard(title: "可操作升级", value: model.scan?.summary.actionable, symbol: "checkmark.shield", accent: .green)
+            MetricCard(title: "本机软件", value: localSoftwareSummary?.total, symbol: "macwindow", accent: .blue)
+            MetricCard(title: "App", value: localSoftwareSummary?.app, symbol: "app", accent: .green)
+            MetricCard(title: "Brew", value: localSoftwareSummary?.brew, symbol: "shippingbox", accent: .orange)
+            MetricCard(title: "App Store", value: localSoftwareSummary?.appStore, symbol: "bag", accent: .purple)
         }
+    }
+
+    private var localSoftwareSummary: LocalSoftwareSummary? {
+        guard let scan = model.scan else { return nil }
+        return LocalSoftwarePresenter.summary(for: LocalSoftwarePresenter.rows(from: scan))
     }
 }
 

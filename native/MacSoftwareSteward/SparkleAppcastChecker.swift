@@ -3,6 +3,12 @@ import Foundation
 struct SparkleAppcastCheckResult: Hashable {
     var availableVersion: String
     var diagnostic: String
+    var downloadURLString: String? = nil
+}
+
+struct SparkleAppcastItem: Hashable {
+    var version: String
+    var downloadURLString: String?
 }
 
 enum SparkleAppcastChecker {
@@ -21,11 +27,15 @@ enum SparkleAppcastChecker {
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 return SparkleAppcastCheckResult(availableVersion: "", diagnostic: "Sparkle feed HTTP 状态码 \(http.statusCode)。")
             }
-            guard let version = parseLatestVersion(from: data), !version.isEmpty else {
+            guard let item = parseLatestItem(from: data), !item.version.isEmpty else {
                 return SparkleAppcastCheckResult(availableVersion: "", diagnostic: "Sparkle feed 未找到可用版本。")
             }
-            if isNewerVersion(version, than: installedVersion) {
-                return SparkleAppcastCheckResult(availableVersion: version, diagnostic: "Sparkle feed 发现版本 \(version)。")
+            if isNewerVersion(item.version, than: installedVersion) {
+                return SparkleAppcastCheckResult(
+                    availableVersion: item.version,
+                    diagnostic: "Sparkle feed 发现版本 \(item.version)。",
+                    downloadURLString: item.downloadURLString
+                )
             }
             return SparkleAppcastCheckResult(availableVersion: "", diagnostic: "Sparkle feed 未发现更新。")
         } catch {
@@ -45,11 +55,15 @@ enum SparkleAppcastChecker {
     }
 
     static func parseLatestVersion(from data: Data) -> String? {
-        let parser = SparkleAppcastVersionParser()
+        parseLatestItem(from: data)?.version
+    }
+
+    static func parseLatestItem(from data: Data) -> SparkleAppcastItem? {
+        let parser = SparkleAppcastItemParser()
         let xmlParser = XMLParser(data: data)
         xmlParser.delegate = parser
         guard xmlParser.parse() else { return nil }
-        return parser.version
+        return parser.item
     }
 
     static func isNewerVersion(_ candidate: String, than installed: String) -> Bool {
@@ -57,8 +71,11 @@ enum SparkleAppcastChecker {
     }
 }
 
-private final class SparkleAppcastVersionParser: NSObject, XMLParserDelegate {
-    var version: String?
+private final class SparkleAppcastItemParser: NSObject, XMLParserDelegate {
+    var item: SparkleAppcastItem?
+    private var currentVersion: String?
+    private var currentDownloadURLString: String?
+    private var isInsideItem = false
     private var captureVersionText = false
     private var versionText = ""
 
@@ -70,11 +87,19 @@ private final class SparkleAppcastVersionParser: NSObject, XMLParserDelegate {
         attributes attributeDict: [String: String] = [:]
     ) {
         let name = (qName ?? elementName).lowercased()
+        if name == "item" {
+            isInsideItem = true
+            currentVersion = nil
+            currentDownloadURLString = nil
+            return
+        }
         if name == "enclosure" {
-            version = attributeDict["sparkle:shortVersionString"]
+            let version = attributeDict["sparkle:shortVersionString"]
                 ?? attributeDict["sparkle:version"]
                 ?? attributeDict["shortVersionString"]
                 ?? attributeDict["version"]
+            let downloadURLString = attributeDict["url"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+            capture(version: version, downloadURLString: downloadURLString)
         } else if name == "sparkle:version" || name == "version" {
             captureVersionText = true
             versionText = ""
@@ -96,10 +121,33 @@ private final class SparkleAppcastVersionParser: NSObject, XMLParserDelegate {
         let name = (qName ?? elementName).lowercased()
         if name == "sparkle:version" || name == "version" {
             let trimmed = versionText.trimmingCharacters(in: .whitespacesAndNewlines)
-            if version == nil, !trimmed.isEmpty {
-                version = trimmed
-            }
+            capture(version: trimmed, downloadURLString: nil)
             captureVersionText = false
+        } else if name == "item" {
+            publishCurrentItemIfNeeded()
+            isInsideItem = false
         }
+    }
+
+    private func capture(version: String?, downloadURLString: String?) {
+        if let version = version?.trimmingCharacters(in: .whitespacesAndNewlines), !version.isEmpty {
+            currentVersion = currentVersion ?? version
+        }
+        if let downloadURLString, !downloadURLString.isEmpty {
+            currentDownloadURLString = currentDownloadURLString ?? downloadURLString
+        }
+        if !isInsideItem {
+            publishCurrentItemIfNeeded()
+        }
+    }
+
+    private func publishCurrentItemIfNeeded() {
+        guard item == nil,
+              let version = currentVersion,
+              !version.isEmpty else { return }
+        item = SparkleAppcastItem(
+            version: version,
+            downloadURLString: currentDownloadURLString
+        )
     }
 }

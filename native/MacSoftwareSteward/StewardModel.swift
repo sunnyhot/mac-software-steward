@@ -405,6 +405,8 @@ final class StewardModel: ObservableObject {
             open(app)
         case .revealInFinder:
             reveal(app)
+        case .directReplace:
+            Task { await directlyReplace(app) }
         case .openUpdater:
             guard let path = RegularAppUpdateActionResolver.firstExistingUpdaterPath(for: app.updateCapability.detector) else {
                 errorMessage = "未找到 \(app.updateCapability.detector.title) 更新器。"
@@ -421,6 +423,152 @@ final class StewardModel: ObservableObject {
                 }
             }
         }
+    }
+
+    private func directlyReplace(_ app: AppItem) async {
+        guard confirmDirectReplacement(for: app) else { return }
+
+        do {
+            let downloadURL = try directReplacementDownloadURL(for: app)
+            let workDirectory = try makeManualReplacementWorkDirectory()
+            defer { try? FileManager.default.removeItem(at: workDirectory) }
+
+            let downloaded = try await downloadManualReplacement(from: downloadURL, into: workDirectory)
+            let replacementApp = try await preparedReplacementApp(from: downloaded, workDirectory: workDirectory)
+            let existingAppURL = URL(fileURLWithPath: app.path, isDirectory: true)
+
+            try ManualAppReplacementInstaller.validateReplacement(
+                existingAppURL: existingAppURL,
+                newAppURL: replacementApp
+            )
+            try ManualAppReplacementInstaller.replace(existingAppURL: existingAppURL, with: replacementApp)
+            showDirectReplacementFinishedAlert(appName: app.name)
+        } catch {
+            errorMessage = "直接替换 \(app.name) 失败：\(error.localizedDescription)"
+        }
+    }
+
+    private func confirmDirectReplacement(for app: AppItem) -> Bool {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "直接替换 \(app.name)？"
+        alert.informativeText = "会从应用声明的 Sparkle 更新源下载安装包，并覆盖当前 App。请先退出目标应用；如果更新源或安装包不可信，可能导致应用不可用。风险自负。"
+        alert.addButton(withTitle: "直接替换")
+        alert.addButton(withTitle: "取消")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    private func directReplacementDownloadURL(for app: AppItem) throws -> URL {
+        let rawValue = (app.updateCapability.downloadURLString ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: rawValue),
+              ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
+            throw ManualAppReplacementError.message("当前更新源没有可直接下载的安装包地址。")
+        }
+        return url
+    }
+
+    private func downloadManualReplacement(from url: URL, into workDirectory: URL) async throws -> URL {
+        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 30)
+        let (temporaryURL, response) = try await URLSession.shared.download(for: request)
+        if let http = response as? HTTPURLResponse,
+           !(200..<300).contains(http.statusCode) {
+            throw ManualAppReplacementError.message("下载安装包失败，HTTP 状态码 \(http.statusCode)。")
+        }
+
+        let fileName = safeDownloadFileName(from: response, fallbackURL: url)
+        let destination = workDirectory.appendingPathComponent(fileName)
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.removeItem(at: destination)
+        }
+        try FileManager.default.moveItem(at: temporaryURL, to: destination)
+        return destination
+    }
+
+    private func safeDownloadFileName(from response: URLResponse, fallbackURL: URL) -> String {
+        let responseName = response.suggestedFilename?
+            .split(separator: "/")
+            .last
+            .map(String.init)
+        let urlName = fallbackURL.lastPathComponent.isEmpty ? nil : fallbackURL.lastPathComponent
+        let name = responseName ?? urlName ?? "app-update"
+        if URL(fileURLWithPath: name).pathExtension.isEmpty,
+           !fallbackURL.pathExtension.isEmpty {
+            return "\(name).\(fallbackURL.pathExtension)"
+        }
+        return name
+    }
+
+    private func preparedReplacementApp(from archiveURL: URL, workDirectory: URL) async throws -> URL {
+        guard let kind = ManualAppReplacementInstaller.archiveKind(for: archiveURL) else {
+            throw ManualAppReplacementError.message("目前直接替换只支持 .zip 或 .dmg 更新包。")
+        }
+
+        switch kind {
+        case .zip:
+            let extractDirectory = workDirectory.appendingPathComponent("extracted", isDirectory: true)
+            try FileManager.default.createDirectory(at: extractDirectory, withIntermediateDirectories: true)
+            let result = await CommandRunner.run(
+                "/usr/bin/ditto",
+                arguments: ["-x", "-k", archiveURL.path, extractDirectory.path],
+                timeout: 120
+            )
+            guard result.ok else {
+                throw ManualAppReplacementError.message(result.stderr.isEmpty ? "解压更新包失败。" : result.stderr)
+            }
+            guard let appURL = ManualAppReplacementInstaller.findApp(in: extractDirectory) else {
+                throw ManualAppReplacementError.message("更新包中没有找到 .app。")
+            }
+            return appURL
+        case .dmg:
+            return try await copyAppFromMountedDMG(archiveURL, workDirectory: workDirectory)
+        }
+    }
+
+    private func copyAppFromMountedDMG(_ dmgURL: URL, workDirectory: URL) async throws -> URL {
+        let attach = await CommandRunner.run(
+            "/usr/bin/hdiutil",
+            arguments: ["attach", "-nobrowse", "-readonly", dmgURL.path],
+            timeout: 120
+        )
+        guard attach.ok else {
+            throw ManualAppReplacementError.message(attach.stderr.isEmpty ? "挂载 DMG 失败。" : attach.stderr)
+        }
+        guard let mountURL = ManualAppReplacementInstaller.mountPoint(fromHdiutilOutput: attach.stdout) else {
+            throw ManualAppReplacementError.message("无法识别 DMG 挂载位置。")
+        }
+
+        do {
+            guard let mountedApp = ManualAppReplacementInstaller.findApp(in: mountURL) else {
+                throw ManualAppReplacementError.message("DMG 中没有找到 .app。")
+            }
+            let copiedApp = workDirectory.appendingPathComponent(mountedApp.lastPathComponent, isDirectory: true)
+            if FileManager.default.fileExists(atPath: copiedApp.path) {
+                try FileManager.default.removeItem(at: copiedApp)
+            }
+            try FileManager.default.copyItem(at: mountedApp, to: copiedApp)
+            _ = await CommandRunner.run("/usr/bin/hdiutil", arguments: ["detach", mountURL.path], timeout: 30)
+            return copiedApp
+        } catch {
+            _ = await CommandRunner.run("/usr/bin/hdiutil", arguments: ["detach", mountURL.path], timeout: 30)
+            throw error
+        }
+    }
+
+    private func makeManualReplacementWorkDirectory() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MacSoftwareStewardManualReplace-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    private func showDirectReplacementFinishedAlert(appName: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "\(appName) 已直接替换"
+        alert.informativeText = "建议重新打开应用，并点击“扫描”确认版本。"
+        alert.addButton(withTitle: "好")
+        alert.runModal()
     }
 
     func refreshDailyInspectionStatus() {

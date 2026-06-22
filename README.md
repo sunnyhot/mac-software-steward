@@ -55,11 +55,11 @@ build/MacSoftwareSteward.app
 | Homebrew formula | 是 | 是，`brew upgrade <name>` |
 | Homebrew cask | 是 | 是，`brew upgrade --cask <name>` |
 | Mac App Store | 需要 `mas` | 是，`mas upgrade <app-id>` |
-| 普通 `.app` | 是 | 不通用，界面提供 Finder 定位后手动处理 |
+| 普通 `.app` | 是 | 不通用；Sparkle 更新源若提供 `.zip/.dmg` 安装包，可选择“直接替换（风险自负）” |
 
 如果 `mas` CLI 未安装，但 Homebrew 可用，原生应用会显示“安装 mas CLI”按钮。安装任务会进入任务日志，成功后自动重新扫描。
 
-普通 `.app` 没有统一升级协议。很多应用使用 Sparkle、Chrome Keystone、Adobe 更新器、JetBrains Toolbox、Microsoft AutoUpdate、内置更新器或专有安装器；应用会识别这些更新能力并在高级模式展示诊断细节，但不会伪造“自动升级”能力，避免误删或误装。
+普通 `.app` 没有统一升级协议。很多应用使用 Sparkle、Chrome Keystone、Adobe 更新器、JetBrains Toolbox、Microsoft AutoUpdate、内置更新器或专有安装器；应用会识别这些更新能力并在高级模式展示诊断细节。对 Sparkle 已发现新版本且 appcast 提供 `.zip/.dmg` 包的应用，界面会额外提供“直接替换（风险自负）”，执行前会二次确认并校验 bundle id，其他普通 App 仍建议走应用内或厂商更新器。
 
 高级模式下，本机应用列表会展开普通 App 的更新诊断：
 

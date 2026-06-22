@@ -12,17 +12,22 @@ enum SidebarRowInteractionState: Equatable {
 
 enum AppTabNavigationPresenter {
     static func primaryTabs(advancedModeEnabled: Bool) -> [AppTab] {
-        advancedModeEnabled ? [.updates, .applications] : [.applications, .history]
+        advancedModeEnabled ? [.updates, .applications] : [.applications]
+    }
+
+    static func controlTabs(advancedModeEnabled: Bool) -> [AppTab] {
+        advancedModeEnabled ? [.rules, .jobs] : []
     }
 
     static func advancedTabs(advancedModeEnabled: Bool) -> [AppTab] {
-        advancedModeEnabled ? [.sources, .rules, .history, .performance, .jobs] : []
+        []
     }
 
     static let footerTabs: [AppTab] = [.settings]
 
     static func visibleTabs(advancedModeEnabled: Bool) -> [AppTab] {
         primaryTabs(advancedModeEnabled: advancedModeEnabled)
+            + controlTabs(advancedModeEnabled: advancedModeEnabled)
             + advancedTabs(advancedModeEnabled: advancedModeEnabled)
             + footerTabs
     }
@@ -35,9 +40,5 @@ enum AppTabNavigationPresenter {
 
     static func isAdvancedTool(_ tab: AppTab, advancedModeEnabled: Bool) -> Bool {
         advancedTabs(advancedModeEnabled: advancedModeEnabled).contains(tab)
-    }
-
-    static func advancedCaption(for selectedTab: AppTab, advancedModeEnabled: Bool) -> String {
-        isAdvancedTool(selectedTab, advancedModeEnabled: advancedModeEnabled) ? selectedTab.rawValue : ""
     }
 }

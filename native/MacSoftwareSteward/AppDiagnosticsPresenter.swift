@@ -86,9 +86,9 @@ enum AppDiagnosticsPresenter {
     private static func stateTitle(for state: String) -> String {
         switch state {
         case "outdated":
-            return "可更新"
+            return "需手动更新"
         case "checkable":
-            return "可检查"
+            return "可手动检查"
         case "current":
             return "已是最新"
         case "unknown":
@@ -112,7 +112,7 @@ enum AppDiagnosticsPresenter {
 
     private static func reasonTitle(app: AppItem, diagnostic: String) -> String {
         if isUpdateSourceIssue(diagnostic) {
-            return "更新源异常"
+            return "无法确认更新源"
         }
         if app.updateState == "outdated", !trimmed(app.availableVersion).isEmpty {
             return "发现新版本"
@@ -129,18 +129,18 @@ enum AppDiagnosticsPresenter {
         diagnostic: String
     ) -> String {
         if isUpdateSourceIssue(diagnostic) {
-            return "检查网络或更新源状态；必要时打开应用内更新器或在 Finder 中定位后手动处理。"
+            return "下一步：点击“打开应用检查”；如果应用内没有更新入口，再在 Finder 中定位后手动确认。"
         }
         if app.updateState == "outdated" {
-            return "已有可用版本信息；普通 App 不会静默替换，请打开应用或更新器完成升级。"
+            return "下一步：点击“打开应用更新”或“打开更新器”，按应用内提示完成升级。"
         }
         if capability.detector == .none {
-            return "未发现可用更新源；可打开 Finder 定位应用，进入应用菜单手动确认版本。"
+            return "下一步：在 Finder 中定位应用，打开后进入应用菜单手动确认版本。"
         }
         if capability.actions.contains(where: { $0.kind == .openUpdater }) {
-            return "打开更新器或应用，使用厂商提供的更新流程确认版本。"
+            return "下一步：点击“打开更新器”，使用厂商提供的更新流程确认版本。"
         }
-        return "打开应用，使用应用内更新入口确认版本。"
+        return "下一步：点击“打开应用检查”，使用应用内更新入口确认版本。"
     }
 
     private static func detailItems(

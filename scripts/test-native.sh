@@ -43,11 +43,40 @@ run_test AppWindowDoubleClickZoomPolicyTest \
   "$SRC/AppWindowDoubleClickZoomPolicy.swift" \
   "$TESTS/AppWindowDoubleClickZoomPolicyTest.swift"
 
+run_test AppManualUpdatePresenterTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/AppManualUpdatePresenter.swift" \
+  "$TESTS/AppManualUpdatePresenterTest.swift"
+
+run_test ManualAppReplacementInstallerTest \
+  "$SRC/ManualAppReplacementInstaller.swift" \
+  "$TESTS/ManualAppReplacementInstallerTest.swift"
+
 run_test AppTabVisibilityTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
   "$SRC/AppTabNavigationPresenter.swift" \
   "$TESTS/AppTabVisibilityTest.swift"
+
+run_test SettingsPagePresenterTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/SettingsPagePresenter.swift" \
+  "$TESTS/SettingsPagePresenterTest.swift"
+
+run_test ApplicationVisibilityPresenterTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/ApplicationVisibilityPresenter.swift" \
+  "$TESTS/ApplicationVisibilityPresenterTest.swift"
+
+run_test LocalSoftwarePresenterTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/ApplicationVisibilityPresenter.swift" \
+  "$SRC/LocalSoftwarePresenter.swift" \
+  "$TESTS/LocalSoftwarePresenterTest.swift"
 
 run_test ScanPerformanceModelTest \
   "$SRC/ScanPerformance.swift" \
@@ -340,6 +369,7 @@ run_test StewardModelScanGuardTest \
   "$SRC/HomebrewDownloadMonitor.swift" \
   "$SRC/HomebrewCaskDownloadSizeResolver.swift" \
   "$SRC/PackageProgressParser.swift" \
+  "$SRC/ManualAppReplacementInstaller.swift" \
   "$SRC/SourceDiagnostics.swift" \
   "$SRC/UpgradeVerifier.swift" \
   "$SRC/StewardModel.swift" \

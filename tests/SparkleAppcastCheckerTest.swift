@@ -17,6 +17,9 @@ struct SparkleAppcastCheckerTest {
 
         let parsed = SparkleAppcastChecker.parseLatestVersion(from: Data(appcast.utf8))
         precondition(parsed == "2.0")
+        let parsedItem = SparkleAppcastChecker.parseLatestItem(from: Data(appcast.utf8))
+        precondition(parsedItem?.version == "2.0")
+        precondition(parsedItem?.downloadURLString == "https://example.com/app.zip")
 
         let fallback = """
         <rss><channel><item><sparkle:version>3.1</sparkle:version></item></channel></rss>

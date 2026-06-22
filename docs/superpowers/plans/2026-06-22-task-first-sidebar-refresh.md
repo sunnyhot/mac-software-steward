@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Remove the user-facing `待处理` navigation entry and replace the flat sidebar with a task-first sidebar that has clear hover, selected, and tab-switch feedback.
+**Goal:** Remove the user-facing `待处理`, `管理来源`, `历史`, and `性能` navigation entries, keep the sidebar task-first, rename `本机应用` to `本机软件`, show all manually maintainable software in that page, and simplify `自动化策略` into direct selectable controls.
 
 **Architecture:** Add a small navigation presenter that owns grouped tab rules and fallback behavior. `ContentView` uses the presenter to render a custom SwiftUI sidebar while existing page views remain intact. Tests protect the user-visible navigation contract before UI wiring changes.
 
@@ -25,30 +25,31 @@ Replace the visible tab assertions in `tests/AppTabVisibilityTest.swift` with:
 ```swift
 precondition(AppTab.visibleTabs(advancedModeEnabled: false) == [
     .applications,
-    .history,
     .settings
 ])
 precondition(AppTab.visibleTabs(advancedModeEnabled: true) == [
     .updates,
     .applications,
-    .sources,
     .rules,
-    .history,
-    .performance,
     .jobs,
     .settings
 ])
 precondition(!AppTab.visibleTabs(advancedModeEnabled: false).contains(.inbox))
 precondition(!AppTab.visibleTabs(advancedModeEnabled: true).contains(.inbox))
+precondition(!AppTab.visibleTabs(advancedModeEnabled: true).contains(.sources))
+precondition(!AppTab.visibleTabs(advancedModeEnabled: true).contains(.history))
+precondition(!AppTab.visibleTabs(advancedModeEnabled: true).contains(.performance))
 precondition(AppTabNavigationPresenter.primaryTabs(advancedModeEnabled: true) == [.updates, .applications])
-precondition(AppTabNavigationPresenter.primaryTabs(advancedModeEnabled: false) == [.applications, .history])
-precondition(AppTabNavigationPresenter.advancedTabs(advancedModeEnabled: true) == [.sources, .rules, .history, .performance, .jobs])
+precondition(AppTabNavigationPresenter.primaryTabs(advancedModeEnabled: false) == [.applications])
+precondition(AppTabNavigationPresenter.controlTabs(advancedModeEnabled: true) == [.rules, .jobs])
+precondition(AppTabNavigationPresenter.controlTabs(advancedModeEnabled: false).isEmpty)
+precondition(AppTabNavigationPresenter.advancedTabs(advancedModeEnabled: true).isEmpty)
 precondition(AppTabNavigationPresenter.advancedTabs(advancedModeEnabled: false).isEmpty)
 precondition(AppTabNavigationPresenter.footerTabs == [.settings])
 precondition(AppTab.rules.rawValue == "自动化策略")
 precondition(AppTabNavigationPresenter.fallbackTab(for: .inbox, advancedModeEnabled: true) == .applications)
 precondition(AppTabNavigationPresenter.fallbackTab(for: .sources, advancedModeEnabled: false) == .applications)
-precondition(AppTabNavigationPresenter.isAdvancedTool(.jobs, advancedModeEnabled: true))
+precondition(!AppTabNavigationPresenter.isAdvancedTool(.jobs, advancedModeEnabled: true))
 precondition(!AppTabNavigationPresenter.isAdvancedTool(.updates, advancedModeEnabled: true))
 precondition(SidebarRowInteractionState.hovered != SidebarRowInteractionState.selected)
 precondition(SidebarRowInteractionState.selected.showsSelectionIndicator)
@@ -89,17 +90,22 @@ enum SidebarRowInteractionState: Equatable {
 
 enum AppTabNavigationPresenter {
     static func primaryTabs(advancedModeEnabled: Bool) -> [AppTab] {
-        advancedModeEnabled ? [.updates, .applications] : [.applications, .history]
+        advancedModeEnabled ? [.updates, .applications] : [.applications]
+    }
+
+    static func controlTabs(advancedModeEnabled: Bool) -> [AppTab] {
+        advancedModeEnabled ? [.rules, .jobs] : []
     }
 
     static func advancedTabs(advancedModeEnabled: Bool) -> [AppTab] {
-        advancedModeEnabled ? [.sources, .rules, .history, .performance, .jobs] : []
+        []
     }
 
     static let footerTabs: [AppTab] = [.settings]
 
     static func visibleTabs(advancedModeEnabled: Bool) -> [AppTab] {
         primaryTabs(advancedModeEnabled: advancedModeEnabled)
+            + controlTabs(advancedModeEnabled: advancedModeEnabled)
             + advancedTabs(advancedModeEnabled: advancedModeEnabled)
             + footerTabs
     }
@@ -114,9 +120,6 @@ enum AppTabNavigationPresenter {
         advancedTabs(advancedModeEnabled: advancedModeEnabled).contains(tab)
     }
 
-    static func advancedCaption(for selectedTab: AppTab, advancedModeEnabled: Bool) -> String {
-        isAdvancedTool(selectedTab, advancedModeEnabled: advancedModeEnabled) ? selectedTab.rawValue : ""
-    }
 }
 ```
 
@@ -174,7 +177,7 @@ TaskFirstSidebar()
     .navigationSplitViewColumnWidth(min: 210, ideal: 230)
 ```
 
-Add `TaskFirstSidebar`, `SidebarStatusChip`, `AdvancedToolsDisclosure`, and `SidebarRow` as private views in `ContentView.swift`.
+Add `TaskFirstSidebar`, `SidebarStatusChip`, and `SidebarRow` as private views in `ContentView.swift`.
 
 - [ ] **Step 3: Implement hover and selected states**
 
@@ -188,15 +191,9 @@ let state: SidebarRowInteractionState = isSelected ? .selected : (isHovered ? .h
 
 Render selected rows with a stronger pill background, accent icon, bold title, and a leading accent mark. Render hovered rows with a softer background, no leading mark, and lighter scale.
 
-- [ ] **Step 4: Add advanced disclosure behavior**
+- [ ] **Step 4: Keep advanced-mode tabs direct, but grouped**
 
-Use view-local state:
-
-```swift
-@State private var advancedExpanded = true
-```
-
-If `model.selectedTab` is an advanced tool, keep the disclosure visually active and show `AppTabNavigationPresenter.advancedCaption(...)` when collapsed.
+When advanced mode is enabled, render `自动化策略` and `任务日志` as ordinary rows from `AppTabNavigationPresenter.controlTabs(advancedModeEnabled:)` under a `诊断与控制` section. Do not add a disclosure row or collapsed state.
 
 ### Task 3: Tab Transition Polish
 

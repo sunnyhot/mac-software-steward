@@ -642,6 +642,7 @@ enum SoftwareScanner {
             : next.updateCapability.installedVersion
         let result = await sparkleChecker(next.updateCapability.feedURLString, installedVersion)
         next.updateCapability.diagnostic = result.diagnostic
+        next.updateCapability.downloadURLString = result.downloadURLString
         if !result.availableVersion.isEmpty {
             next.availableVersion = result.availableVersion
             next.updateState = "outdated"

@@ -31,21 +31,22 @@ struct UpdatesView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("这里汇总 Homebrew 与 Mac App Store 中可直接执行的升级；扫描和升级策略可在设置中调整。")
+                Text("这里汇总 Homebrew 与 Mac App Store 中可直接执行的升级；扫描和升级策略可在自动化策略中调整。")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Picker("筛选", selection: $selectedFilter) {
+                Picker("", selection: $selectedFilter) {
                     ForEach(UpdateFilter.allCases) { filter in
                         Text(filter.rawValue).tag(filter)
                     }
                 }
+                .labelsHidden()
                 .pickerStyle(.segmented)
                 .frame(width: 420)
                 Button {
-                    model.selectedTab = .settings
+                    model.selectedTab = .rules
                 } label: {
-                    Label("升级设置", systemImage: "gearshape")
+                    Label("升级策略", systemImage: "slider.horizontal.3")
                         .font(.caption)
                 }
                 .buttonStyle(.borderless)

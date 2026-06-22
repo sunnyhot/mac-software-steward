@@ -89,7 +89,7 @@ struct AppDiagnosticsPresenterTest {
         precondition(rows[0].appID == sparkle.id)
         precondition(rows[0].appName == "Sparkle")
         precondition(rows[0].detectorTitle == "Sparkle")
-        precondition(rows[0].stateTitle == "可更新")
+        precondition(rows[0].stateTitle == "需手动更新")
         precondition(rows[0].reasonTitle == "发现新版本")
         precondition(rows[0].summary == "Sparkle 发现新版本 2.0")
         precondition(rows[0].diagnostic == "Sparkle feed 发现版本 2.0。")
@@ -100,15 +100,15 @@ struct AppDiagnosticsPresenterTest {
 
         precondition(rows[1].appID == vendor.id)
         precondition(rows[1].detectorTitle == "Chrome Keystone")
-        precondition(rows[1].stateTitle == "可检查")
+        precondition(rows[1].stateTitle == "可手动检查")
         precondition(rows[1].reasonTitle == "无法确认版本")
         precondition(rows[1].diagnostic == "暂无诊断细节。")
-        precondition(rows[1].actionHint.contains("打开应用"))
+        precondition(rows[1].actionHint.contains("打开应用检查"))
         precondition(rows[1].severity == .info)
 
         precondition(rows[2].appID == brokenFeed.id)
-        precondition(rows[2].reasonTitle == "更新源异常")
-        precondition(rows[2].actionHint.contains("更新源"))
+        precondition(rows[2].reasonTitle == "无法确认更新源")
+        precondition(rows[2].actionHint.contains("打开应用检查"))
         precondition(rows[2].severity == .warning)
 
         precondition(rows[3].appID == quiet.id)

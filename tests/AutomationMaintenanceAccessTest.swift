@@ -23,7 +23,7 @@ struct AutomationMaintenanceAccessTest {
 
         let enabledAccess = AutomationMaintenanceAccessPresenter.dailyInspectionAccess(for: enabledProfile)
         precondition(enabledAccess.canEnable == true)
-        precondition(enabledAccess.caption == "定时扫描可管理来源，发现可升级项后自动执行低风险升级")
+        precondition(enabledAccess.caption == "定时扫描可升级项，发现低风险项目后自动处理")
         precondition(enabledAccess.disabledReason == nil)
     }
 }
