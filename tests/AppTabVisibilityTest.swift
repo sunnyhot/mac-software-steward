@@ -4,13 +4,11 @@ import Foundation
 struct AppTabVisibilityTest {
     static func main() {
         precondition(AppTab.visibleTabs(advancedModeEnabled: false) == [
-            .inbox,
             .applications,
             .history,
             .settings
         ])
         precondition(AppTab.visibleTabs(advancedModeEnabled: true) == [
-            .inbox,
             .updates,
             .applications,
             .sources,
@@ -20,6 +18,20 @@ struct AppTabVisibilityTest {
             .jobs,
             .settings
         ])
+        precondition(!AppTab.visibleTabs(advancedModeEnabled: false).contains(.inbox))
+        precondition(!AppTab.visibleTabs(advancedModeEnabled: true).contains(.inbox))
+        precondition(AppTabNavigationPresenter.primaryTabs(advancedModeEnabled: true) == [.updates, .applications])
+        precondition(AppTabNavigationPresenter.primaryTabs(advancedModeEnabled: false) == [.applications, .history])
+        precondition(AppTabNavigationPresenter.advancedTabs(advancedModeEnabled: true) == [.sources, .rules, .history, .performance, .jobs])
+        precondition(AppTabNavigationPresenter.advancedTabs(advancedModeEnabled: false).isEmpty)
+        precondition(AppTabNavigationPresenter.footerTabs == [.settings])
+        precondition(AppTabNavigationPresenter.fallbackTab(for: .inbox, advancedModeEnabled: true) == .applications)
+        precondition(AppTabNavigationPresenter.fallbackTab(for: .sources, advancedModeEnabled: false) == .applications)
+        precondition(AppTabNavigationPresenter.isAdvancedTool(.jobs, advancedModeEnabled: true))
+        precondition(!AppTabNavigationPresenter.isAdvancedTool(.updates, advancedModeEnabled: true))
+        precondition(SidebarRowInteractionState.hovered != SidebarRowInteractionState.selected)
+        precondition(SidebarRowInteractionState.selected.showsSelectionIndicator)
+        precondition(!SidebarRowInteractionState.hovered.showsSelectionIndicator)
         precondition(AppTab.inbox.symbol == "tray.and.arrow.down")
         precondition(AppTab.rules.symbol == "list.bullet.clipboard")
         precondition(AppTab.history.symbol == "clock.arrow.circlepath")

@@ -3,7 +3,7 @@ import Foundation
 
 @MainActor
 final class StewardModel: ObservableObject {
-    @Published var selectedTab: AppTab = .inbox
+    @Published var selectedTab: AppTab = .applications
     @Published var scan: ScanResult?
     @Published var isScanning = false
     @Published var scanPhase: ScanPhase?

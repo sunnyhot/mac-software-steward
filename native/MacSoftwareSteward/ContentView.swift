@@ -7,12 +7,10 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(AppTab.visibleTabs(advancedModeEnabled: automationProfile.profile.advancedModeEnabled), selection: $model.selectedTab) { tab in
-                Label(tab.rawValue, systemImage: tab.symbol)
-                    .tag(tab)
-            }
-            .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 180, ideal: 210)
+            TaskFirstSidebar()
+                .environmentObject(model)
+                .environmentObject(automationProfile)
+                .navigationSplitViewColumnWidth(min: 210, ideal: 230)
         } detail: {
             detailContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -26,12 +24,19 @@ struct ContentView: View {
             UpgradePlanView()
                 .environmentObject(model)
         }
-        .onChange(of: automationProfile.profile.advancedModeEnabled) {
-            let visibleTabs = AppTab.visibleTabs(advancedModeEnabled: automationProfile.profile.advancedModeEnabled)
-            if !visibleTabs.contains(model.selectedTab) {
-                model.selectedTab = .inbox
-            }
+        .onAppear {
+            normalizeSelectedTab()
         }
+        .onChange(of: automationProfile.profile.advancedModeEnabled) {
+            normalizeSelectedTab()
+        }
+    }
+
+    private func normalizeSelectedTab() {
+        model.selectedTab = AppTabNavigationPresenter.fallbackTab(
+            for: model.selectedTab,
+            advancedModeEnabled: automationProfile.profile.advancedModeEnabled
+        )
     }
 
     @ViewBuilder
@@ -44,6 +49,358 @@ struct ContentView: View {
                 Divider().opacity(0.5)
                 MainPanel()
             }
+        }
+    }
+}
+
+// MARK: - Task First Sidebar
+
+private struct TaskFirstSidebar: View {
+    @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
+    @State private var advancedExpanded = true
+
+    private var advancedModeEnabled: Bool {
+        automationProfile.profile.advancedModeEnabled
+    }
+
+    private var advancedCaption: String {
+        AppTabNavigationPresenter.advancedCaption(
+            for: model.selectedTab,
+            advancedModeEnabled: advancedModeEnabled
+        )
+    }
+
+    private var advancedActive: Bool {
+        AppTabNavigationPresenter.isAdvancedTool(
+            model.selectedTab,
+            advancedModeEnabled: advancedModeEnabled
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sidebarHeader
+
+            SidebarSection(title: "日常维护") {
+                ForEach(AppTabNavigationPresenter.primaryTabs(advancedModeEnabled: advancedModeEnabled), id: \.rawValue) { tab in
+                    SidebarRow(
+                        tab: tab,
+                        isSelected: model.selectedTab == tab,
+                        action: { select(tab) }
+                    )
+                }
+            }
+
+            if advancedModeEnabled {
+                SidebarSection(title: "诊断与控制") {
+                    AdvancedToolsDisclosure(
+                        isExpanded: advancedExpanded,
+                        isActive: advancedActive,
+                        activeCaption: advancedCaption,
+                        action: {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                                advancedExpanded.toggle()
+                            }
+                        }
+                    )
+
+                    if advancedExpanded {
+                        VStack(spacing: 4) {
+                            ForEach(AppTabNavigationPresenter.advancedTabs(advancedModeEnabled: true), id: \.rawValue) { tab in
+                                SidebarRow(
+                                    tab: tab,
+                                    isSelected: model.selectedTab == tab,
+                                    isCompact: true,
+                                    action: { select(tab) }
+                                )
+                            }
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+            }
+
+            Spacer(minLength: 12)
+
+            VStack(spacing: 4) {
+                ForEach(AppTabNavigationPresenter.footerTabs, id: \.rawValue) { tab in
+                    SidebarRow(
+                        tab: tab,
+                        isSelected: model.selectedTab == tab,
+                        isUtility: true,
+                        action: { select(tab) }
+                    )
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 54)
+        .padding(.bottom, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.72))
+        .onChange(of: model.selectedTab) {
+            if advancedActive {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                    advancedExpanded = true
+                }
+            }
+        }
+    }
+
+    private var sidebarHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 9) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.accentColor.opacity(0.14))
+                        .frame(width: 30, height: 30)
+                    Image(systemName: "shield.checkered")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Mac 软件管家")
+                        .font(.system(.headline, design: .rounded).weight(.semibold))
+                        .lineLimit(1)
+                    Text("本机维护控制台")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            SidebarStatusChip()
+                .environmentObject(model)
+        }
+        .padding(.bottom, 4)
+    }
+
+    private func select(_ tab: AppTab) {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+            model.selectedTab = tab
+        }
+    }
+}
+
+private struct SidebarSection<Content: View>: View {
+    var title: String
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(.tertiary)
+                .textCase(.uppercase)
+                .padding(.horizontal, 9)
+            content
+        }
+    }
+}
+
+private struct SidebarStatusChip: View {
+    @EnvironmentObject private var model: StewardModel
+
+    private var status: (title: String, detail: String, symbol: String, color: Color, active: Bool) {
+        if model.isScanning {
+            return ("扫描中", "正在刷新软件状态", "magnifyingglass", .blue, true)
+        }
+        if model.hasRunningJob {
+            return ("升级中", "查看日志了解进度", "arrow.triangle.2.circlepath", .blue, true)
+        }
+        let updateCount = model.allUpgradeablePackages.count
+        if updateCount > 0 {
+            return ("\(updateCount) 个更新", "可升级软件待确认", "arrow.down.circle", .orange, false)
+        }
+        return ("已最新", "没有发现可操作升级", "checkmark.circle", .green, false)
+    }
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: status.symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(status.color)
+                .frame(width: 18)
+                .symbolEffectIfAvailable(active: status.active)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(status.title)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                Text(status.detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .background(status.color.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(status.color.opacity(0.15), lineWidth: 1)
+        )
+        .animation(.easeOut(duration: 0.18), value: status.title)
+    }
+}
+
+private struct AdvancedToolsDisclosure: View {
+    var isExpanded: Bool
+    var isActive: Bool
+    var activeCaption: String
+    var action: () -> Void
+    @State private var isHovered = false
+
+    private var rowState: SidebarRowInteractionState {
+        isActive && !isExpanded ? .selected : (isHovered ? .hovered : .normal)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 9) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(rowState == .normal ? .secondary : Color.accentColor)
+                    .frame(width: 18)
+                    .animation(.spring(response: 0.24, dampingFraction: 0.82), value: isExpanded)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("高级工具")
+                        .font(.system(size: 14, weight: rowState == .selected ? .semibold : .medium, design: .rounded))
+                    if !isExpanded, !activeCaption.isEmpty {
+                        Text(activeCaption)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, activeCaption.isEmpty || isExpanded ? 8 : 7)
+            .background(rowBackground(for: rowState), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(alignment: .leading) {
+                if rowState.showsSelectionIndicator {
+                    Capsule()
+                        .fill(Color.accentColor)
+                        .frame(width: 3)
+                        .padding(.vertical, 8)
+                        .transition(.opacity.combined(with: .scale))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(rowState == .hovered ? 1.012 : 1.0)
+        .animation(.spring(response: 0.24, dampingFraction: 0.78), value: rowState)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .help(isExpanded ? "收起高级工具" : "展开高级工具")
+    }
+
+    private func rowBackground(for state: SidebarRowInteractionState) -> Color {
+        switch state {
+        case .normal:
+            return Color.clear
+        case .hovered:
+            return Color.primary.opacity(0.055)
+        case .selected:
+            return Color.accentColor.opacity(0.16)
+        }
+    }
+}
+
+private struct SidebarRow: View {
+    var tab: AppTab
+    var isSelected: Bool
+    var isCompact = false
+    var isUtility = false
+    var action: () -> Void
+    @State private var isHovered = false
+
+    private var rowState: SidebarRowInteractionState {
+        isSelected ? .selected : (isHovered ? .hovered : .normal)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 9) {
+                Image(systemName: tab.symbol)
+                    .font(.system(size: isCompact ? 12 : 14, weight: .semibold))
+                    .foregroundStyle(iconColor)
+                    .frame(width: 18)
+
+                Text(tab.rawValue)
+                    .font(.system(size: isCompact ? 13 : 14, weight: isSelected ? .semibold : .medium, design: .rounded))
+                    .foregroundStyle(textColor)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, isCompact ? 6 : 8)
+            .background(rowBackground, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(alignment: .leading) {
+                if rowState.showsSelectionIndicator {
+                    Capsule()
+                        .fill(Color.accentColor)
+                        .frame(width: 3)
+                        .padding(.vertical, 8)
+                        .transition(.opacity.combined(with: .scale))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(rowState == .hovered ? 1.012 : 1.0)
+        .animation(.spring(response: 0.24, dampingFraction: 0.78), value: rowState)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+
+    private var iconColor: Color {
+        switch rowState {
+        case .normal:
+            return isUtility || isCompact ? .secondary : Color.accentColor.opacity(0.82)
+        case .hovered, .selected:
+            return Color.accentColor
+        }
+    }
+
+    private var textColor: Color {
+        switch rowState {
+        case .normal:
+            return isCompact || isUtility ? .secondary : .primary
+        case .hovered:
+            return .primary
+        case .selected:
+            return Color.accentColor
+        }
+    }
+
+    private var rowBackground: Color {
+        switch rowState {
+        case .normal:
+            return Color.clear
+        case .hovered:
+            return Color.primary.opacity(0.055)
+        case .selected:
+            return Color.accentColor.opacity(0.16)
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func symbolEffectIfAvailable(active: Bool) -> some View {
+        if #available(macOS 15.0, *) {
+            self.symbolEffect(.pulse, options: .repeating, isActive: active)
+        } else {
+            self
         }
     }
 }
@@ -323,6 +680,8 @@ private struct MainPanel: View {
                 Text(model.selectedTab.rawValue)
                     .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
+                    .id(model.selectedTab.rawValue)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 Spacer()
                 if model.selectedTab.usesSearch {
                     searchField
@@ -359,7 +718,9 @@ private struct MainPanel: View {
                     JobsView()
                 }
             }
-            .animation(.easeInOut(duration: 0.15), value: model.selectedTab)
+            .id(model.selectedTab)
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+            .animation(.easeOut(duration: 0.18), value: model.selectedTab)
         }
         .padding(18)
     }

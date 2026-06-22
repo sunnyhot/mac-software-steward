@@ -46,6 +46,7 @@ run_test AppWindowDoubleClickZoomPolicyTest \
 run_test AppTabVisibilityTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
+  "$SRC/AppTabNavigationPresenter.swift" \
   "$TESTS/AppTabVisibilityTest.swift"
 
 run_test ScanPerformanceModelTest \

@@ -40,9 +40,9 @@ enum AppTab: String, CaseIterable, Identifiable {
 
     static func visibleTabs(advancedModeEnabled: Bool) -> [AppTab] {
         if advancedModeEnabled {
-            return [.inbox, .updates, .applications, .sources, .rules, .history, .performance, .jobs, .settings]
+            return [.updates, .applications, .sources, .rules, .history, .performance, .jobs, .settings]
         }
-        return [.inbox, .applications, .history, .settings]
+        return [.applications, .history, .settings]
     }
 
     var symbol: String {
