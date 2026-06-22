@@ -1,0 +1,154 @@
+# Task-First Sidebar UI Refresh Design
+
+## Context
+
+Mac Software Steward currently uses a flat SwiftUI `List` sidebar. In advanced mode,
+all tabs have equal visual weight: inbox, updates, applications, sources, rules,
+history, performance, jobs, and settings. This makes routine maintenance actions
+compete with diagnostics and configuration pages.
+
+The user selected the "task-first" direction and chose to fold advanced pages into
+an expandable advanced tools group.
+
+## Goals
+
+- Make the sidebar emphasize the daily maintenance path.
+- Keep advanced diagnostics available without letting them dominate the first scan.
+- Improve perceived polish with focused hover, selection, and transition motion.
+- Preserve existing tab destinations and application behavior.
+- Keep the implementation scoped to navigation and view presentation.
+
+## Non-Goals
+
+- Do not redesign scanner, upgrade, policy, inbox, or persistence logic.
+- Do not merge or remove existing pages.
+- Do not introduce new frameworks, assets, or a separate design system.
+- Do not change default advanced mode semantics beyond navigation presentation.
+
+## Navigation Design
+
+The sidebar will be replaced with a custom SwiftUI sidebar inside the existing
+`NavigationSplitView` column.
+
+Primary section:
+
+- `待处理`
+- `可升级`
+- `本机应用`
+
+Advanced tools section:
+
+- A single row labeled `高级工具`.
+- The row expands and collapses with a spring animation.
+- Expanded contents include `管理来源`, `规则`, `历史`, `性能`, and `任务日志`.
+- If one of these advanced tabs is selected while the group is collapsed, the group
+  uses the selected row style and shows the active tab title as a short caption.
+
+Footer:
+
+- `设置` stays visible near the bottom of the sidebar as a quieter utility entry.
+
+Advanced mode behavior:
+
+- When advanced mode is disabled, only the existing simple set remains available:
+  `待处理`, `本机应用`, `历史`, and `设置`.
+- When advanced mode is enabled, the task-first grouping applies.
+- If the current selected tab becomes unavailable after advanced mode changes, the
+  app continues to fall back to `待处理`.
+
+## Visual Design
+
+The sidebar should feel like a macOS maintenance console, not a marketing surface.
+The design should stay quiet and utility-focused.
+
+- Use a slightly wider sidebar than the current default so labels and status text
+  have breathing room.
+- Use a compact status chip near the top for app state:
+  - scanning
+  - upgrade running
+  - pending update count
+  - all clear
+- Use a lightweight pill selection state with an accent-colored leading mark.
+- Use lower emphasis for advanced rows through smaller type, softer color, and
+  tighter spacing.
+- Keep settings visually separate from primary work by pinning it near the bottom.
+- Keep radius modest and avoid decorative backgrounds that fight with macOS
+  materials.
+
+## Interaction Design
+
+- Sidebar row hover should gently lift or tint the row.
+- Selected row should animate with a spring response.
+- Advanced tools expansion should animate disclosure, opacity, and vertical movement.
+- Tab content transition uses a short fade with subtle vertical movement to avoid
+  abrupt switches.
+- Status chip should animate changes but avoid constant motion unless scanning or
+  upgrading is active.
+- Respect platform availability for symbol effects and avoid relying on macOS 15+
+  APIs without guards.
+
+## Component Design
+
+Add small, local components in `ContentView.swift`:
+
+- `TaskFirstSidebar`
+- `SidebarSection`
+- `SidebarRow`
+- `SidebarStatusChip`
+- `AdvancedToolsDisclosure`
+
+Add a small presenter/model helper for testability:
+
+- `AppTabNavigationPresenter`
+
+The presenter exposes:
+
+- primary tabs for advanced and non-advanced modes
+- advanced tabs
+- footer tabs
+- visibility checks
+- fallback selection behavior
+
+## Data Flow
+
+- `ContentView` keeps using `model.selectedTab`.
+- `TaskFirstSidebar` reads `model`, `automationProfile`, and relevant counts.
+- Tapping a row sets `model.selectedTab`.
+- Advanced disclosure state is view-local `@State`, defaults to expanded when the
+  selected tab is in the advanced tools set, and is not persisted.
+- `AppTab.visibleTabs(advancedModeEnabled:)` remains available for compatibility;
+  `AppTabNavigationPresenter` centralizes the new grouped navigation rules.
+
+## Error Handling
+
+There is no new backend error surface.
+
+- If advanced mode disables the current tab, keep the current fallback to `待处理`.
+- If counts are unavailable before the first scan, status chip shows a neutral
+  preparing or ready state.
+- If a job fails, existing `JobNoticeView` remains the detail-level failure surface.
+
+## Testing
+
+Add focused Swift tests for navigation grouping and fallback behavior.
+
+Test cases:
+
+- Advanced mode enabled exposes primary tabs, advanced tabs, and settings footer.
+- Advanced mode disabled hides advanced-only tabs but keeps the simple-mode tabs.
+- Selecting an unavailable tab falls back to `待处理`.
+- Advanced group active state is true when selected tab belongs to the advanced set.
+
+Existing verification remains:
+
+```bash
+npm test
+npm run build
+```
+
+## Implementation Notes
+
+- Keep UI copy in Chinese and code identifiers in English.
+- Avoid changing page internals unless needed for spacing consistency.
+- Use existing SwiftUI/AppKit patterns; do not add package dependencies.
+- Keep generated icon files untouched.
