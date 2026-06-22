@@ -8,22 +8,27 @@ history, performance, jobs, and settings. This makes routine maintenance actions
 compete with diagnostics and configuration pages.
 
 The user selected the "task-first" direction and chose to fold advanced pages into
-an expandable advanced tools group.
+an expandable advanced tools group. The user then decided to remove the user-facing
+`待处理` page from navigation.
 
 ## Goals
 
 - Make the sidebar emphasize the daily maintenance path.
 - Keep advanced diagnostics available without letting them dominate the first scan.
+- Remove the user-facing `待处理` tab and stop using it as the default or fallback
+  destination.
 - Improve perceived polish with focused hover, selection, and transition motion.
-- Preserve existing tab destinations and application behavior.
+- Preserve existing non-inbox tab destinations and application behavior.
 - Keep the implementation scoped to navigation and view presentation.
 
 ## Non-Goals
 
 - Do not redesign scanner, upgrade, policy, inbox, or persistence logic.
-- Do not merge or remove existing pages.
+- Do not merge existing pages or delete source files.
 - Do not introduce new frameworks, assets, or a separate design system.
 - Do not change default advanced mode semantics beyond navigation presentation.
+- Do not delete underlying inbox storage or factories in this pass; only remove the
+  user-visible `待处理` page from navigation.
 
 ## Navigation Design
 
@@ -32,7 +37,6 @@ The sidebar will be replaced with a custom SwiftUI sidebar inside the existing
 
 Primary section:
 
-- `待处理`
 - `可升级`
 - `本机应用`
 
@@ -50,11 +54,11 @@ Footer:
 
 Advanced mode behavior:
 
-- When advanced mode is disabled, only the existing simple set remains available:
-  `待处理`, `本机应用`, `历史`, and `设置`.
+- When advanced mode is disabled, only the simplified set remains available:
+  `本机应用`, `历史`, and `设置`.
 - When advanced mode is enabled, the task-first grouping applies.
 - If the current selected tab becomes unavailable after advanced mode changes, the
-  app continues to fall back to `待处理`.
+  app falls back to `本机应用`.
 
 ## Visual Design
 
@@ -131,7 +135,7 @@ The presenter exposes:
 
 There is no new backend error surface.
 
-- If advanced mode disables the current tab, keep the current fallback to `待处理`.
+- If advanced mode disables the current tab, fall back to `本机应用`.
 - If counts are unavailable before the first scan, status chip shows a neutral
   preparing or ready state.
 - If a job fails, existing `JobNoticeView` remains the detail-level failure surface.
@@ -143,8 +147,10 @@ Add focused Swift tests for navigation grouping and fallback behavior.
 Test cases:
 
 - Advanced mode enabled exposes primary tabs, advanced tabs, and settings footer.
-- Advanced mode disabled hides advanced-only tabs but keeps the simple-mode tabs.
-- Selecting an unavailable tab falls back to `待处理`.
+- Advanced mode disabled hides advanced-only tabs and keeps `本机应用`, `历史`, and
+  `设置`.
+- `待处理` is not visible in advanced or simple navigation.
+- Selecting an unavailable tab falls back to `本机应用`.
 - Advanced group active state is true when selected tab belongs to the advanced set.
 - Sidebar hover and selected presentation are separate style states.
 - Tab transition identity changes when `selectedTab` changes, allowing the content
