@@ -2,6 +2,142 @@ import SwiftUI
 
 // MARK: - Shared Views
 
+func tintColor(for role: MaintenanceStatusTintRole) -> Color {
+    switch role {
+    case .neutral:
+        return .secondary
+    case .accent:
+        return .accentColor
+    case .scanning:
+        return .cyan
+    case .attention:
+        return .orange
+    case .success:
+        return .green
+    case .failure:
+        return .red
+    }
+}
+
+extension View {
+    @ViewBuilder
+    func stewardSymbolPulse(active: Bool) -> some View {
+        if #available(macOS 15.0, *) {
+            self.symbolEffect(.pulse, options: .repeating, isActive: active)
+        } else {
+            self
+        }
+    }
+}
+
+struct FlowingAccentLine: View {
+    var tint: Color
+    var isActive: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var offset: CGFloat = -1
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(tint.opacity(isActive ? 0.18 : 0.12))
+
+                if isActive && !reduceMotion {
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [.clear, tint.opacity(0.85), .clear],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: max(80, proxy.size.width * 0.32))
+                        .offset(x: offset * proxy.size.width)
+                }
+            }
+        }
+        .frame(height: 2)
+        .clipShape(Capsule())
+        .onAppear {
+            guard isActive && !reduceMotion else { return }
+            offset = -0.35
+            withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+                offset = 1.05
+            }
+        }
+        .onChange(of: isActive) {
+            guard isActive && !reduceMotion else {
+                offset = -0.35
+                return
+            }
+            offset = -0.35
+            withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+                offset = 1.05
+            }
+        }
+    }
+}
+
+struct PolishedTaskSurfaceModifier: ViewModifier {
+    var tint: Color
+    var isActive: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .background(
+                LinearGradient(
+                    colors: [
+                        tint.opacity(isActive ? 0.08 : 0.035),
+                        Color.clear
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 10)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(tint.opacity(isActive ? 0.24 : 0.10), lineWidth: 1)
+            )
+            .shadow(color: tint.opacity(isActive && !reduceMotion ? 0.10 : 0.03), radius: isActive ? 10 : 4, y: 2)
+    }
+}
+
+extension View {
+    func polishedTaskSurface(tint: Color = .accentColor, isActive: Bool = false) -> some View {
+        modifier(PolishedTaskSurfaceModifier(tint: tint, isActive: isActive))
+    }
+}
+
+struct StatusIconPlate: View {
+    var symbol: String
+    var tint: Color
+    var isActive = false
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(
+                    LinearGradient(
+                        colors: [tint.opacity(isActive ? 0.20 : 0.14), tint.opacity(0.07)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 34, height: 34)
+
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(tint)
+                .stewardSymbolPulse(active: isActive)
+        }
+    }
+}
+
 struct Badge: View {
     var text: String
     var color: Color
@@ -75,11 +211,7 @@ struct WarningLine: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(.red.opacity(0.2), lineWidth: 1)
-        )
+        .polishedTaskSurface(tint: .red, isActive: false)
     }
 }
 
@@ -110,11 +242,7 @@ struct InstallToolPrompt: View {
             Spacer()
         }
         .padding(14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-        )
+        .polishedTaskSurface(tint: .accentColor, isActive: false)
     }
 }
 
@@ -125,19 +253,7 @@ struct EmptyStateView: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(.regularMaterial)
-                    .frame(width: 72, height: 72)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-                    )
-
-                Image(systemName: symbol)
-                    .font(.system(size: 28, weight: .light))
-                    .foregroundStyle(.secondary)
-            }
+            StatusIconPlate(symbol: symbol, tint: .secondary)
 
             VStack(spacing: 6) {
                 Text(title)
@@ -247,15 +363,17 @@ struct UpgradeProgressBar: View {
 
             ProgressView(value: progress.fraction)
                 .progressViewStyle(.linear)
-                .tint(progress.failed > 0 && !progress.isRunning ? .orange : .accentColor)
+                .tint(progressTint)
+
+            FlowingAccentLine(tint: progressTint, isActive: progress.isRunning)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.accentColor.opacity(0.15), lineWidth: 1)
-        )
+        .polishedTaskSurface(tint: progressTint, isActive: progress.isRunning)
+    }
+
+    private var progressTint: Color {
+        progress.failed > 0 && !progress.isRunning ? .orange : .accentColor
     }
 }
 
