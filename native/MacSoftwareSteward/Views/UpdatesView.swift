@@ -30,11 +30,18 @@ struct UpdatesView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("这里汇总 Homebrew 与 Mac App Store 中可直接执行的升级；扫描和升级策略可在自动化策略中调整。")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Spacer()
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("可执行升级")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    Text("Homebrew 与 Mac App Store 中可直接执行的升级会出现在这里。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 12)
+
                 Picker("", selection: $selectedFilter) {
                     ForEach(UpdateFilter.allCases) { filter in
                         Text(filter.rawValue).tag(filter)
@@ -51,6 +58,8 @@ struct UpdatesView: View {
                 }
                 .buttonStyle(.borderless)
             }
+            .padding(12)
+            .polishedTaskSurface(tint: .accentColor, isActive: false)
 
             if model.isScanning {
                 scanningView
@@ -73,8 +82,9 @@ struct UpdatesView: View {
     }
 
     private var scanningView: some View {
-        VStack(spacing: 20) {
-            scanningIcon
+        VStack(spacing: 18) {
+            StatusIconPlate(symbol: "arrow.triangle.2.circlepath", tint: .cyan, isActive: true)
+                .scaleEffect(1.2)
 
             VStack(spacing: 8) {
                 Text("正在扫描本机软件")
@@ -85,39 +95,19 @@ struct UpdatesView: View {
                         .font(.subheadline)
                     ProgressView(value: phase.progress)
                         .progressViewStyle(.linear)
-                        .frame(maxWidth: 280)
+                        .tint(.cyan)
+                        .frame(maxWidth: 320)
+                    FlowingAccentLine(tint: .cyan, isActive: true)
+                        .frame(maxWidth: 320)
                 } else {
-                    Text("准备中...")
+                    Text("准备刷新软件状态")
                         .foregroundStyle(.secondary)
                         .font(.subheadline)
                 }
             }
         }
         .frame(maxWidth: .infinity, minHeight: 300)
-    }
-
-    /// macOS 15+ uses rotate symbolEffect; macOS 14 falls back to static icon.
-    @ViewBuilder
-    private var scanningIcon: some View {
-        if #available(macOS 15.0, *) {
-            ZStack {
-                Circle()
-                    .fill(.regularMaterial)
-                    .frame(width: 64, height: 64)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.accentColor.opacity(0.15), lineWidth: 1)
-                    )
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 28, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .symbolEffect(.rotate, options: .repeating)
-            }
-        } else {
-            Image(systemName: "arrow.triangle.2.circlepath")
-                .font(.system(size: 28, weight: .medium))
-                .foregroundStyle(.secondary)
-        }
+        .polishedTaskSurface(tint: .cyan, isActive: true)
     }
 }
 
@@ -143,16 +133,11 @@ struct UpdateRow: View {
         VStack(alignment: .leading, spacing: 6) {
             // 主行：图标 + 名称 + 标签 + 操作
             HStack(spacing: 10) {
-                // Source icon with styled background
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(sourceIconBackground)
-                        .frame(width: 30, height: 30)
-
-                    Image(systemName: package.source.contains("Brew") ? "shippingbox" : "bag")
-                        .font(.system(.callout, weight: .medium))
-                        .foregroundStyle(sourceIconColor)
-                }
+                StatusIconPlate(
+                    symbol: package.source.contains("Brew") ? "shippingbox" : "bag",
+                    tint: sourceIconColor,
+                    isActive: progress?.status == .running
+                )
 
                 CopyableText(text: package.name)
 
@@ -204,15 +189,15 @@ struct UpdateRow: View {
             if let progress {
                 PackageProgressDetail(progress: progress)
             }
+
+            if isActiveRow {
+                FlowingAccentLine(tint: rowAccent, isActive: true)
+                    .padding(.leading, 40)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .background(rowTint, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(rowBorder, lineWidth: 1)
-        )
+        .polishedTaskSurface(tint: rowAccent, isActive: isActiveRow)
         .scaleEffect(isHovered && progress == nil ? 1.005 : 1.0)
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isHovered)
         .onHover { hovering in
@@ -221,10 +206,6 @@ struct UpdateRow: View {
     }
 
     // MARK: Source Icon Colors
-
-    private var sourceIconBackground: Color {
-        package.source.contains("Brew") ? Color.orange.opacity(0.12) : Color.blue.opacity(0.12)
-    }
 
     private var sourceIconColor: Color {
         package.source.contains("Brew") ? .orange : .blue
@@ -261,23 +242,22 @@ struct UpdateRow: View {
 
     // MARK: Row Style
 
-    private var rowTint: Color {
-        switch progress?.status {
-        case .running, .queued: return Color.accentColor.opacity(0.04)
-        case .succeeded: return Color.green.opacity(0.04)
-        case .failed, .cancelled, .timedOut: return Color.red.opacity(0.04)
-        case .warning: return Color.yellow.opacity(0.04)
-        case nil: return package.outdated ? Color.orange.opacity(0.03) : .clear
-        }
+    private var isActiveRow: Bool {
+        progress?.status == .running || progress?.status == .queued
     }
 
-    private var rowBorder: Color {
+    private var rowAccent: Color {
         switch progress?.status {
-        case .running, .queued: return Color.accentColor.opacity(0.2)
-        case .succeeded: return Color.green.opacity(0.2)
-        case .failed, .cancelled, .timedOut: return Color.red.opacity(0.2)
-        case .warning: return Color.yellow.opacity(0.2)
-        case nil: return package.outdated ? Color.orange.opacity(0.15) : Color.primary.opacity(0.06)
+        case .running, .queued:
+            return .accentColor
+        case .succeeded:
+            return .green
+        case .failed, .cancelled, .timedOut:
+            return .red
+        case .warning:
+            return .yellow
+        case nil:
+            return package.outdated ? .orange : .secondary
         }
     }
 }
@@ -448,10 +428,12 @@ struct PackageProgressDetail: View {
                 ProgressView(value: fraction)
                     .progressViewStyle(.linear)
                     .tint(.accentColor)
+                FlowingAccentLine(tint: .accentColor, isActive: true)
                 downloadMetricRow(percentText: "\(Int(fraction * 100))%")
             } else {
                 ProgressView()
                     .progressViewStyle(.linear)
+                FlowingAccentLine(tint: .accentColor, isActive: true)
                 if progress.downloadSizeText != nil || progress.downloadSpeedText != nil {
                     downloadMetricRow(percentText: nil)
                 }
