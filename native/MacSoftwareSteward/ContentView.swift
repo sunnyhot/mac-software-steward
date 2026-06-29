@@ -167,32 +167,40 @@ private struct SidebarSection<Content: View>: View {
 private struct SidebarStatusChip: View {
     @EnvironmentObject private var model: StewardModel
 
-    private var status: (title: String, detail: String, symbol: String, color: Color, active: Bool) {
-        if model.isScanning {
-            return ("扫描中", "正在刷新软件状态", "magnifyingglass", .blue, true)
-        }
-        if model.hasRunningJob {
-            return ("升级中", "查看日志了解进度", "arrow.triangle.2.circlepath", .blue, true)
-        }
-        let updateCount = model.allUpgradeablePackages.count
-        if updateCount > 0 {
-            return ("\(updateCount) 个更新", "可升级软件待确认", "arrow.down.circle", .orange, false)
-        }
-        return ("已最新", "没有发现可操作升级", "checkmark.circle", .green, false)
+    private var presentation: MaintenanceStatusPresentation {
+        MaintenanceStatusPresenter.presentation(
+            isScanning: model.isScanning,
+            scanPhaseText: model.scanPhase?.rawValue,
+            scanProgress: model.scanPhase?.progress,
+            hasRunningJob: model.hasRunningJob,
+            upgradeProgress: model.upgradeProgress,
+            updateCount: model.allUpgradeablePackages.count,
+            failedPackageCount: model.packageProgress.values.filter { progress in
+                [
+                    PackageUpgradeStatus.failed,
+                    PackageUpgradeStatus.timedOut,
+                    PackageUpgradeStatus.cancelled
+                ].contains(progress.status)
+            }.count
+        )
+    }
+
+    private var tint: Color {
+        tintColor(for: presentation.tintRole)
     }
 
     var body: some View {
         HStack(spacing: 9) {
-            Image(systemName: status.symbol)
+            Image(systemName: presentation.symbol)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(status.color)
+                .foregroundStyle(tint)
                 .frame(width: 18)
-                .symbolEffectIfAvailable(active: status.active)
+                .stewardSymbolPulse(active: presentation.isActive)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(status.title)
+                Text(presentation.title)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
-                Text(status.detail)
+                Text(presentation.detail)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -202,12 +210,8 @@ private struct SidebarStatusChip: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
-        .background(status.color.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(status.color.opacity(0.15), lineWidth: 1)
-        )
-        .animation(.easeOut(duration: 0.18), value: status.title)
+        .polishedTaskSurface(tint: tint, isActive: presentation.isActive)
+        .animation(.easeOut(duration: 0.18), value: presentation)
     }
 }
 
@@ -241,6 +245,10 @@ private struct SidebarRow: View {
             .padding(.horizontal, 9)
             .padding(.vertical, isCompact ? 6 : 8)
             .background(rowBackground, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(rowBorderColor, lineWidth: rowState == .selected ? 1 : 0.5)
+            )
             .overlay(alignment: .leading) {
                 if rowState.showsSelectionIndicator {
                     Capsule()
@@ -284,20 +292,20 @@ private struct SidebarRow: View {
         case .normal:
             return Color.clear
         case .hovered:
-            return Color.primary.opacity(0.055)
+            return Color.primary.opacity(0.06)
         case .selected:
-            return Color.accentColor.opacity(0.16)
+            return Color.accentColor.opacity(0.14)
         }
     }
-}
 
-private extension View {
-    @ViewBuilder
-    func symbolEffectIfAvailable(active: Bool) -> some View {
-        if #available(macOS 15.0, *) {
-            self.symbolEffect(.pulse, options: .repeating, isActive: active)
-        } else {
-            self
+    private var rowBorderColor: Color {
+        switch rowState {
+        case .normal:
+            return Color.clear
+        case .hovered:
+            return Color.primary.opacity(0.08)
+        case .selected:
+            return Color.accentColor.opacity(0.22)
         }
     }
 }
@@ -313,6 +321,12 @@ private struct HeaderView: View {
         VStack(alignment: .leading, spacing: 14) {
             // Toolbar row: title + actions
             toolbarRow
+
+            MaintenanceStatusBand(
+                presentation: statusPresentation,
+                updateCount: model.allUpgradeablePackages.count,
+                failedCount: failedPackageCount
+            )
 
             // Conditional banners
             VStack(spacing: 8) {
@@ -465,6 +479,87 @@ private struct HeaderView: View {
     private var localSoftwareSummary: LocalSoftwareSummary? {
         guard let scan = model.scan else { return nil }
         return LocalSoftwarePresenter.summary(for: LocalSoftwarePresenter.rows(from: scan))
+    }
+
+    private var failedPackageCount: Int {
+        model.packageProgress.values.filter { progress in
+            [
+                PackageUpgradeStatus.failed,
+                PackageUpgradeStatus.timedOut,
+                PackageUpgradeStatus.cancelled
+            ].contains(progress.status)
+        }.count
+    }
+
+    private var statusPresentation: MaintenanceStatusPresentation {
+        MaintenanceStatusPresenter.presentation(
+            isScanning: model.isScanning,
+            scanPhaseText: model.scanPhase?.rawValue,
+            scanProgress: model.scanPhase?.progress,
+            hasRunningJob: model.hasRunningJob,
+            upgradeProgress: model.upgradeProgress,
+            updateCount: model.allUpgradeablePackages.count,
+            failedPackageCount: failedPackageCount
+        )
+    }
+}
+
+private struct MaintenanceStatusBand: View {
+    var presentation: MaintenanceStatusPresentation
+    var updateCount: Int
+    var failedCount: Int
+
+    private var tint: Color {
+        tintColor(for: presentation.tintRole)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                StatusIconPlate(symbol: presentation.symbol, tint: tint, isActive: presentation.isActive)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(presentation.title)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    Text(presentation.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 12)
+
+                statusMetric(title: "可升级", value: updateCount, tint: .orange)
+                statusMetric(title: "需处理", value: failedCount, tint: failedCount > 0 ? .red : .secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+
+            if let progress = presentation.progress {
+                ProgressView(value: progress)
+                    .progressViewStyle(.linear)
+                    .tint(tint)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 10)
+            }
+
+            FlowingAccentLine(tint: tint, isActive: presentation.isActive)
+        }
+        .polishedTaskSurface(tint: tint, isActive: presentation.isActive)
+        .animation(.easeOut(duration: 0.18), value: presentation)
+    }
+
+    private func statusMetric(title: String, value: Int, tint: Color) -> some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Text("\(value)")
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(tint)
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(minWidth: 52, alignment: .trailing)
     }
 }
 
