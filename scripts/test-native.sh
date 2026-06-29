@@ -59,6 +59,12 @@ run_test AppTabVisibilityTest \
   "$SRC/AppTabNavigationPresenter.swift" \
   "$TESTS/AppTabVisibilityTest.swift"
 
+run_test MaintenanceStatusPresenterTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/MaintenanceStatusPresenter.swift" \
+  "$TESTS/MaintenanceStatusPresenterTest.swift"
+
 run_test SettingsPagePresenterTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
