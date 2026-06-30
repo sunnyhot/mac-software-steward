@@ -205,6 +205,18 @@ enum DownloadAccelerationPolicy {
         return .retry(nextAttemptIndex: next)
     }
 
+    static func shouldCleanPartialDownload(
+        for decision: SlowDownloadDecision,
+        cleanupCount: Int,
+        maxCleanups: Int
+    ) -> Bool {
+        guard cleanupCount < maxCleanups else { return false }
+        if case .stalled = decision {
+            return true
+        }
+        return false
+    }
+
     static func systemProxyURLString(from scutilOutput: String) -> String? {
         let lines = scutilOutput.components(separatedBy: .newlines)
 

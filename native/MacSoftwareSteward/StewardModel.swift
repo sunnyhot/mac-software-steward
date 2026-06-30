@@ -931,6 +931,22 @@ final class StewardModel: ObservableObject {
             if result.terminationReason == .cancelled,
                let decision = downloadAccelerationRetryRequests.removeValue(forKey: key),
                let next = attempt.next() {
+                if let packageName = step.packageName,
+                   isHomebrewCaskUpgrade(step),
+                   DownloadAccelerationPolicy.shouldCleanPartialDownload(
+                       for: decision,
+                       cleanupCount: downloadAccelerationCleanups[key] ?? 0,
+                       maxCleanups: DownloadAccelerationConfig.production.maxCacheCleanups
+                   ) {
+                    do {
+                        if let removed = try HomebrewDownloadMonitor.removeIncompleteDownload(packageName: packageName) {
+                            downloadAccelerationCleanups[key, default: 0] += 1
+                            appendLog(id: id, stream: "system", text: "检测到 Homebrew 缓存文件无增长，已清理当前 cask 的未完成下载：\(removed.lastPathComponent)")
+                        }
+                    } catch {
+                        appendLog(id: id, stream: "system", text: "清理 Homebrew 未完成下载失败：\(error.localizedDescription)")
+                    }
+                }
                 appendLog(id: id, stream: "system", text: "\(decision.message)，正在切换到\(next.currentStrategy.title)重试。")
                 attempt = next
                 continue
