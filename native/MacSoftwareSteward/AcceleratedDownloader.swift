@@ -95,7 +95,11 @@ enum AcceleratedDownloader {
             configuration.connectionProxyDictionary = attempt.strategy.connectionProxyDictionary
         }
 
+        let safeFileName = URL(fileURLWithPath: attempt.request.destinationFileName).lastPathComponent
+        let stableTempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MacSoftwareStewardDownload-\(UUID().uuidString)-\(safeFileName)")
         let delegate = AcceleratedURLSessionDelegate(
+            stableSaveURL: stableTempURL,
             expectedByteCount: attempt.request.expectedByteCount,
             onProgress: onProgress
         )
@@ -114,21 +118,33 @@ enum AcceleratedDownloader {
 }
 
 private final class AcceleratedURLSessionDelegate: NSObject, URLSessionDownloadDelegate {
+    private let stableSaveURL: URL
     private let expectedByteCount: Int64?
     private let onProgress: (AcceleratedDownloadProgress) -> Void
     private var continuation: CheckedContinuation<URL, Error>?
+    private var savedFileURL: URL?
+    private var savedFileError: Error?
     private var lastBytes: Int64 = 0
     private var lastDate = Date()
 
-    init(expectedByteCount: Int64?, onProgress: @escaping (AcceleratedDownloadProgress) -> Void) {
+    init(
+        stableSaveURL: URL,
+        expectedByteCount: Int64?,
+        onProgress: @escaping (AcceleratedDownloadProgress) -> Void
+    ) {
+        self.stableSaveURL = stableSaveURL
         self.expectedByteCount = expectedByteCount
         self.onProgress = onProgress
     }
 
     func waitForDownload(_ task: URLSessionDownloadTask) async throws -> URL {
-        try await withCheckedThrowingContinuation { continuation in
-            self.continuation = continuation
-            task.resume()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                self.continuation = continuation
+                task.resume()
+            }
+        } onCancel: {
+            task.cancel()
         }
     }
 
@@ -137,8 +153,15 @@ private final class AcceleratedURLSessionDelegate: NSObject, URLSessionDownloadD
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
-        continuation?.resume(returning: location)
-        continuation = nil
+        do {
+            if FileManager.default.fileExists(atPath: stableSaveURL.path) {
+                try FileManager.default.removeItem(at: stableSaveURL)
+            }
+            try FileManager.default.moveItem(at: location, to: stableSaveURL)
+            savedFileURL = stableSaveURL
+        } catch {
+            savedFileError = error
+        }
     }
 
     func urlSession(
@@ -166,8 +189,17 @@ private final class AcceleratedURLSessionDelegate: NSObject, URLSessionDownloadD
         task: URLSessionTask,
         didCompleteWithError error: Error?
     ) {
-        guard let error else { return }
-        continuation?.resume(throwing: error)
-        continuation = nil
+        guard let continuation else { return }
+        self.continuation = nil
+
+        if let error {
+            continuation.resume(throwing: error)
+        } else if let savedFileError {
+            continuation.resume(throwing: savedFileError)
+        } else if let savedFileURL {
+            continuation.resume(returning: savedFileURL)
+        } else {
+            continuation.resume(throwing: AcceleratedDownloadError.failed("下载文件保存失败：未收到完成文件。"))
+        }
     }
 }

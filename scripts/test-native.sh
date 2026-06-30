@@ -39,6 +39,25 @@ run_test AppUpdateSecurityTest \
   "$SRC/AppUpdateSecurity.swift" \
   "$TESTS/AppUpdateSecurityTest.swift"
 
+run_test AppUpdateDownloadPresenterTest \
+  "$SRC/CommandRunner.swift" \
+  "$SRC/DownloadAcceleration.swift" \
+  "$SRC/AcceleratedDownloader.swift" \
+  "$SRC/AppUpdateDownloadPresenter.swift" \
+  "$TESTS/AppUpdateDownloadPresenterTest.swift"
+
+run_test AppUpdateModelAccelerationTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/CommandRunner.swift" \
+  "$SRC/SelfUpdateInstallScript.swift" \
+  "$SRC/AppUpdateSecurity.swift" \
+  "$SRC/DownloadAcceleration.swift" \
+  "$SRC/AcceleratedDownloader.swift" \
+  "$SRC/AppUpdateDownloadPresenter.swift" \
+  "$SRC/AppUpdater.swift" \
+  "$TESTS/AppUpdateModelAccelerationTest.swift"
+
 run_test AppWindowDoubleClickZoomPolicyTest \
   "$SRC/AppWindowDoubleClickZoomPolicy.swift" \
   "$TESTS/AppWindowDoubleClickZoomPolicyTest.swift"

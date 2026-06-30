@@ -45,12 +45,10 @@ final class AppUpdateModel: ObservableObject {
 
     private var latestRelease: GitHubRelease?
     private let session: URLSession
+    private let downloadStrategiesProvider: () async -> [DownloadAccelerationStrategy]
+    private let acceleratedDownloadRunner: AcceleratedDownloader.Runner?
     private var periodicTask: Task<Void, Never>?
     private var lastCheckTime: Date?
-    /// 用于跟踪下载进度
-    private var downloadStartTime: Date?
-    private var lastDownloadedBytes: Int64 = 0
-    private var lastDownloadSpeedTime: Date?
 
     private static let automaticChecksKey = "AppUpdateAutomaticChecksEnabled"
     private static let automaticDownloadsKey = "AppUpdateAutomaticDownloadsEnabled"
@@ -61,8 +59,14 @@ final class AppUpdateModel: ObservableObject {
         "https://github.com/\(owner)/\(repo)/releases/latest/download/latest.json"
     }
 
-    init(session: URLSession = .shared) {
+    init(
+        session: URLSession = .shared,
+        downloadStrategiesProvider: @escaping () async -> [DownloadAccelerationStrategy] = DownloadAccelerationPolicy.defaultStrategies,
+        acceleratedDownloadRunner: AcceleratedDownloader.Runner? = nil
+    ) {
         self.session = session
+        self.downloadStrategiesProvider = downloadStrategiesProvider
+        self.acceleratedDownloadRunner = acceleratedDownloadRunner
         self.automaticChecksEnabled = UserDefaults.standard.object(forKey: Self.automaticChecksKey) as? Bool ?? true
         self.automaticDownloadsEnabled = UserDefaults.standard.object(forKey: Self.automaticDownloadsKey) as? Bool ?? true
     }
@@ -180,9 +184,6 @@ final class AppUpdateModel: ObservableObject {
         downloadedSizeText = nil
         totalDownloadSizeText = releaseAssetSizeText.isEmpty ? nil : releaseAssetSizeText
         downloadSpeedText = nil
-        downloadStartTime = Date()
-        lastDownloadedBytes = 0
-        lastDownloadSpeedTime = Date()
         progress = "正在连接下载 \(asset.name)..."
 
         do {
@@ -311,54 +312,51 @@ final class AppUpdateModel: ObservableObject {
     }
 
     private func download(asset: GitHubRelease.Asset) async throws -> URL {
-        guard let url = URL(string: asset.browserDownloadURL) else {
-            throw AppUpdateError.message("Release asset 下载地址无效。")
-        }
-        let workDirectory = try makeWorkDirectory()
-        let destination = workDirectory.appendingPathComponent(asset.name)
+        try await downloadReleaseAssetForSelfUpdate(
+            assetName: asset.name,
+            downloadURLString: asset.browserDownloadURL,
+            size: asset.size
+        )
+    }
 
-        let stableTempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("MacSoftwareSteward-\(UUID().uuidString).zip")
-        let delegate = DownloadProgressDelegate(stableSaveURL: stableTempURL) { [weak self] bytesWritten, totalWritten, totalExpected in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                if totalExpected > 0 {
-                    self.downloadFraction = Double(totalWritten) / Double(totalExpected)
-                    self.totalDownloadSizeText = ByteCountFormatter.string(fromByteCount: totalExpected, countStyle: .file)
-                } else {
-                    self.downloadFraction = nil
+    func downloadReleaseAssetForSelfUpdate(
+        assetName: String,
+        downloadURLString: String,
+        size: Int
+    ) async throws -> URL {
+        let request = try AppUpdateDownloadPresenter.request(
+            assetName: assetName,
+            downloadURLString: downloadURLString,
+            size: size
+        )
+        let workDirectory = try makeWorkDirectory()
+        let destination = workDirectory.appendingPathComponent(assetName)
+        let strategies = await downloadStrategiesProvider()
+        let downloadedFile = try await AcceleratedDownloader.download(
+            request,
+            strategies: strategies,
+            runner: acceleratedDownloadRunner,
+            onProgress: { [weak self] downloadProgress in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let presentation = AppUpdateDownloadPresenter.presentation(
+                        for: downloadProgress,
+                        assetName: assetName
+                    )
+                    self.progress = presentation.progressText
+                    self.downloadFraction = presentation.fraction
+                    self.downloadedSizeText = presentation.downloadedSizeText
+                    self.totalDownloadSizeText = presentation.totalDownloadSizeText
+                    self.downloadSpeedText = presentation.downloadSpeedText
                 }
-                self.progress = "正在下载 \(asset.name)..."
-                self.downloadedSizeText = ByteCountFormatter.string(fromByteCount: totalWritten, countStyle: .file)
-                // 计算下载速度（每秒采样一次避免抖动）
-                let now = Date()
-                if let lastTime = self.lastDownloadSpeedTime,
-                   now.timeIntervalSince(lastTime) >= 1.0 {
-                    let bytesDelta = totalWritten - self.lastDownloadedBytes
-                    let timeDelta = now.timeIntervalSince(lastTime)
-                    if timeDelta > 0 {
-                        let bytesPerSecond = Double(bytesDelta) / timeDelta
-                        self.downloadSpeedText = ByteCountFormatter.string(fromByteCount: Int64(bytesPerSecond), countStyle: .file) + "/s"
-                    }
-                    self.lastDownloadedBytes = totalWritten
-                    self.lastDownloadSpeedTime = now
+            },
+            onStatus: { [weak self] status in
+                Task { @MainActor [weak self] in
+                    self?.progress = status
                 }
             }
-        }
-        let configuration = URLSessionConfiguration.default
-        configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-        configuration.timeoutIntervalForRequest = 30
-        configuration.timeoutIntervalForResource = 300
-        let downloadSession = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
-        defer { downloadSession.finishTasksAndInvalidate() }
+        )
 
-        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 30)
-        let task = downloadSession.downloadTask(with: request)
-        let downloadedFile = try await delegate.waitForDownload(task)
-        let response = task.response
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw AppUpdateError.message("下载安装包失败。")
-        }
         guard FileManager.default.fileExists(atPath: downloadedFile.path) else {
             throw AppUpdateError.message("下载文件保存失败：临时文件不存在。")
         }
@@ -393,7 +391,7 @@ final class AppUpdateModel: ObservableObject {
         }
 
         let scriptURL = newAppURL.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("install-update.zsh")
-        let logURL = DailyInspectionScheduler.supportDirectory.appendingPathComponent("self-update.log")
+        let logURL = selfUpdateSupportDirectory.appendingPathComponent("self-update.log")
         try FileManager.default.createDirectory(at: logURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try SelfUpdateInstallScript.content.write(to: scriptURL, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
@@ -482,6 +480,11 @@ final class AppUpdateModel: ObservableObject {
 
     private var appBundleName: String {
         Bundle.main.object(forInfoDictionaryKey: "GitHubReleaseAppBundleName") as? String ?? "MacSoftwareSteward.app"
+    }
+
+    private var selfUpdateSupportDirectory: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/MacSoftwareSteward", isDirectory: true)
     }
 }
 
@@ -585,76 +588,4 @@ private func versionParts(_ version: String) -> [Int] {
     version
         .split { !$0.isNumber }
         .map { Int($0) ?? 0 }
-}
-
-/// URLSession 下载进度委托。
-/// 注意：不要和 async `download(for:)` 混用；该 API 不会把进度交给 session delegate。
-private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
-    private let onProgress: (Int64, Int64, Int64) -> Void
-    private let stableSaveURL: URL
-    private var continuation: CheckedContinuation<URL, Error>?
-    private var savedFileURL: URL?
-    private var savedFileError: Error?
-
-    init(stableSaveURL: URL, onProgress: @escaping (Int64, Int64, Int64) -> Void) {
-        self.stableSaveURL = stableSaveURL
-        self.onProgress = onProgress
-        super.init()
-    }
-
-    func waitForDownload(_ task: URLSessionDownloadTask) async throws -> URL {
-        try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
-                self.continuation = continuation
-                task.resume()
-            }
-        } onCancel: {
-            task.cancel()
-        }
-    }
-
-    func urlSession(
-        _ session: URLSession,
-        downloadTask: URLSessionDownloadTask,
-        didFinishDownloadingTo location: URL
-    ) {
-        do {
-            if FileManager.default.fileExists(atPath: stableSaveURL.path) {
-                try FileManager.default.removeItem(at: stableSaveURL)
-            }
-            try FileManager.default.moveItem(at: location, to: stableSaveURL)
-            savedFileURL = stableSaveURL
-        } catch {
-            savedFileError = error
-        }
-    }
-
-    func urlSession(
-        _ session: URLSession,
-        downloadTask: URLSessionDownloadTask,
-        didWriteData bytesWritten: Int64,
-        totalBytesWritten: Int64,
-        totalBytesExpectedToWrite: Int64
-    ) {
-        onProgress(bytesWritten, totalBytesWritten, totalBytesExpectedToWrite)
-    }
-
-    func urlSession(
-        _ session: URLSession,
-        task: URLSessionTask,
-        didCompleteWithError error: Error?
-    ) {
-        guard let continuation else { return }
-        self.continuation = nil
-
-        if let error {
-            continuation.resume(throwing: error)
-        } else if let savedFileError {
-            continuation.resume(throwing: savedFileError)
-        } else if let savedFileURL {
-            continuation.resume(returning: savedFileURL)
-        } else {
-            continuation.resume(throwing: AppUpdateError.message("下载文件保存失败：未收到完成文件。"))
-        }
-    }
 }
