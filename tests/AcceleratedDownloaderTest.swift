@@ -52,5 +52,37 @@ struct AcceleratedDownloaderTest {
         precondition(finalURL.path == "/tmp/app.zip")
         precondition(attempts == ["环境代理", "直连"], "Unexpected attempts: \(attempts)")
         precondition(statuses.contains { $0.contains("模拟慢下载") })
+
+        attempts.removeAll()
+        statuses.removeAll()
+        let timeoutRecoveredURL = try await AcceleratedDownloader.download(
+            request,
+            strategies: strategies,
+            config: DownloadAccelerationConfig(
+                minimumObservedDuration: 1,
+                stalledAfter: 1,
+                slowBytesPerSecond: 1,
+                requiredConsecutiveSlowSamples: 1,
+                longRemainingTime: 1,
+                smallDownloadLimitBytes: 100,
+                maxAttempts: 2,
+                maxCacheCleanups: 0
+            ),
+            runner: { attempt, _ in
+                attempts.append(attempt.strategy.title)
+                if attempt.index == 0 {
+                    throw URLError(.timedOut)
+                }
+                return URL(fileURLWithPath: "/tmp/app-timeout-recovered.zip")
+            },
+            onStatus: { status in
+                statuses.append(status)
+            }
+        )
+
+        precondition(timeoutRecoveredURL.path == "/tmp/app-timeout-recovered.zip")
+        precondition(attempts == ["环境代理", "直连"], "Unexpected timeout attempts: \(attempts)")
+        precondition(statuses.contains { $0.contains("网络连接超时") })
+        precondition(AcceleratedDownloadError.retryableMessage(from: URLError(.badURL)) == nil)
     }
 }

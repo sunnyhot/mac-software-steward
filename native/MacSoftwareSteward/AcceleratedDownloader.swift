@@ -30,6 +30,30 @@ enum AcceleratedDownloadError: LocalizedError, Equatable {
             return message
         }
     }
+
+    static func retryableMessage(from error: Error) -> String? {
+        if case .retryable(let message) = error as? AcceleratedDownloadError {
+            return message
+        }
+
+        let nsError = error as NSError
+        guard nsError.domain == NSURLErrorDomain else { return nil }
+
+        switch nsError.code {
+        case NSURLErrorTimedOut:
+            return "网络连接超时"
+        case NSURLErrorNetworkConnectionLost:
+            return "网络连接中断"
+        case NSURLErrorCannotConnectToHost:
+            return "无法连接下载服务器"
+        case NSURLErrorCannotFindHost, NSURLErrorDNSLookupFailed:
+            return "无法解析下载服务器"
+        case NSURLErrorNotConnectedToInternet:
+            return "网络不可用"
+        default:
+            return nil
+        }
+    }
 }
 
 enum AcceleratedDownloader {
@@ -60,22 +84,22 @@ enum AcceleratedDownloader {
 
             do {
                 return try await run(attempt, onProgress)
-            } catch AcceleratedDownloadError.retryable(let message) {
-                lastError = AcceleratedDownloadError.retryable(message)
-                switch DownloadAccelerationPolicy.retryDecision(
-                    attemptIndex: attemptIndex,
-                    strategyCount: effectiveStrategies.count,
-                    maxAttempts: config.maxAttempts
-                ) {
-                case .retry(let next):
-                    onStatus("\(message)，正在自动切换加速方式重试")
-                    attemptIndex = next
-                    continue
-                case .stop:
-                    throw AcceleratedDownloadError.failed(message)
-                }
             } catch {
                 lastError = error
+                if let message = AcceleratedDownloadError.retryableMessage(from: error) {
+                    switch DownloadAccelerationPolicy.retryDecision(
+                        attemptIndex: attemptIndex,
+                        strategyCount: effectiveStrategies.count,
+                        maxAttempts: config.maxAttempts
+                    ) {
+                    case .retry(let next):
+                        onStatus("\(message)，正在自动切换加速方式重试")
+                        attemptIndex = next
+                        continue
+                    case .stop:
+                        throw AcceleratedDownloadError.failed(message)
+                    }
+                }
                 throw error
             }
         }
