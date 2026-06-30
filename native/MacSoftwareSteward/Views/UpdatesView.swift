@@ -417,6 +417,13 @@ struct PackageProgressDetail: View {
             .font(.caption2)
             .foregroundStyle(.tertiary)
 
+            if let accelerationHint = UpgradeProgressPresenter.accelerationHint(for: progress) {
+                Label(accelerationHint, systemImage: "bolt.horizontal.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.blue)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if let staleHint = UpgradeProgressPresenter.staleHint(for: progress) {
                 Label(staleHint, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)

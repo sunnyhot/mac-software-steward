@@ -47,8 +47,28 @@ enum UpgradeProgressPresenter {
         "最近输出 \(durationText(from: progress.updatedAt, to: now))前"
     }
 
+    static func accelerationHint(for progress: PackageUpgradeProgress) -> String? {
+        guard let status = progress.accelerationStatusText?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !status.isEmpty else { return nil }
+        let strategy = progress.accelerationStrategyText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let attempt = progress.accelerationAttemptText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !strategy.isEmpty, !attempt.isEmpty {
+            return "\(status)：\(strategy)（\(attempt)）"
+        }
+        if !strategy.isEmpty {
+            return "\(status)：\(strategy)"
+        }
+        if !attempt.isEmpty {
+            return "\(status)（\(attempt)）"
+        }
+        return status
+    }
+
     static func staleHint(for progress: PackageUpgradeProgress, now: Date = Date()) -> String? {
         guard progress.status == .running else { return nil }
+        if accelerationHint(for: progress) != nil {
+            return nil
+        }
         let elapsed = now.timeIntervalSince(progress.updatedAt)
         guard elapsed >= 120 else { return nil }
         return "超过 \(durationText(from: progress.updatedAt, to: now))没有新输出，可能在等待下载、安装或系统授权。"

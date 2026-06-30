@@ -377,6 +377,12 @@ struct PackageUpgradeProgress: Hashable {
     var downloadSpeedText: String? = nil
     /// 下载剩余时间描述（如 "剩余 12 分钟"）
     var downloadTimeRemainingText: String? = nil
+    /// 自动下载加速状态描述。
+    var accelerationStatusText: String? = nil
+    /// 当前使用的下载策略描述。
+    var accelerationStrategyText: String? = nil
+    /// 当前重试次数描述。
+    var accelerationAttemptText: String? = nil
 }
 
 struct LogLine: Identifiable, Hashable {
