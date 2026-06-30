@@ -86,6 +86,35 @@ enum HomebrewDownloadMonitor {
         )
     }
 
+    static func matchingIncompleteFile(
+        packageName: String,
+        in directory: URL = downloadsDirectory(),
+        fileManager: FileManager = .default
+    ) throws -> URL? {
+        let candidates = try fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey],
+            options: [.skipsHiddenFiles]
+        )
+        .filter { $0.lastPathComponent.hasSuffix(".incomplete") }
+        .filter { matches(fileName: $0.lastPathComponent, packageName: packageName) }
+
+        return candidates.isEmpty ? nil : newestFile(in: candidates)
+    }
+
+    @discardableResult
+    static func removeIncompleteDownload(
+        packageName: String,
+        in directory: URL = downloadsDirectory(),
+        fileManager: FileManager = .default
+    ) throws -> URL? {
+        guard let file = try matchingIncompleteFile(packageName: packageName, in: directory, fileManager: fileManager) else {
+            return nil
+        }
+        try fileManager.removeItem(at: file)
+        return file
+    }
+
     static func formatBytes(_ bytes: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }

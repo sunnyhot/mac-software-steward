@@ -37,6 +37,19 @@ struct HomebrewDownloadMonitorTest {
         let unrelated = try HomebrewDownloadMonitor.snapshot(packageName: "warp", in: directory, previous: nil, now: Date(timeIntervalSince1970: 40))
         precondition(unrelated == nil, "Unrelated incomplete files must not be matched")
 
+        let warpFile = directory.appendingPathComponent("ghi--warp.dmg.incomplete")
+        try Data(repeating: 3, count: 90).write(to: warpFile)
+        let otherFile = directory.appendingPathComponent("jkl--visual-studio-code.zip.incomplete")
+        try Data(repeating: 4, count: 120).write(to: otherFile)
+
+        let matchedWarp = try HomebrewDownloadMonitor.matchingIncompleteFile(packageName: "warp", in: directory)
+        precondition(matchedWarp?.lastPathComponent == warpFile.lastPathComponent)
+
+        let removedWarp = try HomebrewDownloadMonitor.removeIncompleteDownload(packageName: "warp", in: directory)
+        precondition(removedWarp?.lastPathComponent == warpFile.lastPathComponent)
+        precondition(!FileManager.default.fileExists(atPath: warpFile.path), "Expected only warp incomplete file to be removed")
+        precondition(FileManager.default.fileExists(atPath: otherFile.path), "Unrelated incomplete file must remain")
+
         precondition(HomebrewDownloadMonitor.canApplySnapshot(toPhase: "安装中"), "Active incomplete downloads must be allowed to correct premature installing phase")
         precondition(!HomebrewDownloadMonitor.canApplySnapshot(toPhase: "替换应用"), "Cache download snapshots must not override real app replacement phase")
         precondition(!HomebrewDownloadMonitor.canApplySnapshot(toPhase: "清理中"), "Cache download snapshots must not override cleanup phase")
