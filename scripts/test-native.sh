@@ -151,6 +151,7 @@ run_test CommandRunnerControlTest \
   "$TESTS/CommandRunnerControlTest.swift"
 
 run_test DownloadAccelerationPolicyTest \
+  "$SRC/CommandRunner.swift" \
   "$SRC/DownloadAcceleration.swift" \
   "$TESTS/DownloadAccelerationPolicyTest.swift"
 

@@ -68,5 +68,27 @@ struct DownloadAccelerationPolicyTest {
 
         precondition(DownloadAccelerationPolicy.retryDecision(attemptIndex: 0, strategyCount: 3, maxAttempts: 3) == .retry(nextAttemptIndex: 1))
         precondition(DownloadAccelerationPolicy.retryDecision(attemptIndex: 2, strategyCount: 3, maxAttempts: 3) == .stop)
+
+        let scutilOutput = """
+        <dictionary> {
+          HTTPEnable : 1
+          HTTPPort : 7890
+          HTTPProxy : 127.0.0.1
+          HTTPSEnable : 1
+          HTTPSPort : 7890
+          HTTPSProxy : 127.0.0.1
+        }
+        """
+        let parsedSystemProxy = DownloadAccelerationPolicy.systemProxyURLString(from: scutilOutput)
+        precondition(parsedSystemProxy == "http://127.0.0.1:7890", "Unexpected system proxy: \(String(describing: parsedSystemProxy))")
+
+        let disabledScutilOutput = """
+        <dictionary> {
+          HTTPEnable : 0
+          HTTPPort : 7890
+          HTTPProxy : 127.0.0.1
+        }
+        """
+        precondition(DownloadAccelerationPolicy.systemProxyURLString(from: disabledScutilOutput) == nil)
     }
 }

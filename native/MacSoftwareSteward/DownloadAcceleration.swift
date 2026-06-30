@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 enum DownloadAccelerationStrategyKind: String, Hashable {
@@ -177,6 +178,57 @@ enum DownloadAccelerationPolicy {
         return .retry(nextAttemptIndex: next)
     }
 
+    static func systemProxyURLString(from scutilOutput: String) -> String? {
+        let lines = scutilOutput.components(separatedBy: .newlines)
+
+        func value(for key: String) -> String? {
+            for line in lines {
+                let parts = line
+                    .split(separator: ":", maxSplits: 1)
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                if parts.count == 2, parts[0] == key, !parts[1].isEmpty {
+                    return parts[1]
+                }
+            }
+            return nil
+        }
+
+        if value(for: "HTTPSEnable") == "1",
+           let host = value(for: "HTTPSProxy"),
+           let port = value(for: "HTTPSPort") {
+            return "http://\(host):\(port)"
+        }
+
+        if value(for: "HTTPEnable") == "1",
+           let host = value(for: "HTTPProxy"),
+           let port = value(for: "HTTPPort") {
+            return "http://\(host):\(port)"
+        }
+
+        return nil
+    }
+
+    static func localProxyProbeResults(
+        ports: [Int] = [7890, 7897, 1080, 8080, 6152],
+        timeout: TimeInterval = 0.2
+    ) async -> [Int: Bool] {
+        var results: [Int: Bool] = [:]
+        for port in ports {
+            results[port] = await canOpenLocalTCPConnection(port: port, timeout: timeout)
+        }
+        return results
+    }
+
+    static func defaultStrategies() async -> [DownloadAccelerationStrategy] {
+        let systemProxy = await currentSystemProxyURLString()
+        let localResults = await localProxyProbeResults()
+        return rankedStrategies(
+            environment: ProcessInfo.processInfo.environment,
+            systemProxyURLString: systemProxy,
+            localProxyProbeResults: localResults
+        )
+    }
+
     private static func inheritedProxyURLString(from environment: [String: String]) -> String? {
         for key in ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy", "HTTP_PROXY", "http_proxy"] {
             if let value = environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
@@ -184,5 +236,37 @@ enum DownloadAccelerationPolicy {
             }
         }
         return nil
+    }
+
+    private static func currentSystemProxyURLString() async -> String? {
+        let result = await CommandRunner.run("/usr/sbin/scutil", arguments: ["--proxy"], timeout: 2)
+        guard result.ok else { return nil }
+        return systemProxyURLString(from: result.stdout)
+    }
+
+    private static func canOpenLocalTCPConnection(port: Int, timeout: TimeInterval) async -> Bool {
+        await withCheckedContinuation { continuation in
+            let socketFD = socket(AF_INET, SOCK_STREAM, 0)
+            guard socketFD >= 0 else {
+                continuation.resume(returning: false)
+                return
+            }
+
+            var address = sockaddr_in()
+            address.sin_family = sa_family_t(AF_INET)
+            address.sin_port = in_port_t(port).bigEndian
+            inet_pton(AF_INET, "127.0.0.1", &address.sin_addr)
+
+            DispatchQueue.global().async {
+                var addr = address
+                let connected = withUnsafePointer(to: &addr) {
+                    $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                        connect(socketFD, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0
+                    }
+                }
+                close(socketFD)
+                continuation.resume(returning: connected)
+            }
+        }
     }
 }
