@@ -155,6 +155,11 @@ run_test DownloadAccelerationPolicyTest \
   "$SRC/DownloadAcceleration.swift" \
   "$TESTS/DownloadAccelerationPolicyTest.swift"
 
+run_test DownloadAccelerationCommandPlannerTest \
+  "$SRC/CommandRunner.swift" \
+  "$SRC/DownloadAcceleration.swift" \
+  "$TESTS/DownloadAccelerationCommandPlannerTest.swift"
+
 run_test DailyPolicyFilteringTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
@@ -379,6 +384,7 @@ run_test StewardModelScanGuardTest \
   "$SRC/UpgradeFailureAnalyzer.swift" \
   "$SRC/HomebrewDownloadMonitor.swift" \
   "$SRC/HomebrewCaskDownloadSizeResolver.swift" \
+  "$SRC/DownloadAcceleration.swift" \
   "$SRC/PackageProgressParser.swift" \
   "$SRC/ManualAppReplacementInstaller.swift" \
   "$SRC/SourceDiagnostics.swift" \

@@ -51,6 +51,12 @@ final class StewardModel: ObservableObject {
     private var downloadMonitorTasks: [String: Task<Void, Never>] = [:]
     private var downloadSizeTasks: [String: Task<Void, Never>] = [:]
     private var downloadExpectedSizes: [String: Int64] = [:]
+    private var downloadAccelerationStrategies: [String: [DownloadAccelerationStrategy]] = [:]
+    private var downloadAccelerationAttempts: [String: CommandAccelerationAttempt] = [:]
+    private var downloadAccelerationRetryRequests: [String: SlowDownloadDecision] = [:]
+    private var downloadAccelerationTokens: [String: CommandCancellationToken] = [:]
+    private var downloadAccelerationCleanups: [String: Int] = [:]
+    private var downloadSlowSampleState: [String: (startedAt: Date, lastGrowthAt: Date, lastByteCount: Int64, consecutiveSlowSamples: Int)] = [:]
     private var autoRepairAttemptedPackageIDs: Set<String> = []
     @Published var upgradeProgress: UpgradeProgress?
     /// 用户关闭过的失败任务 ID，关闭后不再显示失败通知（直到新任务失败）
@@ -873,16 +879,65 @@ final class StewardModel: ObservableObject {
     }
 
     private func runCommand(jobID id: UUID, step: UpgradeStep, command: UpgradeCommand, token: CommandCancellationToken) async -> StreamingCommandResult {
-        await CommandRunner.runStreamingDetailed(
-            command.executable,
-            arguments: command.arguments,
-            timeout: 7200,
-            cancellationToken: token
-        ) { stream, text in
-            Task { @MainActor in
-                self.appendLog(id: id, stream: stream, text: text)
-                self.updatePackageDetail(for: step, stream: stream, text: text)
+        let strategies = await strategiesForStep(step)
+        var attempt = CommandAccelerationAttempt(
+            strategies: strategies,
+            attemptIndex: 0,
+            maxAttempts: DownloadAccelerationConfig.production.maxAttempts
+        )
+        let key = accelerationKey(for: step)
+
+        while true {
+            if token.isCancelled {
+                return StreamingCommandResult(code: -1, recentOutput: "", terminationReason: .cancelled)
             }
+
+            let attemptToken = CommandCancellationToken()
+            downloadAccelerationTokens[key] = attemptToken
+            downloadAccelerationAttempts[key] = attempt
+            applyAccelerationStatus(
+                attempt,
+                to: step,
+                status: attempt.attemptIndex == 0 ? "正在自动选择最快下载方式" : "下载偏慢，正在自动切换加速方式重试"
+            )
+            appendLog(id: id, stream: "system", text: "下载加速：本次命令使用\(attempt.currentStrategy.title)（\(attempt.attemptText)）。")
+
+            let bridgeTask = Task {
+                while !Task.isCancelled, !attemptToken.isCancelled {
+                    if token.isCancelled {
+                        attemptToken.cancel()
+                        return
+                    }
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+            }
+
+            let result = await CommandRunner.runStreamingDetailed(
+                command.executable,
+                arguments: command.arguments,
+                timeout: 7200,
+                cancellationToken: attemptToken,
+                environmentOverlay: attempt.currentStrategy.environmentOverlay
+            ) { stream, text in
+                Task { @MainActor in
+                    self.appendLog(id: id, stream: stream, text: text)
+                    self.updatePackageDetail(for: step, stream: stream, text: text)
+                }
+            }
+            bridgeTask.cancel()
+            attemptToken.cancel()
+            downloadAccelerationTokens[key] = nil
+
+            if result.terminationReason == .cancelled,
+               let decision = downloadAccelerationRetryRequests.removeValue(forKey: key),
+               let next = attempt.next() {
+                appendLog(id: id, stream: "system", text: "\(decision.message)，正在切换到\(next.currentStrategy.title)重试。")
+                attempt = next
+                continue
+            }
+
+            clearAccelerationStatus(for: step)
+            return result
         }
     }
 
@@ -910,17 +965,7 @@ final class StewardModel: ObservableObject {
                 }
                 let model = self
                 group.addTask {
-                    let result = await CommandRunner.runStreamingDetailed(
-                        command.executable,
-                        arguments: command.arguments,
-                        timeout: 7200,
-                        cancellationToken: token
-                    ) { stream, text in
-                        Task { @MainActor in
-                            model.appendLog(id: id, stream: stream, text: text)
-                            model.updatePackageDetail(for: step, stream: stream, text: text)
-                        }
-                    }
+                    let result = await model.runCommand(jobID: id, step: step, command: command, token: token)
                     return StepExecutionOutcome(step: step, command: command, result: result)
                 }
             }
@@ -1104,6 +1149,42 @@ final class StewardModel: ObservableObject {
         }
     }
 
+    private func accelerationKey(for step: UpgradeStep) -> String {
+        step.packageID ?? step.command.display
+    }
+
+    private func strategiesForStep(_ step: UpgradeStep) async -> [DownloadAccelerationStrategy] {
+        let key = accelerationKey(for: step)
+        if let existing = downloadAccelerationStrategies[key] {
+            return existing
+        }
+        let strategies = await DownloadAccelerationPolicy.defaultStrategies()
+        downloadAccelerationStrategies[key] = strategies
+        return strategies
+    }
+
+    private func applyAccelerationStatus(_ attempt: CommandAccelerationAttempt, to step: UpgradeStep, status: String) {
+        guard let packageID = step.packageID, var progress = packageProgress[packageID] else { return }
+        progress.accelerationStatusText = status
+        progress.accelerationStrategyText = attempt.currentStrategy.title
+        progress.accelerationAttemptText = attempt.attemptText
+        packageProgress[packageID] = progress
+    }
+
+    private func clearAccelerationStatus(for step: UpgradeStep) {
+        guard let packageID = step.packageID, var progress = packageProgress[packageID] else { return }
+        progress.accelerationStatusText = nil
+        progress.accelerationStrategyText = nil
+        progress.accelerationAttemptText = nil
+        packageProgress[packageID] = progress
+    }
+
+    private func requestDownloadAccelerationRetry(packageID: String, decision: SlowDownloadDecision) {
+        guard downloadAccelerationRetryRequests[packageID] == nil else { return }
+        downloadAccelerationRetryRequests[packageID] = decision
+        downloadAccelerationTokens[packageID]?.cancel()
+    }
+
     private func markQueued(_ steps: [UpgradeStep]) {
         for step in steps {
             guard let packageID = step.packageID, let packageName = step.packageName else { continue }
@@ -1253,6 +1334,13 @@ final class StewardModel: ObservableObject {
         downloadSizeTasks[packageID]?.cancel()
         downloadSizeTasks[packageID] = nil
         downloadExpectedSizes[packageID] = nil
+        downloadAccelerationTokens[packageID]?.cancel()
+        downloadAccelerationTokens[packageID] = nil
+        downloadAccelerationRetryRequests[packageID] = nil
+        downloadAccelerationAttempts[packageID] = nil
+        downloadAccelerationStrategies[packageID] = nil
+        downloadAccelerationCleanups[packageID] = nil
+        downloadSlowSampleState[packageID] = nil
     }
 
     private func startHomebrewDownloadSizeLookupIfNeeded(for step: UpgradeStep) {
@@ -1295,6 +1383,36 @@ final class StewardModel: ObservableObject {
             progress.downloadFraction = fraction
         } else if progress.downloadFraction == 0 {
             progress.downloadFraction = nil
+        }
+
+        let key = packageID
+        let now = Date()
+        var state = downloadSlowSampleState[key] ?? (
+            startedAt: now,
+            lastGrowthAt: now,
+            lastByteCount: snapshot.byteCount,
+            consecutiveSlowSamples: 0
+        )
+        if snapshot.byteCount > state.lastByteCount {
+            state.lastGrowthAt = now
+            state.lastByteCount = snapshot.byteCount
+        }
+        let isSlowSpeed = (snapshot.speedBytesPerSecond ?? Double.greatestFiniteMagnitude) < DownloadAccelerationConfig.production.slowBytesPerSecond
+        state.consecutiveSlowSamples = isSlowSpeed ? state.consecutiveSlowSamples + 1 : 0
+        downloadSlowSampleState[key] = state
+
+        let sample = DownloadSpeedSample(
+            startedAt: state.startedAt,
+            sampledAt: now,
+            byteCount: snapshot.byteCount,
+            expectedByteCount: snapshot.expectedByteCount,
+            speedBytesPerSecond: snapshot.speedBytesPerSecond,
+            secondsSinceLastGrowth: now.timeIntervalSince(state.lastGrowthAt),
+            consecutiveSlowSamples: state.consecutiveSlowSamples
+        )
+        let decision = DownloadAccelerationPolicy.decision(for: sample)
+        if decision.isRetryable {
+            requestDownloadAccelerationRetry(packageID: packageID, decision: decision)
         }
         packageProgress[packageID] = progress
     }

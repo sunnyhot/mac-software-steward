@@ -118,6 +118,33 @@ enum DownloadRetryDecision: Hashable {
     case stop
 }
 
+struct CommandAccelerationAttempt: Hashable {
+    var strategies: [DownloadAccelerationStrategy]
+    var attemptIndex: Int
+    var maxAttempts: Int
+
+    var currentStrategy: DownloadAccelerationStrategy {
+        strategies[min(attemptIndex, max(strategies.count - 1, 0))]
+    }
+
+    var attemptText: String {
+        "第 \(attemptIndex + 1)/\(min(maxAttempts, strategies.count)) 次"
+    }
+
+    func next() -> CommandAccelerationAttempt? {
+        switch DownloadAccelerationPolicy.retryDecision(
+            attemptIndex: attemptIndex,
+            strategyCount: strategies.count,
+            maxAttempts: maxAttempts
+        ) {
+        case .retry(let nextAttemptIndex):
+            return CommandAccelerationAttempt(strategies: strategies, attemptIndex: nextAttemptIndex, maxAttempts: maxAttempts)
+        case .stop:
+            return nil
+        }
+    }
+}
+
 enum DownloadAccelerationPolicy {
     static func rankedStrategies(
         environment: [String: String] = ProcessInfo.processInfo.environment,
