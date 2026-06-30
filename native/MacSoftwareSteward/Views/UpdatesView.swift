@@ -520,7 +520,7 @@ struct PackageProgressDetail: View {
         .font(.caption)
         .textSelection(.enabled)
         .padding(12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .stewardSurface(cornerRadius: 10, tint: .red)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(.red.opacity(0.15), lineWidth: 1)

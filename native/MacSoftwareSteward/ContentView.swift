@@ -14,6 +14,7 @@ struct ContentView: View {
         } detail: {
             detailContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(StewardCanvasBackground().ignoresSafeArea())
                 .animation(.easeInOut(duration: 0.2), value: model.selectedTab)
         }
         .sheet(isPresented: $updater.showUpdateDialog) {
@@ -109,7 +110,7 @@ private struct TaskFirstSidebar: View {
         .padding(.top, 54)
         .padding(.bottom, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.72))
+        .stewardSurface(role: .sidebar, cornerRadius: 0)
     }
 
     private var sidebarHeader: some View {
@@ -458,7 +459,7 @@ private struct HeaderView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .stewardSurface(cornerRadius: 10, tint: .red)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(.red.opacity(0.2), lineWidth: 1)
@@ -651,7 +652,7 @@ private struct MetricCard: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, minHeight: 58)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .stewardSurface(cornerRadius: 12, tint: accent)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(isHovered ? accent.opacity(0.3) : Color.primary.opacity(0.06), lineWidth: 1)
@@ -733,7 +734,7 @@ private struct MainPanel: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .frame(minWidth: 200, idealWidth: 320, maxWidth: 400)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .stewardSurface(cornerRadius: 10)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.primary.opacity(0.06), lineWidth: 1)
@@ -785,7 +786,7 @@ private struct JobNoticeView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .foregroundStyle(notice.isFailure ? .red : Color.accentColor)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .stewardSurface(cornerRadius: 10, tint: notice.isFailure ? .red : Color.accentColor)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke((notice.isFailure ? Color.red : Color.accentColor).opacity(0.2), lineWidth: 1)

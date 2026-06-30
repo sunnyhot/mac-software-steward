@@ -27,6 +27,10 @@ run_test AppAppearanceResolverTest \
   "$SRC/AppAppearanceResolver.swift" \
   "$TESTS/AppAppearanceResolverTest.swift"
 
+run_test AppSurfacePaletteTest \
+  "$SRC/AppSurfacePalette.swift" \
+  "$TESTS/AppSurfacePaletteTest.swift"
+
 run_test AppSingleInstancePolicyTest \
   "$SRC/AppSingleInstancePolicy.swift" \
   "$TESTS/AppSingleInstancePolicyTest.swift"

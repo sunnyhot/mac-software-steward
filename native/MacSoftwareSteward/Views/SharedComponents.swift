@@ -83,33 +83,83 @@ struct PolishedTaskSurfaceModifier: ViewModifier {
     var tint: Color
     var isActive: Bool
 
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-            .background(
-                LinearGradient(
-                    colors: [
-                        tint.opacity(isActive ? 0.08 : 0.035),
-                        Color.clear
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                in: RoundedRectangle(cornerRadius: 10)
-            )
+            .background(StewardSurfaceBackground(role: .surface, cornerRadius: 10, tint: tint, isActive: isActive))
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
                     .stroke(tint.opacity(isActive ? 0.24 : 0.10), lineWidth: 1)
             )
-            .shadow(color: tint.opacity(isActive && !reduceMotion ? 0.10 : 0.03), radius: isActive ? 10 : 4, y: 2)
+            .shadow(
+                color: tint.opacity(!reduceMotion ? AppSurfacePalette.shadowOpacity(isActive: isActive, appearance: appearance) : 0.02),
+                radius: isActive ? 10 : 4,
+                y: 2
+            )
+    }
+
+    private var appearance: AppSurfaceAppearance {
+        colorScheme == .dark ? .dark : .light
     }
 }
 
 extension View {
     func polishedTaskSurface(tint: Color = .accentColor, isActive: Bool = false) -> some View {
         modifier(PolishedTaskSurfaceModifier(tint: tint, isActive: isActive))
+    }
+
+    func stewardSurface(role: AppSurfaceRole = .surface, cornerRadius: CGFloat = 10, tint: Color? = nil, isActive: Bool = false) -> some View {
+        background(StewardSurfaceBackground(role: role, cornerRadius: cornerRadius, tint: tint, isActive: isActive))
+    }
+}
+
+struct StewardCanvasBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Color(nsColor: AppSurfacePalette.nsColor(for: .canvas, appearance: appearance))
+            .opacity(AppSurfacePalette.opacity(for: .canvas, appearance: appearance))
+    }
+
+    private var appearance: AppSurfaceAppearance {
+        colorScheme == .dark ? .dark : .light
+    }
+}
+
+struct StewardSurfaceBackground: View {
+    var role: AppSurfaceRole
+    var cornerRadius: CGFloat
+    var tint: Color?
+    var isActive: Bool
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(Color(nsColor: AppSurfacePalette.nsColor(for: role, appearance: appearance)))
+            .opacity(AppSurfacePalette.opacity(for: role, appearance: appearance))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(tintGradient)
+            )
+    }
+
+    private var tintGradient: LinearGradient {
+        let tintColor = tint ?? .clear
+        return LinearGradient(
+            colors: [
+                tintColor.opacity(AppSurfacePalette.tintOpacity(isActive: isActive, appearance: appearance)),
+                Color.clear
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    private var appearance: AppSurfaceAppearance {
+        colorScheme == .dark ? .dark : .light
     }
 }
 
@@ -675,7 +725,7 @@ struct ErrorRecoveryCard: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .stewardSurface(cornerRadius: 12, tint: .orange)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(.orange.opacity(0.25), lineWidth: 1)
