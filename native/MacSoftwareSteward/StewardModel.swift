@@ -44,6 +44,8 @@ final class StewardModel: ObservableObject {
 
     private let scanner: SoftwareScanning
     private let notificationDispatcher: AutomationNotificationDelivering
+    private let downloadStrategiesProvider: () async -> [DownloadAccelerationStrategy]
+    private let acceleratedDownloadRunner: AcceleratedDownloader.Runner?
     private var activeJobCount = 0
     private var pendingJobQueue: [(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool, inboxStore: InboxStore?, autoRepairProfile: AutomationProfile?)] = []
     private var debounceTask: Task<Void, Never>?
@@ -65,11 +67,15 @@ final class StewardModel: ObservableObject {
     init(
         scanner: SoftwareScanning = LiveSoftwareScanning(),
         notificationDispatcher: AutomationNotificationDelivering? = nil,
-        scanPerformanceStore: ScanPerformanceStore = ScanPerformanceStore()
+        scanPerformanceStore: ScanPerformanceStore = ScanPerformanceStore(),
+        downloadStrategiesProvider: @escaping () async -> [DownloadAccelerationStrategy] = DownloadAccelerationPolicy.defaultStrategies,
+        acceleratedDownloadRunner: AcceleratedDownloader.Runner? = nil
     ) {
         self.scanner = scanner
         self.notificationDispatcher = notificationDispatcher ?? UserNotificationDispatcher()
         self.scanPerformanceStore = scanPerformanceStore
+        self.downloadStrategiesProvider = downloadStrategiesProvider
+        self.acceleratedDownloadRunner = acceleratedDownloadRunner
         refreshDailyInspectionStatus()
     }
 
@@ -474,33 +480,37 @@ final class StewardModel: ObservableObject {
         return url
     }
 
-    private func downloadManualReplacement(from url: URL, into workDirectory: URL) async throws -> URL {
-        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 30)
-        let (temporaryURL, response) = try await URLSession.shared.download(for: request)
-        if let http = response as? HTTPURLResponse,
-           !(200..<300).contains(http.statusCode) {
-            throw ManualAppReplacementError.message("下载安装包失败，HTTP 状态码 \(http.statusCode)。")
-        }
-
-        let fileName = safeDownloadFileName(from: response, fallbackURL: url)
+    func downloadManualReplacement(from url: URL, into workDirectory: URL) async throws -> URL {
+        let fileName = safeDownloadFileName(from: url)
+        let request = AcceleratedDownloadRequest(
+            url: url,
+            destinationFileName: fileName,
+            expectedByteCount: nil,
+            operationName: "直接替换下载"
+        )
+        let strategies = await downloadStrategiesProvider()
+        let temporaryURL = try await AcceleratedDownloader.download(
+            request,
+            strategies: strategies,
+            runner: acceleratedDownloadRunner
+        )
         let destination = workDirectory.appendingPathComponent(fileName)
-        if FileManager.default.fileExists(atPath: destination.path) {
+        if temporaryURL.path != destination.path,
+           FileManager.default.fileExists(atPath: destination.path) {
             try FileManager.default.removeItem(at: destination)
         }
-        try FileManager.default.moveItem(at: temporaryURL, to: destination)
+        if temporaryURL.path != destination.path {
+            try FileManager.default.moveItem(at: temporaryURL, to: destination)
+        }
         return destination
     }
 
-    private func safeDownloadFileName(from response: URLResponse, fallbackURL: URL) -> String {
-        let responseName = response.suggestedFilename?
-            .split(separator: "/")
-            .last
-            .map(String.init)
-        let urlName = fallbackURL.lastPathComponent.isEmpty ? nil : fallbackURL.lastPathComponent
-        let name = responseName ?? urlName ?? "app-update"
+    private func safeDownloadFileName(from url: URL) -> String {
+        let urlName = url.lastPathComponent.isEmpty ? nil : url.lastPathComponent
+        let name = urlName ?? "app-update"
         if URL(fileURLWithPath: name).pathExtension.isEmpty,
-           !fallbackURL.pathExtension.isEmpty {
-            return "\(name).\(fallbackURL.pathExtension)"
+           !url.pathExtension.isEmpty {
+            return "\(name).\(url.pathExtension)"
         }
         return name
     }

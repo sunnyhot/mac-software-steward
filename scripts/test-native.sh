@@ -410,6 +410,7 @@ run_test StewardModelScanGuardTest \
   "$SRC/HomebrewDownloadMonitor.swift" \
   "$SRC/HomebrewCaskDownloadSizeResolver.swift" \
   "$SRC/DownloadAcceleration.swift" \
+  "$SRC/AcceleratedDownloader.swift" \
   "$SRC/PackageProgressParser.swift" \
   "$SRC/ManualAppReplacementInstaller.swift" \
   "$SRC/SourceDiagnostics.swift" \
