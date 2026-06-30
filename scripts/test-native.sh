@@ -150,6 +150,10 @@ run_test CommandRunnerControlTest \
   "$SRC/CommandRunner.swift" \
   "$TESTS/CommandRunnerControlTest.swift"
 
+run_test DownloadAccelerationPolicyTest \
+  "$SRC/DownloadAcceleration.swift" \
+  "$TESTS/DownloadAccelerationPolicyTest.swift"
+
 run_test DailyPolicyFilteringTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
