@@ -160,6 +160,12 @@ run_test DownloadAccelerationCommandPlannerTest \
   "$SRC/DownloadAcceleration.swift" \
   "$TESTS/DownloadAccelerationCommandPlannerTest.swift"
 
+run_test AcceleratedDownloaderTest \
+  "$SRC/CommandRunner.swift" \
+  "$SRC/DownloadAcceleration.swift" \
+  "$SRC/AcceleratedDownloader.swift" \
+  "$TESTS/AcceleratedDownloaderTest.swift"
+
 run_test DailyPolicyFilteringTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
