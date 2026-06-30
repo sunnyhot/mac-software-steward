@@ -23,5 +23,43 @@ struct CommandRunnerControlTest {
             cancellationToken: token
         ) { _, _ in }
         precondition(cancelled.terminationReason == .cancelled)
+
+        let overlayResult = await CommandRunner.run(
+            "/bin/sh",
+            arguments: ["-c", "printf '%s' \"$MSS_TEST_OVERLAY\""],
+            timeout: 5,
+            environmentOverlay: ["MSS_TEST_OVERLAY": "works"]
+        )
+        precondition(overlayResult.ok)
+        precondition(overlayResult.stdout == "works")
+
+        let streamingCapture = OutputCapture()
+        let streamingOverlay = await CommandRunner.runStreamingDetailed(
+            "/bin/sh",
+            arguments: ["-c", "printf '%s' \"$MSS_STREAMING_OVERLAY\""],
+            timeout: 5,
+            environmentOverlay: ["MSS_STREAMING_OVERLAY": "streaming"]
+        ) { stream, text in
+            streamingCapture.append(stream: stream, text: text)
+        }
+        precondition(streamingOverlay.code == 0)
+        precondition(streamingCapture.text.contains("streaming"))
+    }
+}
+
+private final class OutputCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var lines: [String] = []
+
+    func append(stream: String, text: String) {
+        lock.lock()
+        lines.append("[\(stream)] \(text)")
+        lock.unlock()
+    }
+
+    var text: String {
+        lock.lock()
+        defer { lock.unlock() }
+        return lines.joined(separator: "\n")
     }
 }

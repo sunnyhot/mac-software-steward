@@ -112,7 +112,12 @@ enum CommandRunner {
         return result.ok && !found.isEmpty ? found : nil
     }
 
-    static func run(_ executable: String, arguments: [String], timeout: TimeInterval = 60) async -> CommandResult {
+    static func run(
+        _ executable: String,
+        arguments: [String],
+        timeout: TimeInterval = 60,
+        environmentOverlay: [String: String] = [:]
+    ) async -> CommandResult {
         await withCheckedContinuation { continuation in
             let process = Process()
             let stdout = Pipe()
@@ -121,7 +126,7 @@ enum CommandRunner {
 
             process.executableURL = URL(fileURLWithPath: executable)
             process.arguments = arguments
-            process.environment = processEnvironment()
+            process.environment = processEnvironment(overlay: environmentOverlay)
             process.standardOutput = stdout
             process.standardError = stderr
 
@@ -194,6 +199,7 @@ enum CommandRunner {
         arguments: [String],
         timeout: TimeInterval = 7200,
         cancellationToken: CommandCancellationToken? = nil,
+        environmentOverlay: [String: String] = [:],
         onOutput: @escaping @Sendable (String, String) -> Void
     ) async -> StreamingCommandResult {
         await withCheckedContinuation { continuation in
@@ -206,7 +212,7 @@ enum CommandRunner {
 
             process.executableURL = URL(fileURLWithPath: executable)
             process.arguments = arguments
-            process.environment = processEnvironment()
+            process.environment = processEnvironment(overlay: environmentOverlay)
             process.standardOutput = stdout
             process.standardError = stderr
 
@@ -295,11 +301,14 @@ enum CommandRunner {
         }
     }
 
-    private static func processEnvironment() -> [String: String] {
+    private static func processEnvironment(overlay: [String: String] = [:]) -> [String: String] {
         var environment = ProcessInfo.processInfo.environment
         environment["PATH"] = defaultPath
         environment["LC_ALL"] = "en_US.UTF-8"
         environment["LANG"] = "en_US.UTF-8"
+        for (key, value) in overlay {
+            environment[key] = value
+        }
         return environment
     }
 }
