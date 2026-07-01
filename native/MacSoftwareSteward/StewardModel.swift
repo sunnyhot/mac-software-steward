@@ -697,15 +697,14 @@ final class StewardModel: ObservableObject {
         )
 
         Task {
-            await runJob(
+            let status = await runJob(
                 id: id,
                 steps: steps,
-                rescanAfterSuccess: rescanAfterSuccess,
                 inboxStore: inboxStore,
                 autoRepairProfile: autoRepairProfile
             )
             activeJobCount -= 1
-            scheduleRescanAfterJobCompletion(rescanAfterSuccess: rescanAfterSuccess, inboxStore: inboxStore)
+            scheduleRescanAfterJobCompletion(rescanAfterSuccess: rescanAfterSuccess, status: status, inboxStore: inboxStore)
             dequeueNext()
         }
     }
@@ -749,31 +748,40 @@ final class StewardModel: ObservableObject {
         // Update the queued job's steps — markQueued was already called
         activeJobCount += 1
         Task {
-            await runJob(
+            let status = await runJob(
                 id: next.id,
                 steps: next.steps,
-                rescanAfterSuccess: next.rescanAfterSuccess,
                 inboxStore: next.inboxStore,
                 autoRepairProfile: next.autoRepairProfile
             )
             activeJobCount -= 1
-            scheduleRescanAfterJobCompletion(rescanAfterSuccess: next.rescanAfterSuccess, inboxStore: next.inboxStore)
+            scheduleRescanAfterJobCompletion(rescanAfterSuccess: next.rescanAfterSuccess, status: status, inboxStore: next.inboxStore)
             dequeueNext()
         }
     }
 
-    private func scheduleRescanAfterJobCompletion(rescanAfterSuccess: Bool, inboxStore: InboxStore?) {
-        guard rescanAfterSuccess, !hasRunningJob, pendingJobQueue.isEmpty else { return }
-        Task { await scanSoftware(inboxStore: inboxStore) }
+    private func scheduleRescanAfterJobCompletion(rescanAfterSuccess: Bool, status: JobStatus, inboxStore: InboxStore?) {
+        guard JobRescanPolicy.shouldRescanAfterJobCompletion(rescanAfterSuccess: rescanAfterSuccess, status: status),
+              !hasRunningJob,
+              pendingJobQueue.isEmpty else { return }
+        let previousProgress = packageProgress
+        Task {
+            await scanSoftware(inboxStore: inboxStore)
+            if let scan {
+                let remaining = UpgradeVerifier.remainingOutdatedIDs(in: scan)
+                for (id, progress) in previousProgress {
+                    packageProgress[id] = UpgradeVerifier.verify(progress: progress, remainingPackageIDs: remaining)
+                }
+            }
+        }
     }
 
     private func runJob(
         id: UUID,
         steps: [UpgradeStep],
-        rescanAfterSuccess: Bool,
         inboxStore: InboxStore?,
         autoRepairProfile: AutomationProfile?
-    ) async {
+    ) async -> JobStatus {
         updateJob(id) {
             $0.status = .running
             $0.startedAt = Date()
@@ -818,6 +826,7 @@ final class StewardModel: ObservableObject {
 
         activeCancellationTokens[id] = nil
 
+        var finalStatus: JobStatus = .succeeded
         updateJob(id) {
             if $0.status == .cancelled || $0.status == .timedOut {
                 $0.exitCode = firstErrorCode ?? $0.exitCode ?? 1
@@ -830,6 +839,7 @@ final class StewardModel: ObservableObject {
                 $0.exitCode = 0
                 $0.log.append(LogLine(stream: "system", text: "完成"))
             }
+            finalStatus = $0.status
             $0.finishedAt = Date()
         }
         if let job = jobs.first(where: { $0.id == id }) {
@@ -864,17 +874,7 @@ final class StewardModel: ObservableObject {
         }
 
         upgradeProgress = nil
-
-        if rescanAfterSuccess {
-            let previousProgress = packageProgress
-            await scanSoftware(inboxStore: inboxStore)
-            if let scan {
-                let remaining = UpgradeVerifier.remainingOutdatedIDs(in: scan)
-                for (id, progress) in previousProgress {
-                    packageProgress[id] = UpgradeVerifier.verify(progress: progress, remainingPackageIDs: remaining)
-                }
-            }
-        }
+        return finalStatus
     }
 
     private func prepareStepExecution(jobID id: UUID, step: UpgradeStep) -> UpgradeCommand {
@@ -1207,6 +1207,15 @@ final class StewardModel: ObservableObject {
 
     private func requestDownloadAccelerationRetry(packageID: String, decision: SlowDownloadDecision) {
         guard downloadAccelerationRetryRequests[packageID] == nil else { return }
+        guard let attempt = downloadAccelerationAttempts[packageID],
+              DownloadAccelerationPolicy.shouldRequestCommandRetry(for: decision, attempt: attempt) else {
+            if var progress = packageProgress[packageID],
+               progress.accelerationStatusText != nil {
+                progress.accelerationStatusText = "\(decision.message)，已是最后一种下载方式，继续等待当前下载"
+                packageProgress[packageID] = progress
+            }
+            return
+        }
         downloadAccelerationRetryRequests[packageID] = decision
         downloadAccelerationTokens[packageID]?.cancel()
     }
@@ -1583,6 +1592,18 @@ enum StewardError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .message(let text): return text
+        }
+    }
+}
+
+enum JobRescanPolicy {
+    static func shouldRescanAfterJobCompletion(rescanAfterSuccess: Bool, status: JobStatus) -> Bool {
+        guard rescanAfterSuccess else { return false }
+        switch status {
+        case .succeeded, .failed, .warning:
+            return true
+        case .queued, .running, .cancelled, .timedOut:
+            return false
         }
     }
 }

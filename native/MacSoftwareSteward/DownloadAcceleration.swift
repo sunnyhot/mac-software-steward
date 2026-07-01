@@ -205,15 +205,28 @@ enum DownloadAccelerationPolicy {
         return .retry(nextAttemptIndex: next)
     }
 
+    static func shouldRequestCommandRetry(for decision: SlowDownloadDecision, attempt: CommandAccelerationAttempt) -> Bool {
+        guard decision.isRetryable else { return false }
+        switch retryDecision(
+            attemptIndex: attempt.attemptIndex,
+            strategyCount: attempt.strategies.count,
+            maxAttempts: attempt.maxAttempts
+        ) {
+        case .retry:
+            return true
+        case .stop:
+            return false
+        }
+    }
+
     static func shouldCleanPartialDownload(
         for decision: SlowDownloadDecision,
         cleanupCount: Int,
         maxCleanups: Int
     ) -> Bool {
-        guard cleanupCount < maxCleanups else { return false }
-        if case .stalled = decision {
-            return true
-        }
+        _ = decision
+        _ = cleanupCount
+        _ = maxCleanups
         return false
     }
 

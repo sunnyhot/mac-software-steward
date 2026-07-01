@@ -68,6 +68,21 @@ struct DownloadAccelerationPolicyTest {
 
         precondition(DownloadAccelerationPolicy.retryDecision(attemptIndex: 0, strategyCount: 3, maxAttempts: 3) == .retry(nextAttemptIndex: 1))
         precondition(DownloadAccelerationPolicy.retryDecision(attemptIndex: 2, strategyCount: 3, maxAttempts: 3) == .stop)
+        let firstCommandAttempt = CommandAccelerationAttempt(
+            strategies: [
+                DownloadAccelerationStrategy(kind: .systemProxy, proxyURLString: "http://127.0.0.1:8080"),
+                DownloadAccelerationStrategy(kind: .direct, proxyURLString: nil)
+            ],
+            attemptIndex: 0,
+            maxAttempts: 3
+        )
+        let finalCommandAttempt = CommandAccelerationAttempt(
+            strategies: firstCommandAttempt.strategies,
+            attemptIndex: 1,
+            maxAttempts: 3
+        )
+        precondition(DownloadAccelerationPolicy.shouldRequestCommandRetry(for: .stalled("下载长时间没有增长"), attempt: firstCommandAttempt))
+        precondition(!DownloadAccelerationPolicy.shouldRequestCommandRetry(for: .stalled("下载长时间没有增长"), attempt: finalCommandAttempt), "Final strategy must keep running instead of surfacing a cancellation")
 
         let scutilOutput = """
         <dictionary> {
@@ -91,8 +106,8 @@ struct DownloadAccelerationPolicyTest {
         """
         precondition(DownloadAccelerationPolicy.systemProxyURLString(from: disabledScutilOutput) == nil)
 
-        precondition(DownloadAccelerationPolicy.shouldCleanPartialDownload(for: .stalled("下载长时间没有增长"), cleanupCount: 0, maxCleanups: 2))
-        precondition(DownloadAccelerationPolicy.shouldCleanPartialDownload(for: .stalled("下载长时间没有增长"), cleanupCount: 1, maxCleanups: 2))
+        precondition(!DownloadAccelerationPolicy.shouldCleanPartialDownload(for: .stalled("下载长时间没有增长"), cleanupCount: 0, maxCleanups: 2), "Automatic strategy switching should preserve Homebrew incomplete downloads for resume")
+        precondition(!DownloadAccelerationPolicy.shouldCleanPartialDownload(for: .stalled("下载长时间没有增长"), cleanupCount: 1, maxCleanups: 2))
         precondition(!DownloadAccelerationPolicy.shouldCleanPartialDownload(for: .stalled("下载长时间没有增长"), cleanupCount: 2, maxCleanups: 2))
         precondition(!DownloadAccelerationPolicy.shouldCleanPartialDownload(for: .slow("下载速度持续偏低"), cleanupCount: 0, maxCleanups: 2))
         precondition(!DownloadAccelerationPolicy.shouldCleanPartialDownload(for: .healthy, cleanupCount: 0, maxCleanups: 2))

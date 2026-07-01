@@ -35,7 +35,8 @@ git add \
   README.md \
   package.json \
   native \
-  scripts
+  scripts \
+  tests
 
 if ! git diff --cached --quiet; then
   git commit -m "release: v$VERSION"

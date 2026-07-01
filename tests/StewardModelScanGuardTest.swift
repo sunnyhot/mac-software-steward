@@ -63,6 +63,11 @@ struct StewardModelScanGuardTest {
     @MainActor
     static func main() async throws {
         UserDefaults.standard.removeObject(forKey: "maxConcurrentUpgrades")
+        precondition(JobRescanPolicy.shouldRescanAfterJobCompletion(rescanAfterSuccess: true, status: .succeeded))
+        precondition(JobRescanPolicy.shouldRescanAfterJobCompletion(rescanAfterSuccess: true, status: .failed))
+        precondition(!JobRescanPolicy.shouldRescanAfterJobCompletion(rescanAfterSuccess: true, status: .cancelled), "Cancelled upgrade jobs must not trigger an automatic rescan")
+        precondition(!JobRescanPolicy.shouldRescanAfterJobCompletion(rescanAfterSuccess: true, status: .timedOut), "Timed-out upgrade jobs must not trigger an automatic rescan")
+        precondition(!JobRescanPolicy.shouldRescanAfterJobCompletion(rescanAfterSuccess: false, status: .succeeded))
 
         let scanner = DelayedScanner()
         let model = StewardModel(scanner: scanner)
