@@ -14,9 +14,11 @@ struct ContentView: View {
         } detail: {
             detailContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .background(StewardCanvasBackground().ignoresSafeArea())
+                .background(DetailChromeBackground())
                 .animation(.easeInOut(duration: 0.2), value: model.selectedTab)
         }
+        .toolbarBackground(Color(nsColor: .windowBackgroundColor), for: .windowToolbar)
+        .toolbarBackground(.visible, for: .windowToolbar)
         .sheet(isPresented: $updater.showUpdateDialog) {
             AppUpdateDialog()
                 .environmentObject(updater)
@@ -54,6 +56,34 @@ struct ContentView: View {
                 MainPanel()
             }
         }
+    }
+}
+
+private enum AppChromeMetrics {
+    static let topRailHeight: CGFloat = 82
+}
+
+private struct DetailChromeBackground: View {
+    var body: some View {
+        ZStack(alignment: .top) {
+            StewardCanvasBackground()
+                .ignoresSafeArea()
+            UnifiedTopRail()
+                .allowsHitTesting(false)
+        }
+    }
+}
+
+private struct UnifiedTopRail: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            Color(nsColor: .windowBackgroundColor)
+                .frame(height: AppChromeMetrics.topRailHeight)
+            Divider()
+                .opacity(0.35)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .ignoresSafeArea(edges: .top)
     }
 }
 
@@ -107,7 +137,7 @@ private struct TaskFirstSidebar: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.top, 54)
+        .padding(.top, 58)
         .padding(.bottom, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .stewardSurface(role: .sidebar, cornerRadius: 0)
