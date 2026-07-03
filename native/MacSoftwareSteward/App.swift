@@ -145,7 +145,7 @@ struct MacSoftwareStewardApp: App {
                 }
         }
         .windowStyle(.titleBar)
-        .windowToolbarStyle(.unified(showsTitle: false))
+        .windowToolbarStyle(.unifiedCompact(showsTitle: false))
 
         MenuBarExtra(menuBarTitle, systemImage: menuBarSymbol) {
             MenuBarUpgradeMenu()

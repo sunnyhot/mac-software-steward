@@ -19,6 +19,8 @@ struct ContentView: View {
         }
         .toolbarBackground(Color(nsColor: .windowBackgroundColor), for: .windowToolbar)
         .toolbarBackground(.visible, for: .windowToolbar)
+        .toolbar(removing: AppWindowChromePolicy.removesAutomaticSidebarToggle ? .sidebarToggle : nil)
+        .background(WindowChromeConfigurator().frame(width: 0, height: 0))
         .sheet(isPresented: $updater.showUpdateDialog) {
             AppUpdateDialog()
                 .environmentObject(updater)
@@ -59,10 +61,6 @@ struct ContentView: View {
     }
 }
 
-private enum AppChromeMetrics {
-    static let topRailHeight: CGFloat = 82
-}
-
 private struct DetailChromeBackground: View {
     var body: some View {
         ZStack(alignment: .top) {
@@ -78,7 +76,7 @@ private struct UnifiedTopRail: View {
     var body: some View {
         VStack(spacing: 0) {
             Color(nsColor: .windowBackgroundColor)
-                .frame(height: AppChromeMetrics.topRailHeight)
+                .frame(height: AppChromeLayout.topRailHeight)
             Divider()
                 .opacity(0.35)
         }
@@ -137,7 +135,7 @@ private struct TaskFirstSidebar: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.top, 58)
+        .padding(.top, AppChromeLayout.sidebarTopPadding)
         .padding(.bottom, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .stewardSurface(role: .sidebar, cornerRadius: 0)
@@ -381,7 +379,7 @@ private struct HeaderView: View {
             metricsRow
         }
         .padding(.horizontal, 20)
-        .padding(.top, 18)
+        .padding(.top, AppChromeLayout.detailHeaderTopPadding)
         .padding(.bottom, 14)
         .background(headerBackground)
     }

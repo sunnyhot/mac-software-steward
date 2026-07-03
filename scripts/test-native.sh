@@ -66,6 +66,10 @@ run_test AppWindowDoubleClickZoomPolicyTest \
   "$SRC/AppWindowDoubleClickZoomPolicy.swift" \
   "$TESTS/AppWindowDoubleClickZoomPolicyTest.swift"
 
+run_test AppWindowChromePolicyTest \
+  "$SRC/AppWindowChromePolicy.swift" \
+  "$TESTS/AppWindowChromePolicyTest.swift"
+
 run_test AppManualUpdatePresenterTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
