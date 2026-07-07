@@ -153,6 +153,50 @@ struct StewardModelScanGuardTest {
         model.performUpdateAction(sparkleApp.updateCapability.actions[0], for: sparkleApp)
         precondition(model.errorMessage == "未找到 Sparkle 更新器。")
 
+        let executableFormula = BrewPackage(
+            id: "brew:formula:jq",
+            kind: "formula",
+            name: "jq",
+            installedVersion: "1.6",
+            currentVersion: "1.7",
+            pinned: false,
+            autoUpdates: false,
+            outdated: true,
+            upgradeable: true
+        )
+        let manualCask = BrewPackage(
+            id: "brew:cask:clash-party",
+            kind: "cask",
+            name: "clash-party",
+            installedVersion: "1.9.6",
+            currentVersion: "2.0.0",
+            pinned: false,
+            autoUpdates: true,
+            outdated: true,
+            upgradeable: false,
+            manualUpdateOnly: true
+        )
+        let manualCaskModel = StewardModel(scanner: StaticScanner(result: ScanResult(
+            scannedAt: Date(timeIntervalSince1970: 0),
+            includeGreedy: false,
+            summary: ScanSummary(applications: 0, brewFormulae: 1, brewCasks: 1, masApps: 0, outdated: 2, actionable: 1, scanMs: 1),
+            applications: ApplicationsScan(source: "test", ok: true, error: "", items: []),
+            brew: BrewScan(
+                available: true,
+                path: "/opt/homebrew/bin/brew",
+                prefix: "/opt/homebrew",
+                version: "Homebrew 5",
+                error: "",
+                includeGreedy: false,
+                formulae: [executableFormula],
+                casks: [manualCask]
+            ),
+            mas: MasScan(available: false, path: "", error: "", apps: [])
+        )))
+        await manualCaskModel.scanSoftware()
+        precondition(manualCaskModel.allUpgradeablePackages.map(\.id) == [executableFormula.id, manualCask.id])
+        precondition(manualCaskModel.availableUpdates.map(\.id) == [executableFormula.id])
+
         let directReplacementWorkDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("direct-replacement-download-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directReplacementWorkDirectory, withIntermediateDirectories: true)

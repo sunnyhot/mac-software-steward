@@ -79,7 +79,7 @@ final class StewardModel: ObservableObject {
         refreshDailyInspectionStatus()
     }
 
-    /// 所有可升级的包（用于 UI 显示，包含正在升级的包以显示进度）
+    /// 所有待处理升级/提醒（用于 UI 显示，包含需手动处理的自更新 cask）
     @Published var allUpgradeablePackages: [UpdatablePackage] = []
 
     /// 未在升级中的可升级包（用于 upgradeAll，排除 queued/running/succeeded）
@@ -92,12 +92,12 @@ final class StewardModel: ObservableObject {
             availableUpdates = []
             return
         }
-        allUpgradeablePackages = scan.brew.formulae.filter(\.upgradeable).map(UpdatablePackage.brew)
-            + scan.brew.casks.filter(\.upgradeable).map(UpdatablePackage.brew)
-            + scan.mas.apps.filter(\.upgradeable).map(UpdatablePackage.mas)
+        allUpgradeablePackages = scan.brew.formulae.filter { $0.outdated || $0.upgradeable }.map(UpdatablePackage.brew)
+            + scan.brew.casks.filter { $0.outdated || $0.upgradeable }.map(UpdatablePackage.brew)
+            + scan.mas.apps.filter { $0.outdated || $0.upgradeable }.map(UpdatablePackage.mas)
         availableUpdates = allUpgradeablePackages.filter { package in
             let status = packageProgress[package.id]?.status
-            return status != .succeeded && status != .running && status != .queued
+            return package.upgradeable && status != .succeeded && status != .running && status != .queued
         }
     }
 

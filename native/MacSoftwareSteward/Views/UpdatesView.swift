@@ -233,7 +233,7 @@ struct UpdateRow: View {
                     )
                 }
             } label: {
-                Label("升级", systemImage: "play")
+                Label(package.upgradeable ? "升级" : "需手动", systemImage: package.upgradeable ? "play" : "hand.raised")
             }
             .buttonStyle(.borderless)
             .disabled(!package.upgradeable || packageActionDisabled)

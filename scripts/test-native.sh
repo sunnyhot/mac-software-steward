@@ -211,6 +211,18 @@ run_test HomebrewDownloadMonitorTest \
   "$SRC/HomebrewDownloadMonitor.swift" \
   "$TESTS/HomebrewDownloadMonitorTest.swift"
 
+run_test HomebrewCaskUpdateAdvisorTest \
+  "$SRC/CommandRunner.swift" \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/AutomationProfileStore.swift" \
+  "$SRC/SparkleAppcastChecker.swift" \
+  "$SRC/HomebrewCaskUpdateAdvisor.swift" \
+  "$SRC/RegularAppUpdateDiscovery.swift" \
+  "$SRC/RegularAppUpdateDiscoveryCache.swift" \
+  "$SRC/Scanner.swift" \
+  "$TESTS/HomebrewCaskUpdateAdvisorTest.swift"
+
 run_test InboxStoreTest \
   "$SRC/InboxStore.swift" \
   "$TESTS/InboxStoreTest.swift"
@@ -349,6 +361,7 @@ run_test ScannerBrewListFallbackTest \
   "$SRC/RegularAppUpdateDiscovery.swift" \
   "$SRC/RegularAppUpdateDiscoveryCache.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
+  "$SRC/HomebrewCaskUpdateAdvisor.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerBrewListFallbackTest.swift"
 
@@ -360,6 +373,7 @@ run_test ScannerAppUpdateCapabilityTest \
   "$SRC/RegularAppUpdateDiscovery.swift" \
   "$SRC/RegularAppUpdateDiscoveryCache.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
+  "$SRC/HomebrewCaskUpdateAdvisor.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerAppUpdateCapabilityTest.swift"
 
@@ -371,6 +385,7 @@ run_test ScannerSparkleAppcastPolicyTest \
   "$SRC/RegularAppUpdateDiscovery.swift" \
   "$SRC/RegularAppUpdateDiscoveryCache.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
+  "$SRC/HomebrewCaskUpdateAdvisor.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerSparkleAppcastPolicyTest.swift"
 
@@ -382,6 +397,7 @@ run_test ScannerNormalizeTokenTest \
   "$SRC/RegularAppUpdateDiscovery.swift" \
   "$SRC/RegularAppUpdateDiscoveryCache.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
+  "$SRC/HomebrewCaskUpdateAdvisor.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerNormalizeTokenTest.swift"
 
@@ -400,6 +416,7 @@ run_test StewardModelScanGuardTest \
   "$SRC/RecoveryInboxFactory.swift" \
   "$SRC/AutoRepairDecider.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
+  "$SRC/HomebrewCaskUpdateAdvisor.swift" \
   "$SRC/Scanner.swift" \
   "$SRC/SoftwareScanning.swift" \
   "$SRC/InboxStore.swift" \

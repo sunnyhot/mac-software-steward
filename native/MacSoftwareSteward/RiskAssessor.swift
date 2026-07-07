@@ -177,7 +177,7 @@ enum RiskAssessor {
             return false
         }
 
-        return brew.kind == "cask" && brew.outdated
+        return brew.kind == "cask" && brew.outdated && !brew.manualUpdateOnly
     }
 
     private static func isMajorVersionChange(installed: String, current: String) -> Bool {

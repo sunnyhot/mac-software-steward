@@ -182,6 +182,7 @@ struct BrewPackage: Identifiable, Hashable {
     var autoUpdates: Bool
     var outdated: Bool
     var upgradeable: Bool
+    var manualUpdateOnly: Bool = false
 }
 
 struct MasApp: Identifiable, Hashable {
@@ -310,6 +311,13 @@ enum UpdatablePackage: Identifiable, Hashable {
     var autoUpdates: Bool {
         if case .brew(let package) = self {
             return package.autoUpdates
+        }
+        return false
+    }
+
+    var manualUpdateOnly: Bool {
+        if case .brew(let package) = self {
+            return package.manualUpdateOnly
         }
         return false
     }

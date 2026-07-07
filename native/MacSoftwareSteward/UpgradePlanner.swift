@@ -126,7 +126,7 @@ enum UpgradePlanner {
             return risk.summary
         }
         if !package.upgradeable {
-            return package.outdated ? "需要手动处理" : "无需升级"
+            return package.manualUpdateOnly ? "应用自带更新器发现新版本" : (package.outdated ? "需要手动处理" : "无需升级")
         }
 
         return "当前不可执行"
@@ -136,6 +136,9 @@ enum UpgradePlanner {
         switch package {
         case .brew(let brew):
             if brew.kind == "cask" {
+                if brew.manualUpdateOnly {
+                    return "应用内更新器"
+                }
                 var parts = ["brew", "upgrade", "--cask"]
                 if includeGreedy {
                     parts.append("--greedy")

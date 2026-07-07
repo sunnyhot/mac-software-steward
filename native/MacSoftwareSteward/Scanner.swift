@@ -68,7 +68,10 @@ enum SoftwareScanner {
         }
         onPhaseChange?(.brewInfo)
         async let brewTask = timed(.brew) {
-            await scanBrew(includeGreedy: includeGreedy)
+            await scanBrew(
+                includeGreedy: includeGreedy,
+                regularAppNetworkPolicy: regularAppNetworkPolicy
+            )
         }
         onPhaseChange?(.appStore)
         async let masTask = timed(.mas) {
@@ -180,7 +183,10 @@ enum SoftwareScanner {
         let result: CommandResult
     }
 
-    static func scanBrew(includeGreedy: Bool) async -> BrewScan {
+    static func scanBrew(
+        includeGreedy: Bool,
+        regularAppNetworkPolicy: RegularAppNetworkPolicy = .declaredSourcesOnly
+    ) async -> BrewScan {
         guard let brewPath = await CommandRunner.commandPath("brew") else {
             return BrewScan(
                 available: false,
@@ -241,7 +247,23 @@ enum SoftwareScanner {
         let installedCasks = caskListResult.packages
         let outdatedPayload = parseBrewOutdated(outdated.stdout)
         let formulae = mergeBrew(installed: installedFormulae, outdated: outdatedPayload.formulae, kind: "formula")
-        let casks = mergeBrew(installed: installedCasks, outdated: outdatedPayload.casks, kind: "cask")
+        let caskMetadataByName = await scanCaskMetadata(
+            brewPath: brewPath,
+            installedCasks: installedCasks
+        )
+        let caskAdvisoriesByName = await caskUpdateAdvisories(
+            installedCasks: installedCasks,
+            outdated: outdatedPayload.casks,
+            metadataByName: caskMetadataByName,
+            networkPolicy: regularAppNetworkPolicy
+        )
+        let casks = mergeBrew(
+            installed: installedCasks,
+            outdated: outdatedPayload.casks,
+            kind: "cask",
+            caskMetadataByName: caskMetadataByName,
+            caskAdvisoriesByName: caskAdvisoriesByName
+        )
 
         let errors = [
             formulaListResult.error,
@@ -451,7 +473,9 @@ enum SoftwareScanner {
     static func mergeBrew(
         installed: [(name: String, installedVersion: String)],
         outdated: [[String: Any]],
-        kind: String
+        kind: String,
+        caskMetadataByName: [String: HomebrewCaskMetadata] = [:],
+        caskAdvisoriesByName: [String: HomebrewCaskUpdateAdvisory] = [:]
     ) -> [BrewPackage] {
         let outdatedByName = Dictionary(outdated.compactMap { item -> (String, [String: Any])? in
             guard let name = item["name"] as? String else { return nil }
@@ -460,12 +484,18 @@ enum SoftwareScanner {
 
         return installed.map { item in
             let pending = outdatedByName[item.name]
+            let metadata = kind == "cask" ? caskMetadataByName[item.name] : nil
+            let advisory = kind == "cask" ? caskAdvisoriesByName[item.name] : nil
             let installedVersions = stringList(pending?["installed_versions"])
                 ?? stringList(pending?["outdated_versions"])
-                ?? [item.installedVersion].filter { !$0.isEmpty }
-            let currentVersion = stringValue(pending?["current_version"]) ?? stringValue(pending?["newest_version"]) ?? ""
+                ?? [item.installedVersion.isEmpty ? (metadata?.version ?? "") : item.installedVersion].filter { !$0.isEmpty }
+            let currentVersion = stringValue(pending?["current_version"])
+                ?? stringValue(pending?["newest_version"])
+                ?? advisory?.currentVersion
+                ?? ""
             let pinned = pending?["pinned"] as? Bool ?? false
-            let autoUpdates = pending?["auto_updates"] as? Bool ?? false
+            let autoUpdates = pending?["auto_updates"] as? Bool ?? metadata?.autoUpdates ?? false
+            let manualUpdateOnly = pending == nil && advisory != nil
 
             return BrewPackage(
                 id: "brew:\(kind):\(item.name)",
@@ -475,14 +505,84 @@ enum SoftwareScanner {
                 currentVersion: currentVersion,
                 pinned: pinned,
                 autoUpdates: autoUpdates,
-                outdated: pending != nil,
-                upgradeable: pending != nil && !pinned && !(kind == "cask" && autoUpdates)
+                outdated: pending != nil || advisory != nil,
+                upgradeable: pending != nil && !pinned && !(kind == "cask" && autoUpdates),
+                manualUpdateOnly: manualUpdateOnly
             )
         }
         .sorted {
             if $0.outdated != $1.outdated { return $0.outdated && !$1.outdated }
             return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
         }
+    }
+
+    static func scanCaskMetadata(
+        brewPath: String,
+        installedCasks: [(name: String, installedVersion: String)]
+    ) async -> [String: HomebrewCaskMetadata] {
+        let names = installedCasks.map(\.name).filter { !$0.isEmpty }
+        guard !names.isEmpty else { return [:] }
+        let result = await CommandRunner.run(
+            brewPath,
+            arguments: ["info", "--cask", "--json=v2"] + names,
+            timeout: 60
+        )
+        guard result.ok else { return [:] }
+        return HomebrewCaskUpdateAdvisor.parseMetadata(from: result.stdout)
+    }
+
+    typealias CaskAdvisoryChecker = @Sendable (HomebrewCaskMetadata, String) async -> HomebrewCaskUpdateAdvisory?
+
+    static func caskUpdateAdvisories(
+        installedCasks: [(name: String, installedVersion: String)],
+        outdated: [[String: Any]],
+        metadataByName: [String: HomebrewCaskMetadata],
+        networkPolicy: RegularAppNetworkPolicy,
+        concurrencyLimit: Int = 4,
+        checker: @escaping CaskAdvisoryChecker = { metadata, installedVersion in
+            await HomebrewCaskUpdateAdvisor.check(metadata: metadata, installedVersion: installedVersion)
+        }
+    ) async -> [String: HomebrewCaskUpdateAdvisory] {
+        guard networkPolicy != .localOnly else { return [:] }
+        let outdatedNames = Set(outdated.compactMap { $0["name"] as? String })
+        let candidates = installedCasks.compactMap { item -> (name: String, installedVersion: String, metadata: HomebrewCaskMetadata)? in
+            guard !outdatedNames.contains(item.name),
+                  let metadata = metadataByName[item.name],
+                  metadata.autoUpdates,
+                  !metadata.releaseFeedURLString.isEmpty else {
+                return nil
+            }
+            return (item.name, item.installedVersion, metadata)
+        }
+        guard !candidates.isEmpty else { return [:] }
+
+        let limit = max(1, concurrencyLimit)
+        var advisories: [String: HomebrewCaskUpdateAdvisory] = [:]
+        await withTaskGroup(of: (String, HomebrewCaskUpdateAdvisory?).self) { group in
+            var nextCandidateIndex = 0
+            let initialCount = min(limit, candidates.count)
+            for _ in 0..<initialCount {
+                let candidate = candidates[nextCandidateIndex]
+                nextCandidateIndex += 1
+                group.addTask {
+                    (candidate.name, await checker(candidate.metadata, candidate.installedVersion))
+                }
+            }
+
+            while let result = await group.next() {
+                if let advisory = result.1 {
+                    advisories[result.0] = advisory
+                }
+                if nextCandidateIndex < candidates.count {
+                    let candidate = candidates[nextCandidateIndex]
+                    nextCandidateIndex += 1
+                    group.addTask {
+                        (candidate.name, await checker(candidate.metadata, candidate.installedVersion))
+                    }
+                }
+            }
+        }
+        return advisories
     }
 
     static func parseMasListLine(_ line: String) -> MasApp? {
