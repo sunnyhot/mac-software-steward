@@ -28,47 +28,58 @@ struct InboxView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if !automationProfile.profile.onboardingCompleted {
-                AutomationOnboardingCard()
-                    .environmentObject(automationProfile)
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 14) {
+                inboxHeader
+                inboxContent
             }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(.bottom, 4)
+        }
+    }
 
-            AutomationSummaryCard()
-                .environmentObject(model)
+    @ViewBuilder
+    private var inboxHeader: some View {
+        if !automationProfile.profile.onboardingCompleted {
+            AutomationOnboardingCard()
                 .environmentObject(automationProfile)
-                .environmentObject(inboxStore)
+        }
 
-            if automationProfile.profile.advancedModeEnabled && !inboxStore.items.isEmpty {
-                InboxFilterBar(
-                    kindFilter: $kindFilter,
-                    severityFilter: $severityFilter,
-                    statusFilter: $statusFilter
-                )
-            }
+        AutomationSummaryCard()
+            .environmentObject(model)
+            .environmentObject(automationProfile)
+            .environmentObject(inboxStore)
 
-            if !hasAnyVisibleScopeItems {
-                EmptyStateView(
-                    symbol: "checkmark.circle",
-                    title: "暂无待处理事项",
-                    text: "需要确认的升级、失败恢复和来源异常会出现在这里。"
-                )
-            } else if visibleItems.isEmpty {
-                EmptyStateView(
-                    symbol: "line.3.horizontal.decrease.circle",
-                    title: "当前筛选暂无事项",
-                    text: "调整类型或严重级别筛选后再查看。"
-                )
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(visibleItems) { item in
-                            InboxItemRow(item: item)
-                                .environmentObject(model)
-                                .environmentObject(automationProfile)
-                                .environmentObject(inboxStore)
-                        }
-                    }
+        if automationProfile.profile.advancedModeEnabled && !inboxStore.items.isEmpty {
+            InboxFilterBar(
+                kindFilter: $kindFilter,
+                severityFilter: $severityFilter,
+                statusFilter: $statusFilter
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var inboxContent: some View {
+        if !hasAnyVisibleScopeItems {
+            EmptyStateView(
+                symbol: "checkmark.circle",
+                title: "暂无待处理事项",
+                text: "需要确认的升级、失败恢复和来源异常会出现在这里。"
+            )
+        } else if visibleItems.isEmpty {
+            EmptyStateView(
+                symbol: "line.3.horizontal.decrease.circle",
+                title: "当前筛选暂无事项",
+                text: "调整类型或严重级别筛选后再查看。"
+            )
+        } else {
+            LazyVStack(spacing: 8) {
+                ForEach(visibleItems) { item in
+                    InboxItemRow(item: item)
+                        .environmentObject(model)
+                        .environmentObject(automationProfile)
+                        .environmentObject(inboxStore)
                 }
             }
         }

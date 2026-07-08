@@ -92,3 +92,64 @@ enum MaintenanceStatusPresenter {
         )
     }
 }
+
+struct MenuBarStatusPresentation: Equatable {
+    var title: String
+    var summary: String
+    var symbol: String
+}
+
+enum MenuBarStatusPresenter {
+    static func presentation(
+        isScanning: Bool,
+        isConfirmingUpgradePlan: Bool,
+        hasRunningJob: Bool,
+        activeUpgradeCount: Int,
+        remainingUpgradeableCount: Int,
+        totalUpgradeableCount: Int
+    ) -> MenuBarStatusPresentation {
+        if isScanning {
+            return MenuBarStatusPresentation(
+                title: "扫描中",
+                summary: "正在扫描软件更新",
+                symbol: "magnifyingglass"
+            )
+        }
+
+        if hasRunningJob {
+            let activeText = activeUpgradeCount > 0 ? "\(activeUpgradeCount) 个执行中" : "正在执行任务"
+            let activeSummary = activeUpgradeCount > 0 ? activeText : "任务正在执行"
+            var summaryParts = ["正在升级，\(activeSummary)"]
+            if remainingUpgradeableCount > 0 {
+                summaryParts.append("剩余 \(remainingUpgradeableCount) 项待升级")
+            }
+            return MenuBarStatusPresentation(
+                title: "升级中 · \(activeText)",
+                summary: summaryParts.joined(separator: " · "),
+                symbol: "arrow.triangle.2.circlepath"
+            )
+        }
+
+        if isConfirmingUpgradePlan {
+            return MenuBarStatusPresentation(
+                title: "准备升级中",
+                summary: "正在准备升级任务",
+                symbol: "hourglass"
+            )
+        }
+
+        if totalUpgradeableCount > 0 {
+            return MenuBarStatusPresentation(
+                title: "\(totalUpgradeableCount) 个更新",
+                summary: "发现 \(totalUpgradeableCount) 个可升级软件",
+                symbol: "arrow.down.circle.fill"
+            )
+        }
+
+        return MenuBarStatusPresentation(
+            title: "已最新",
+            summary: "当前没有可升级软件",
+            symbol: "checkmark.circle"
+        )
+    }
+}

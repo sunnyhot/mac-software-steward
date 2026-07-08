@@ -183,24 +183,28 @@ struct MacSoftwareStewardApp: App {
     }
 
     private var menuBarTitle: String {
-        if model.isScanning {
-            return "扫描中"
-        }
-        let totalCount = model.allUpgradeablePackages.count
-        if model.hasRunningJob {
-            return "升级中 · 剩余 \(model.availableUpdates.count) 待升级"
-        }
-        if model.isConfirmingUpgradePlan {
-            return "准备升级中"
-        }
-        return totalCount > 0 ? "\(totalCount) 个更新" : "已最新"
+        menuBarPresentation.title
     }
 
     private var menuBarSymbol: String {
-        if model.isScanning { return "magnifyingglass" }
-        if model.isConfirmingUpgradePlan { return "hourglass" }
-        if model.hasRunningJob { return "arrow.triangle.2.circlepath" }
-        return model.allUpgradeablePackages.isEmpty ? "checkmark.circle" : "arrow.down.circle.fill"
+        menuBarPresentation.symbol
+    }
+
+    private var menuBarPresentation: MenuBarStatusPresentation {
+        MenuBarStatusPresenter.presentation(
+            isScanning: model.isScanning,
+            isConfirmingUpgradePlan: model.isConfirmingUpgradePlan,
+            hasRunningJob: model.hasRunningJob,
+            activeUpgradeCount: activeUpgradeCount,
+            remainingUpgradeableCount: model.availableUpdates.count,
+            totalUpgradeableCount: model.allUpgradeablePackages.count
+        )
+    }
+
+    private var activeUpgradeCount: Int {
+        model.packageProgress.values.filter { progress in
+            progress.status == .queued || progress.status == .running
+        }.count
     }
 
     private var currentAppearanceMode: AppearanceMode {
@@ -266,7 +270,7 @@ private struct MenuBarUpgradeMenu: View {
         .disabled(model.availableUpdates.isEmpty || model.hasRunningJob || model.isConfirmingUpgradePlan)
 
         if model.hasRunningJob {
-            Text("升级任务运行中")
+            Text(activeUpgradeCount > 0 ? "\(activeUpgradeCount) 个升级任务执行中" : "升级任务运行中")
         } else if model.isConfirmingUpgradePlan {
             Text("正在准备升级任务")
         }
@@ -297,18 +301,23 @@ private struct MenuBarUpgradeMenu: View {
     }
 
     private var summaryText: String {
-        if model.isScanning {
-            return "正在扫描软件更新"
-        }
-        if model.hasRunningJob {
-            return "正在升级，剩余 \(model.availableUpdates.count) 项待升级"
-        }
-        if model.isConfirmingUpgradePlan {
-            return "正在准备升级任务"
-        }
-        let totalCount = model.allUpgradeablePackages.count
-        return totalCount == 0
-            ? "当前没有可升级软件"
-            : "发现 \(totalCount) 个可升级软件"
+        menuBarPresentation.summary
+    }
+
+    private var menuBarPresentation: MenuBarStatusPresentation {
+        MenuBarStatusPresenter.presentation(
+            isScanning: model.isScanning,
+            isConfirmingUpgradePlan: model.isConfirmingUpgradePlan,
+            hasRunningJob: model.hasRunningJob,
+            activeUpgradeCount: activeUpgradeCount,
+            remainingUpgradeableCount: model.availableUpdates.count,
+            totalUpgradeableCount: model.allUpgradeablePackages.count
+        )
+    }
+
+    private var activeUpgradeCount: Int {
+        model.packageProgress.values.filter { progress in
+            progress.status == .queued || progress.status == .running
+        }.count
     }
 }

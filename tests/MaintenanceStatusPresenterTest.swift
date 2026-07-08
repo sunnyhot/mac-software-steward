@@ -81,5 +81,28 @@ struct MaintenanceStatusPresenterTest {
         precondition(failed.symbol == "exclamationmark.triangle", "Unexpected failed symbol: \(failed.symbol)")
         precondition(failed.tintRole == .failure)
         precondition(!failed.isActive)
+
+        let upgradingMenu = MenuBarStatusPresenter.presentation(
+            isScanning: false,
+            isConfirmingUpgradePlan: false,
+            hasRunningJob: true,
+            activeUpgradeCount: 2,
+            remainingUpgradeableCount: 0,
+            totalUpgradeableCount: 2
+        )
+        precondition(upgradingMenu.title == "升级中 · 2 个执行中", "Unexpected upgrading menu title: \(upgradingMenu.title)")
+        precondition(upgradingMenu.summary == "正在升级，2 个执行中", "Unexpected upgrading menu summary: \(upgradingMenu.summary)")
+        precondition(upgradingMenu.symbol == "arrow.triangle.2.circlepath", "Unexpected upgrading menu symbol: \(upgradingMenu.symbol)")
+
+        let queuedMenu = MenuBarStatusPresenter.presentation(
+            isScanning: false,
+            isConfirmingUpgradePlan: false,
+            hasRunningJob: true,
+            activeUpgradeCount: 1,
+            remainingUpgradeableCount: 3,
+            totalUpgradeableCount: 4
+        )
+        precondition(queuedMenu.title == "升级中 · 1 个执行中", "Unexpected queued menu title: \(queuedMenu.title)")
+        precondition(queuedMenu.summary == "正在升级，1 个执行中 · 剩余 3 项待升级", "Unexpected queued menu summary: \(queuedMenu.summary)")
     }
 }

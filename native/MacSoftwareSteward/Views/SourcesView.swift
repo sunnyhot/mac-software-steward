@@ -11,26 +11,38 @@ struct SourcesView: View {
     @State private var selectedPane: SourcePane = .homebrew
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center, spacing: 12) {
-                Text("管理来源负责执行升级；本机应用页只展示实际安装的 .app 和来源关系。")
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Picker("管理来源", selection: $selectedPane) {
-                    ForEach(SourcePane.allCases) { pane in
-                        Text(pane.rawValue).tag(pane)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 280)
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 14) {
+                sourceHeader
+                sourceContent
             }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(.bottom, 4)
+        }
+    }
 
-            switch selectedPane {
-            case .homebrew:
-                BrewSourceView()
-            case .appStore:
-                AppStoreSourceView()
+    private var sourceHeader: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text("管理来源负责执行升级；本机应用页只展示实际安装的 .app 和来源关系。")
+                .foregroundStyle(.secondary)
+            Spacer()
+            Picker("管理来源", selection: $selectedPane) {
+                ForEach(SourcePane.allCases) { pane in
+                    Text(pane.rawValue).tag(pane)
+                }
             }
+            .pickerStyle(.segmented)
+            .frame(width: 280)
+        }
+    }
+
+    @ViewBuilder
+    private var sourceContent: some View {
+        switch selectedPane {
+        case .homebrew:
+            BrewSourceView()
+        case .appStore:
+            AppStoreSourceView()
         }
     }
 }
@@ -48,27 +60,25 @@ struct BrewSourceView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                if let brew = model.scan?.brew {
-                    InfoLine(text: brew.available ? "\(brew.version) · \(brew.prefix)" : "未检测到 Homebrew")
+        VStack(alignment: .leading, spacing: 18) {
+            if let brew = model.scan?.brew {
+                InfoLine(text: brew.available ? "\(brew.version) · \(brew.prefix)" : "未检测到 Homebrew")
 
-                    // 错误诊断卡片（替代裸 WarningLine）
-                    if let diagnosis = brewDiagnosis {
-                        ErrorRecoveryCard(
-                            diagnosis: diagnosis,
-                            onAction: { action in
-                                Task { await model.performSourceRecovery(action: action) }
-                            },
-                            isProcessing: model.isScanning
-                        )
-                    }
-
-                    PackageSection(title: "Formula", packages: filteredBrew(brew.formulae))
-                    PackageSection(title: "Cask", packages: filteredBrew(brew.casks))
-                } else {
-                    EmptyStateView(symbol: "shippingbox", title: "等待扫描", text: "点击扫描后会显示 Homebrew 软件。")
+                // 错误诊断卡片（替代裸 WarningLine）
+                if let diagnosis = brewDiagnosis {
+                    ErrorRecoveryCard(
+                        diagnosis: diagnosis,
+                        onAction: { action in
+                            Task { await model.performSourceRecovery(action: action) }
+                        },
+                        isProcessing: model.isScanning
+                    )
                 }
+
+                PackageSection(title: "Formula", packages: filteredBrew(brew.formulae))
+                PackageSection(title: "Cask", packages: filteredBrew(brew.casks))
+            } else {
+                EmptyStateView(symbol: "shippingbox", title: "等待扫描", text: "点击扫描后会显示 Homebrew 软件。")
             }
         }
     }
@@ -149,11 +159,9 @@ struct AppStoreSourceView: View {
                     )
                 }
             }
-            ScrollView {
-                LazyVStack(spacing: 10) {
-                    ForEach(apps) { app in
-                        UpdateRow(package: .mas(app))
-                    }
+            LazyVStack(spacing: 10) {
+                ForEach(apps) { app in
+                    UpdateRow(package: .mas(app))
                 }
             }
         }

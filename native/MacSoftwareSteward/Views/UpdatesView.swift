@@ -29,53 +29,63 @@ struct UpdatesView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("可执行升级")
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    Text("Homebrew 与 Mac App Store 中可直接执行的升级会出现在这里。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-
-                Spacer(minLength: 12)
-
-                Picker("", selection: $selectedFilter) {
-                    ForEach(UpdateFilter.allCases) { filter in
-                        Text(filter.rawValue).tag(filter)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                .frame(width: 420)
-                Button {
-                    model.selectedTab = .rules
-                } label: {
-                    Label("升级策略", systemImage: "slider.horizontal.3")
-                        .font(.caption)
-                }
-                .buttonStyle(.borderless)
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 12) {
+                filterHeader
+                updateContent
             }
-            .padding(12)
-            .polishedTaskSurface(tint: .accentColor, isActive: false)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(.bottom, 4)
+        }
+    }
 
-            if model.isScanning {
-                scanningView
-            } else if updates.isEmpty {
-                EmptyStateView(symbol: "checkmark.circle", title: "没有发现可操作升级", text: "如果需要包含自动更新类 cask，请打开 greedy cask 后重新扫描。")
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(updates) { package in
-                            UpdateRow(package: package)
-                                .transition(.asymmetric(
-                                    insertion: .opacity.combined(with: .move(edge: .top)),
-                                    removal: .opacity
-                                ))
-                        }
-                    }
+    private var filterHeader: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("可执行升级")
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                Text("Homebrew 与 Mac App Store 中可直接执行的升级会出现在这里。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 12)
+
+            Picker("", selection: $selectedFilter) {
+                ForEach(UpdateFilter.allCases) { filter in
+                    Text(filter.rawValue).tag(filter)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(width: 420)
+            Button {
+                model.selectedTab = .rules
+            } label: {
+                Label("升级策略", systemImage: "slider.horizontal.3")
+                    .font(.caption)
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding(12)
+        .polishedTaskSurface(tint: .accentColor, isActive: false)
+    }
+
+    @ViewBuilder
+    private var updateContent: some View {
+        if model.isScanning {
+            scanningView
+        } else if updates.isEmpty {
+            EmptyStateView(symbol: "checkmark.circle", title: "没有发现可操作升级", text: "如果需要包含自动更新类 cask，请打开 greedy cask 后重新扫描。")
+        } else {
+            LazyVStack(spacing: 8) {
+                ForEach(updates) { package in
+                    UpdateRow(package: package)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .move(edge: .top)),
+                            removal: .opacity
+                        ))
                 }
             }
         }

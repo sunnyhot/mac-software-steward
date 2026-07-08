@@ -13,43 +13,53 @@ struct ApplicationsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 12) {
-                Text("汇总电脑里可人工维护的软件，包括普通 App、Homebrew Formula、Homebrew Cask 和 App Store 应用。")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 12) {
+                filterHeader
+                applicationContent
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(.bottom, 4)
+        }
+    }
 
-                Spacer()
+    private var filterHeader: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text("汇总电脑里可人工维护的软件，包括普通 App、Homebrew Formula、Homebrew Cask 和 App Store 应用。")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
 
-                Picker("筛选", selection: $selectedFilter) {
-                    ForEach(LocalSoftwareFilter.allCases) { filter in
-                        Text(filter.rawValue).tag(filter)
-                    }
+            Spacer()
+
+            Picker("筛选", selection: $selectedFilter) {
+                ForEach(LocalSoftwareFilter.allCases) { filter in
+                    Text(filter.rawValue).tag(filter)
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 520)
             }
+            .pickerStyle(.segmented)
+            .frame(width: 520)
+        }
+    }
 
-            if let scan = model.scan?.applications, !scan.error.isEmpty {
-                WarningLine(text: scan.error)
-            }
-            if rows.isEmpty {
-                EmptyStateView(
-                    symbol: "checkmark.seal",
-                    title: "暂无可维护软件",
-                    text: "扫描完成后，这里会列出可人工升级或检查更新的软件。"
-                )
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(rows) { row in
-                            LocalSoftwareRowView(row: row)
-                                .transition(.asymmetric(
-                                    insertion: .opacity.combined(with: .move(edge: .top)),
-                                    removal: .opacity
-                                ))
-                        }
-                    }
+    @ViewBuilder
+    private var applicationContent: some View {
+        if let scan = model.scan?.applications, !scan.error.isEmpty {
+            WarningLine(text: scan.error)
+        }
+        if rows.isEmpty {
+            EmptyStateView(
+                symbol: "checkmark.seal",
+                title: "暂无可维护软件",
+                text: "扫描完成后，这里会列出可人工升级或检查更新的软件。"
+            )
+        } else {
+            LazyVStack(spacing: 8) {
+                ForEach(rows) { row in
+                    LocalSoftwareRowView(row: row)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .move(edge: .top)),
+                            removal: .opacity
+                        ))
                 }
             }
         }

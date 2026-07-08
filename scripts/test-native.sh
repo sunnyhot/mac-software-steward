@@ -86,6 +86,9 @@ run_test AppTabVisibilityTest \
   "$SRC/AppTabNavigationPresenter.swift" \
   "$TESTS/AppTabVisibilityTest.swift"
 
+run_test TabScrollStructureTest \
+  "$TESTS/TabScrollStructureTest.swift"
+
 run_test MaintenanceStatusPresenterTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
