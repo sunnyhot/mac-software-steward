@@ -105,6 +105,25 @@ final class StewardModel: ObservableObject {
         jobs.contains { $0.status == .queued || $0.status == .running }
     }
 
+    /// 失败/超时/取消的升级记录中，已不在当前可升级集合里的孤儿。
+    ///
+    /// 重新扫描后，如果某个包不再 outdated（例如其实已升成功，或 brew 输出发生变化），
+    /// 它会从 `allUpgradeablePackages` 消失，但 `packageProgress` 里的失败记录仍然残留。
+    /// 这些孤儿会导致顶部状态横幅计数与下方升级列表对不上，这里把它们暴露出来，
+    /// 让升级列表可以继续展示这些项，用户能看到失败原因并重试或清除。
+    var orphanedFailedProgresses: [PackageUpgradeProgress] {
+        let knownIDs = Set(allUpgradeablePackages.map(\.id))
+        return packageProgress.values
+            .filter {
+                !knownIDs.contains($0.packageID) && [
+                    PackageUpgradeStatus.failed,
+                    PackageUpgradeStatus.timedOut,
+                    PackageUpgradeStatus.cancelled
+                ].contains($0.status)
+            }
+            .sorted { $0.packageName.localizedStandardCompare($1.packageName) == .orderedAscending }
+    }
+
     var jobNotice: JobNotice? {
         if let job = jobs.first(where: { $0.status == .queued || $0.status == .running }) {
             return JobNotice(

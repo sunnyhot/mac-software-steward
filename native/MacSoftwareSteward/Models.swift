@@ -365,9 +365,11 @@ struct RecoveryAction: Codable, Hashable {
     var allowsAutomaticRepair: Bool = false
 }
 
-struct PackageUpgradeProgress: Hashable {
+struct PackageUpgradeProgress: Hashable, Identifiable {
     var packageID: String
     var packageName: String
+
+    var id: String { packageID }
     var status: PackageUpgradeStatus
     var detail: String
     var phaseText = ""

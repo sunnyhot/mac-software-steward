@@ -76,18 +76,60 @@ struct UpdatesView: View {
     private var updateContent: some View {
         if model.isScanning {
             scanningView
-        } else if updates.isEmpty {
-            EmptyStateView(symbol: "checkmark.circle", title: "没有发现可操作升级", text: "如果需要包含自动更新类 cask，请打开 greedy cask 后重新扫描。")
         } else {
-            LazyVStack(spacing: 8) {
-                ForEach(updates) { package in
-                    UpdateRow(package: package)
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .move(edge: .top)),
-                            removal: .opacity
-                        ))
+            VStack(spacing: 8) {
+                if updates.isEmpty {
+                    EmptyStateView(symbol: "checkmark.circle", title: "没有发现可操作升级", text: "如果需要包含自动更新类 cask，请打开 greedy cask 后重新扫描。")
+                } else {
+                    LazyVStack(spacing: 8) {
+                        ForEach(updates) { package in
+                            UpdateRow(package: package)
+                                .transition(.asymmetric(
+                                    insertion: .opacity.combined(with: .move(edge: .top)),
+                                    removal: .opacity
+                                ))
+                        }
+                    }
+                }
+
+                orphanedFailedSection
+            }
+        }
+    }
+
+    /// 失败孤儿：升级失败后重新扫描，包已不在可升级集合里，但失败记录仍残留。
+    /// 单独成区展示，避免顶部状态横幅计数与列表对不上，用户能看到原因并重试或清除。
+    @ViewBuilder
+    private var orphanedFailedSection: some View {
+        let orphans = model.orphanedFailedProgresses
+        if !orphans.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text("\(orphans.count) 个失败项不在当前可升级列表中")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    Spacer(minLength: 8)
+                    Button {
+                        for progress in orphans {
+                            model.clearPackageFailure(progress.packageID)
+                        }
+                    } label: {
+                        Label("全部清除", systemImage: "trash")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+
+                LazyVStack(spacing: 8) {
+                    ForEach(orphans) { progress in
+                        OrphanedFailedRow(progress: progress)
+                    }
                 }
             }
+            .polishedTaskSurface(tint: .red, isActive: false)
         }
     }
 
@@ -269,6 +311,55 @@ struct UpdateRow: View {
         case nil:
             return package.outdated ? .orange : .secondary
         }
+    }
+}
+
+// MARK: - Orphaned Failed Row
+
+/// 失败孤儿行：升级失败后重新扫描，包已不在可升级集合里，但失败记录仍残留。
+/// 复用普通失败行的视觉（红色强调 + 重试/清除按钮 + 失败详情），数据来自 PackageUpgradeProgress。
+private struct OrphanedFailedRow: View {
+    @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var inboxStore: InboxStore
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
+    var progress: PackageUpgradeProgress
+
+    private var packageActionDisabled: Bool {
+        model.isConfirmingUpgradePlan || model.isPackageActive(progress.packageID)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                StatusIconPlate(symbol: "exclamationmark.triangle.fill", tint: .red, isActive: false)
+                CopyableText(text: progress.packageName.isEmpty ? progress.packageID : progress.packageName)
+                Spacer()
+                PackageProgressBadge(progress: progress)
+                Button {
+                    Task { await model.retryPackage(progress.packageID, inboxStore: inboxStore) }
+                } label: {
+                    Label("重试", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .disabled(packageActionDisabled)
+                Button {
+                    model.clearPackageFailure(progress.packageID)
+                } label: {
+                    Label("清除", systemImage: "xmark")
+                }
+                .buttonStyle(.borderless)
+                .disabled(packageActionDisabled)
+            }
+
+            PackageProgressDetail(progress: progress)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .polishedTaskSurface(tint: .red, isActive: false)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(.red.opacity(0.15), lineWidth: 1)
+        )
     }
 }
 

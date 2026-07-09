@@ -304,6 +304,76 @@ struct StewardModelScanGuardTest {
         await first.value
 
         precondition(model.isScanning == false, "Expected scan flag to reset after completion")
+
+        // 失败孤儿可见性：升级失败后重新扫描，包已不在可升级集合里，但失败记录仍残留。
+        // 这种孤儿会让顶部状态横幅计数与升级列表对不上。orphanedFailedProgresses 必须把它暴露出来。
+        let orphanScanner = StaticScanner(result: ScanResult(
+            scannedAt: Date(timeIntervalSince1970: 0),
+            includeGreedy: false,
+            summary: ScanSummary(applications: 0, brewFormulae: 0, brewCasks: 0, masApps: 0, outdated: 0, actionable: 0, scanMs: 1),
+            applications: ApplicationsScan(source: "test", ok: true, error: "", items: []),
+            brew: BrewScan(available: true, path: "/opt/homebrew/bin/brew", prefix: "/opt/homebrew", version: "Homebrew 5", error: "", includeGreedy: false, formulae: [], casks: []),
+            mas: MasScan(available: false, path: "", error: "", apps: [])
+        ))
+        let orphanModel = StewardModel(scanner: orphanScanner)
+        await orphanModel.scanSoftware()
+        precondition(orphanModel.allUpgradeablePackages.isEmpty, "Empty scan should produce no upgradeable packages")
+
+        let orphanProgress = PackageUpgradeProgress(
+            packageID: "brew:formula:ghost",
+            packageName: "ghost",
+            status: .failed,
+            detail: "升级失败",
+            failureSummary: "升级失败",
+            recoverySuggestion: "请重试。",
+            recoveryAction: .retry,
+            lastFailedCommand: "brew upgrade ghost"
+        )
+        orphanModel.packageProgress[orphanProgress.packageID] = orphanProgress
+        precondition(orphanModel.orphanedFailedProgresses.map(\.packageID) == [orphanProgress.packageID], "Failed progress for a package no longer in scan must surface as orphan")
+        precondition(orphanModel.allUpgradeablePackages.isEmpty, "Orphan must not leak into the upgradeable list")
+
+        // 失败包重新出现在扫描中时，不再是孤儿：它回到 allUpgradeablePackages，不再算进 orphanedFailedProgresses。
+        let ghostPackage = BrewPackage(
+            id: orphanProgress.packageID,
+            kind: "formula",
+            name: "ghost",
+            installedVersion: "1.0",
+            currentVersion: "2.0",
+            pinned: false,
+            autoUpdates: false,
+            outdated: true,
+            upgradeable: true
+        )
+        let ghostRescannedModel = StewardModel(scanner: StaticScanner(result: ScanResult(
+            scannedAt: Date(timeIntervalSince1970: 0),
+            includeGreedy: false,
+            summary: ScanSummary(applications: 0, brewFormulae: 1, brewCasks: 0, masApps: 0, outdated: 1, actionable: 1, scanMs: 1),
+            applications: ApplicationsScan(source: "test", ok: true, error: "", items: []),
+            brew: BrewScan(available: true, path: "/opt/homebrew/bin/brew", prefix: "/opt/homebrew", version: "Homebrew 5", error: "", includeGreedy: false, formulae: [ghostPackage], casks: []),
+            mas: MasScan(available: false, path: "", error: "", apps: [])
+        )))
+        ghostRescannedModel.packageProgress[orphanProgress.packageID] = orphanProgress
+        await ghostRescannedModel.scanSoftware()
+        precondition(ghostRescannedModel.allUpgradeablePackages.map(\.id) == [ghostPackage.id])
+        precondition(ghostRescannedModel.orphanedFailedProgresses.isEmpty, "A failed package that reappears in scan must not be treated as orphan")
+
+        // clearPackageFailure 必须把孤儿从 packageProgress 中移除。
+        orphanModel.clearPackageFailure(orphanProgress.packageID)
+        precondition(orphanModel.orphanedFailedProgresses.isEmpty, "clearPackageFailure must remove the orphan")
+        precondition(orphanModel.packageProgress[orphanProgress.packageID] == nil)
+
+        // 非 failed 状态（成功/排队/运行中）不应被算作孤儿。
+        for nonFailureStatus in [PackageUpgradeStatus.succeeded, .queued, .running, .warning] {
+            let nonFailureModel = StewardModel(scanner: orphanScanner)
+            nonFailureModel.packageProgress["brew:formula:other"] = PackageUpgradeProgress(
+                packageID: "brew:formula:other",
+                packageName: "other",
+                status: nonFailureStatus,
+                detail: ""
+            )
+            precondition(nonFailureModel.orphanedFailedProgresses.isEmpty, "\(nonFailureStatus.rawValue) must not count as orphan")
+        }
     }
 
     private static func appUpdateScanResult() -> ScanResult {
