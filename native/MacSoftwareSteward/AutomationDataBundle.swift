@@ -1,7 +1,7 @@
 import Foundation
 
 struct AutomationDataBundle: Codable, Equatable {
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 3
 
     var schemaVersion: Int
     var exportedAt: Date
@@ -9,6 +9,8 @@ struct AutomationDataBundle: Codable, Equatable {
     var upgradePolicyOverrides: [String: UpgradePolicy]
     var inspectionReports: [InspectionReportRecord]
     var upgradeHistoryRecords: [UpgradeHistoryRecord]
+    /// v3 新增：维护运行记录。v1/v2 导入时回退空数组。
+    var maintenanceRunRecords: [MaintenanceRunRecord]
 
     init(
         schemaVersion: Int,
@@ -16,7 +18,8 @@ struct AutomationDataBundle: Codable, Equatable {
         automationProfile: AutomationProfile,
         upgradePolicyOverrides: [String: UpgradePolicy],
         inspectionReports: [InspectionReportRecord],
-        upgradeHistoryRecords: [UpgradeHistoryRecord]
+        upgradeHistoryRecords: [UpgradeHistoryRecord],
+        maintenanceRunRecords: [MaintenanceRunRecord] = []
     ) {
         self.schemaVersion = schemaVersion
         self.exportedAt = exportedAt
@@ -24,6 +27,7 @@ struct AutomationDataBundle: Codable, Equatable {
         self.upgradePolicyOverrides = upgradePolicyOverrides
         self.inspectionReports = inspectionReports
         self.upgradeHistoryRecords = upgradeHistoryRecords
+        self.maintenanceRunRecords = maintenanceRunRecords
     }
 
     init(from decoder: Decoder) throws {
@@ -34,6 +38,7 @@ struct AutomationDataBundle: Codable, Equatable {
         upgradePolicyOverrides = try container.decode([String: UpgradePolicy].self, forKey: .upgradePolicyOverrides)
         inspectionReports = try container.decode([InspectionReportRecord].self, forKey: .inspectionReports)
         upgradeHistoryRecords = try container.decodeIfPresent([UpgradeHistoryRecord].self, forKey: .upgradeHistoryRecords) ?? []
+        maintenanceRunRecords = try container.decodeIfPresent([MaintenanceRunRecord].self, forKey: .maintenanceRunRecords) ?? []
     }
 }
 
@@ -53,6 +58,7 @@ struct AutomationDataBundleSummary: Equatable {
     var policyCount: Int
     var inspectionReportCount: Int
     var upgradeHistoryCount: Int
+    var maintenanceRunCount: Int
 }
 
 enum AutomationDataBundleService {
@@ -61,6 +67,7 @@ enum AutomationDataBundleService {
         upgradePolicyOverrides: [String: UpgradePolicy],
         inspectionReports: [InspectionReportRecord],
         upgradeHistoryRecords: [UpgradeHistoryRecord] = [],
+        maintenanceRunRecords: [MaintenanceRunRecord] = [],
         exportedAt: Date = Date()
     ) -> AutomationDataBundle {
         AutomationDataBundle(
@@ -69,7 +76,8 @@ enum AutomationDataBundleService {
             automationProfile: profile,
             upgradePolicyOverrides: upgradePolicyOverrides,
             inspectionReports: inspectionReports,
-            upgradeHistoryRecords: upgradeHistoryRecords
+            upgradeHistoryRecords: upgradeHistoryRecords,
+            maintenanceRunRecords: maintenanceRunRecords
         )
     }
 
@@ -96,7 +104,8 @@ enum AutomationDataBundleService {
             schemaVersion: bundle.schemaVersion,
             policyCount: bundle.upgradePolicyOverrides.count,
             inspectionReportCount: bundle.inspectionReports.count,
-            upgradeHistoryCount: bundle.upgradeHistoryRecords.count
+            upgradeHistoryCount: bundle.upgradeHistoryRecords.count,
+            maintenanceRunCount: bundle.maintenanceRunRecords.count
         )
     }
 }

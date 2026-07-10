@@ -161,8 +161,18 @@ run_test AutomationDataBundleTest \
   "$SRC/UpgradePolicyStore.swift" \
   "$SRC/UpgradeHistoryStore.swift" \
   "$SRC/InspectionReportStore.swift" \
+  "$SRC/MaintenanceWorkflowState.swift" \
+  "$SRC/MaintenanceRunStore.swift" \
   "$SRC/AutomationDataBundle.swift" \
   "$TESTS/AutomationDataBundleTest.swift"
+
+run_test MaintenanceRunStoreTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/InspectionReportStore.swift" \
+  "$SRC/MaintenanceWorkflowState.swift" \
+  "$SRC/MaintenanceRunStore.swift" \
+  "$TESTS/MaintenanceRunStoreTest.swift"
 
 run_test RulesConsolePresenterTest \
   "$SRC/AutomationProfileStore.swift" \
