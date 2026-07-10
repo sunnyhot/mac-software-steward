@@ -81,6 +81,8 @@ run_or_explain "Building ${APP_NAME}Agent" xcrun swiftc \
   "$ROOT_DIR"/native/MacSoftwareSteward/RiskAssessor.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/UpgradePlanner.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/DailyUpgradePolicy.swift \
+  "$ROOT_DIR"/native/MacSoftwareSteward/MaintenanceWorkflowState.swift \
+  "$ROOT_DIR"/native/MacSoftwareSteward/MaintenancePlanner.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/InboxStore.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/RiskInboxFactory.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/AppUpdateInboxFactory.swift \

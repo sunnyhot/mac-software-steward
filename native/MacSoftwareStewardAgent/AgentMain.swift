@@ -20,8 +20,12 @@ struct MacSoftwareStewardAgent {
         print("[scan] 应用 \(scan.summary.applications)，formula \(scan.summary.brewFormulae)，cask \(scan.summary.brewCasks)，可操作升级 \(scan.summary.actionable)")
 
         let policyStore = UpgradePolicyStore()
+        let profile = AutomationProfileStore().profile
+        // 使用统一 MaintenancePlanner 分类，与总览页/升级页保持一致的 automatic 判定。
+        let plan = MaintenancePlanner.makePlan(scan: scan, policyStore: policyStore, includeGreedy: includeGreedy, profile: profile)
+        let automaticPackages = plan.automaticItems.compactMap(\.package)
+        // 同时用旧 UpgradePlanner 生成 rows，供巡检报告和 inbox 发布使用（向后兼容）。
         let rows = UpgradePlanner.makePlan(scan: scan, policyStore: policyStore, includeGreedy: includeGreedy)
-        let automaticPackages = DailyUpgradePolicy.automaticPackages(from: rows)
         let inboxStore = InboxStore()
         let inboxItemIDs = DailyInspectionInboxPublisher.publish(scan: scan, rows: rows, to: inboxStore)
 
@@ -53,10 +57,10 @@ struct MacSoftwareStewardAgent {
             if case .mas(let app) = package { return app }
             return nil
         }
-        let skipped = rows.filter { $0.policy != .automatic || !$0.canExecute }
-        for row in skipped {
-            let reason = row.skipReason.isEmpty ? row.policy.title : row.skipReason
-            print("[skip] \(row.packageName): \(reason)")
+        // 跳过的包：不是 automatic 的计划项。
+        for item in plan.items where item.disposition != .automatic {
+            let reason = item.reasons.first ?? item.disposition.title
+            print("[skip] \(item.packageName): \(reason)")
         }
 
         guard !formulaUpdates.isEmpty || !caskUpdates.isEmpty || !masUpdates.isEmpty else {
