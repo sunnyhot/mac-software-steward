@@ -95,6 +95,23 @@ run_test MaintenanceStatusPresenterTest \
   "$SRC/MaintenanceStatusPresenter.swift" \
   "$TESTS/MaintenanceStatusPresenterTest.swift"
 
+run_test MaintenanceWorkflowStateTest \
+  "$SRC/MaintenanceWorkflowState.swift" \
+  "$TESTS/MaintenanceWorkflowStateTest.swift"
+
+run_test MaintenanceRunLeaseTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/InboxStore.swift" \
+  "$SRC/AutomationProfileStore.swift" \
+  "$SRC/UpgradePolicyStore.swift" \
+  "$SRC/RiskAssessor.swift" \
+  "$SRC/MaintenanceWorkflowState.swift" \
+  "$SRC/MaintenancePlanner.swift" \
+  "$SRC/MaintenanceProtocols.swift" \
+  "$SRC/MaintenanceRunLease.swift" \
+  "$TESTS/MaintenanceRunLeaseTest.swift"
+
 run_test SettingsPagePresenterTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
@@ -204,6 +221,15 @@ run_test DailyPolicyFilteringTest \
   "$SRC/UpgradePlanner.swift" \
   "$SRC/DailyUpgradePolicy.swift" \
   "$TESTS/DailyPolicyFilteringTest.swift"
+
+run_test MaintenancePlannerTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/UpgradePolicyStore.swift" \
+  "$SRC/AutomationProfileStore.swift" \
+  "$SRC/RiskAssessor.swift" \
+  "$SRC/MaintenancePlanner.swift" \
+  "$TESTS/MaintenancePlannerTest.swift"
 
 run_test HomebrewCaskDownloadSizeResolverTest \
   "$SRC/CommandRunner.swift" \
