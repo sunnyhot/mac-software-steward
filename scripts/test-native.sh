@@ -469,6 +469,11 @@ run_test StewardModelScanGuardTest \
   "$SRC/ManualAppReplacementInstaller.swift" \
   "$SRC/SourceDiagnostics.swift" \
   "$SRC/UpgradeVerifier.swift" \
+  "$SRC/MaintenanceWorkflowState.swift" \
+  "$SRC/MaintenancePlanner.swift" \
+  "$SRC/MaintenanceProtocols.swift" \
+  "$SRC/MaintenanceRunLease.swift" \
+  "$SRC/MaintenanceExecutor.swift" \
   "$SRC/StewardModel.swift" \
   "$TESTS/StewardModelScanGuardTest.swift"
 
