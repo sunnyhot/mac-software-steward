@@ -47,6 +47,12 @@ final class MaintenanceExecutor: ObservableObject {
     private let historyStore: UpgradeHistoryStore
     private let downloadStrategiesProvider: () async -> [DownloadAccelerationStrategy]
 
+    /// 跨进程维护租约。智能维护/每日巡检开始时获取，结束时释放。
+    /// 单包升级和一键升级不获取租约（保持现有行为）。
+    private var runLease: MaintenanceRunLease?
+    /// 当前持有的活跃 lease（nil 表示未持有）。
+    private(set) var heldLease: MaintenanceLease?
+
     var hasRunningJob: Bool {
         jobs.contains { $0.status == .queued || $0.status == .running }
     }
@@ -55,16 +61,46 @@ final class MaintenanceExecutor: ObservableObject {
         historyStore: UpgradeHistoryStore,
         maxConcurrentUpgrades: Int = UserDefaults.standard.object(forKey: "maxConcurrentUpgrades") as? Int ?? 3,
         downloadStrategiesProvider: @escaping () async -> [DownloadAccelerationStrategy] = DownloadAccelerationPolicy.defaultStrategies,
-        host: MaintenanceExecutorHost? = nil
+        host: MaintenanceExecutorHost? = nil,
+        runLease: MaintenanceRunLease? = nil
     ) {
         self.historyStore = historyStore
         self.maxConcurrentUpgrades = maxConcurrentUpgrades
         self.downloadStrategiesProvider = downloadStrategiesProvider
         self.host = host
+        self.runLease = runLease
     }
 
     func setHost(_ host: MaintenanceExecutorHost?) {
         self.host = host
+    }
+
+    // MARK: - Maintenance lease
+    //
+    // 智能维护/每日巡检在开始执行前获取跨进程租约，确保 GUI 与后台 Agent 不会重复运行。
+    // 单包升级和一键升级不获取租约（保持现有行为，不破坏向后兼容）。
+
+    /// 尝试获取维护租约。成功返回 lease，冲突返回已有的活跃 lease。
+    func acquireLease(trigger: MaintenanceRunTrigger) -> MaintenanceLeaseAcquisition? {
+        guard let runLease else { return nil }
+        let acquisition = runLease.acquire(trigger: trigger)
+        if case .acquired(let lease) = acquisition {
+            heldLease = lease
+        }
+        return acquisition
+    }
+
+    /// 释放当前持有的租约（终态完成或有序取消时调用）。
+    func releaseLease() {
+        if let lease = heldLease {
+            runLease?.release(lease)
+            heldLease = nil
+        }
+    }
+
+    /// 查询当前活跃的跨进程 lease（可能由其他进程持有）。
+    func currentMaintenanceLease() -> MaintenanceLease? {
+        runLease?.currentLease()
     }
 
     func updateMaxConcurrentUpgrades(_ value: Int) {

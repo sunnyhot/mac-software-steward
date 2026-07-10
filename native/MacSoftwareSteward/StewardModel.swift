@@ -81,9 +81,11 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
 
         let historyStore = UpgradeHistoryStore()
         self.historyStore = historyStore
+        let runLease = MaintenanceRunLease(directory: MaintenanceRunLease.defaultDirectory)
         let executor = MaintenanceExecutor(
             historyStore: historyStore,
-            downloadStrategiesProvider: downloadStrategiesProvider
+            downloadStrategiesProvider: downloadStrategiesProvider,
+            runLease: runLease
         )
         self.executor = executor
         executor.setHost(self)
