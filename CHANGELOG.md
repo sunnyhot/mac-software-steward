@@ -1,5 +1,46 @@
 # Changelog
 
+## v0.14.0 (2026-07-10)
+
+### 统一维护引擎与维护总览页
+
+这是自 v0.13.31 以来的架构性升级，引入统一维护引擎和新的默认「维护总览」页面。
+
+#### 维护总览页（新默认入口）
+
+- **应用启动后默认进入「维护总览」页**，标准模式和高级模式都是。
+- **「开始智能维护」按钮**：扫描本机软件 → 分类（automatic / 需确认 / 仅提醒 / 已阻止）→ 只自动升级低风险项 → 校验结果。
+- **维护轨道可视化**：扫描 → 评估 → 执行 → 校验，四阶段连续展示，当前阶段高亮，已完成标绿。
+- **四项指标卡片**：管理软件总数、可自动升级、需确认、下次巡检时间。
+- **优先任务列表**：展示可自动升级和需确认的项目。
+- **维护摘要**：最近一次运行结果 + 每日巡检状态。
+- 首次启动（未扫描）显示就绪态，不显示零值健康评估。
+
+#### 统一计划分类
+
+- 新增 `MaintenancePlanner`，把扫描结果分类为 automatic / confirmationRequired / reminderOnly / blocked 四种 disposition。GUI 和后台 Agent 共用同一套分类逻辑。
+- **`lowRiskAutoUpgradeEnabled` 不再形同虚设**：此前该开关在计划/巡检链路中完全没被读取；现在它真正门控 automatic 组——关闭时所有项降级为需确认。**这是行为变化**。
+- blocked 项（跳过 / 源不可用 / 固定 / 不可升级 / 风险阻止）不携带可执行包，UI 无法转为可执行。
+
+#### 执行引擎重构
+
+- 新增 `MaintenanceExecutor`（1138 行），从 `StewardModel` 抽出全部升级执行逻辑（任务队列、并发控制、取消令牌、包级进度、下载加速、Homebrew 下载监控、失败分析、自动修复）。
+- `StewardModel` 从 1628 行降到 696 行（-57%），降级为门面：通过 computed property 转发 jobs / packageProgress / upgradeProgress，通过 objectWillChange 合并让现有 UI 无感切换。
+- 修复已有 bug：`strategiesForStep` 改用注入的 `downloadStrategiesProvider`，不再硬调 `DownloadAccelerationPolicy.defaultStrategies()`。
+
+#### 跨进程租约与运行记录
+
+- 新增 `MaintenanceRunLease`：Foundation-only 跨进程锁（flock 独占 + PID/启动时间防复用 + stale 回收），GUI 与后台 Agent 共用，防止同时执行。
+- 新增 `MaintenanceRunStore`：版本化运行记录（触发来源、时间、终态、计划分类、逐包结果），存储到 `~/Library/Application Support/MacSoftwareSteward/maintenance-runs.json`。
+- 自动化数据导入导出升级到 schema v3，新增 `maintenanceRunRecords` 字段，向后兼容 v1/v2。
+
+#### 其他
+
+- 新增 `MaintenanceVerifier`（重扫后校验：命令成功但版本仍 outdated → mismatch）和 `MaintenanceRecoveryCoordinator`（复用 RecoveryActionPlanner）。
+- 新增 `MaintenanceWorkflowState` 工作流状态机（idle → scanning → assessing → executing → verifying → 终态）。
+- 后台 Agent 改用统一 `MaintenancePlanner` 做计划分类。
+- 76 个测试全绿（含 8 个新增维护引擎测试）。
+
 ## v0.13.31 (2026-07-09)
 
 ### 失败孤儿可见性修复
