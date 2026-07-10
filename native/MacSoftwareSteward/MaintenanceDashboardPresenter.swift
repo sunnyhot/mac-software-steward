@@ -29,6 +29,8 @@ struct MaintenanceDashboardMetric: Identifiable, Equatable {
     var id: String
     var title: String
     var value: Int
+    /// 文本值（优先于 value 显示），用于"下次巡检"等非数字 metric。
+    var textValue: String?
     var symbol: String
     var tintRole: MaintenanceStatusTintRole
 }
@@ -94,10 +96,10 @@ enum MaintenanceDashboardPresenter {
         let confirmationCount = plan?.confirmationItems.count ?? 0
         let managedCount = (plan?.items.count ?? 0)
         let metrics: [MaintenanceDashboardMetric] = [
-            MaintenanceDashboardMetric(id: "managed", title: "管理软件", value: managedCount, symbol: "shippingbox", tintRole: .neutral),
-            MaintenanceDashboardMetric(id: "automatic", title: "可自动升级", value: automaticCount, symbol: "bolt.circle", tintRole: .accent),
-            MaintenanceDashboardMetric(id: "confirmation", title: "需确认", value: confirmationCount, symbol: "hand.raised", tintRole: .attention),
-            MaintenanceDashboardMetric(id: "nextInspection", title: "下次巡检", value: 0, symbol: "calendar", tintRole: .neutral)
+            MaintenanceDashboardMetric(id: "managed", title: "管理软件", value: managedCount, textValue: nil, symbol: "shippingbox", tintRole: .neutral),
+            MaintenanceDashboardMetric(id: "automatic", title: "可自动升级", value: automaticCount, textValue: nil, symbol: "bolt.circle", tintRole: .accent),
+            MaintenanceDashboardMetric(id: "confirmation", title: "需确认", value: confirmationCount, textValue: nil, symbol: "hand.raised", tintRole: .attention),
+            MaintenanceDashboardMetric(id: "nextInspection", title: "下次巡检", value: 0, textValue: nextInspectionText, symbol: "calendar", tintRole: .neutral)
         ]
 
         // Priority tasks：automatic + confirmation（最多 5 条）
