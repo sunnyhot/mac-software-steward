@@ -12,7 +12,7 @@ enum SidebarRowInteractionState: Equatable {
 
 enum AppTabNavigationPresenter {
     static func primaryTabs(advancedModeEnabled: Bool) -> [AppTab] {
-        advancedModeEnabled ? [.updates, .applications] : [.applications]
+        advancedModeEnabled ? [.overview, .updates, .applications] : [.overview, .applications]
     }
 
     static func controlTabs(advancedModeEnabled: Bool) -> [AppTab] {
@@ -35,7 +35,7 @@ enum AppTabNavigationPresenter {
     static func fallbackTab(for selectedTab: AppTab, advancedModeEnabled: Bool) -> AppTab {
         visibleTabs(advancedModeEnabled: advancedModeEnabled).contains(selectedTab)
             ? selectedTab
-            : .applications
+            : .overview
     }
 
     static func isAdvancedTool(_ tab: AppTab, advancedModeEnabled: Bool) -> Bool {

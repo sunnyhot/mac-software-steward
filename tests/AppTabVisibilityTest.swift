@@ -4,10 +4,12 @@ import Foundation
 struct AppTabVisibilityTest {
     static func main() {
         precondition(AppTab.visibleTabs(advancedModeEnabled: false) == [
+            .overview,
             .applications,
             .settings
         ])
         precondition(AppTab.visibleTabs(advancedModeEnabled: true) == [
+            .overview,
             .updates,
             .applications,
             .rules,
@@ -19,15 +21,15 @@ struct AppTabVisibilityTest {
         precondition(!AppTab.visibleTabs(advancedModeEnabled: true).contains(.sources))
         precondition(!AppTab.visibleTabs(advancedModeEnabled: true).contains(.history))
         precondition(!AppTab.visibleTabs(advancedModeEnabled: true).contains(.performance))
-        precondition(AppTabNavigationPresenter.primaryTabs(advancedModeEnabled: true) == [.updates, .applications])
-        precondition(AppTabNavigationPresenter.primaryTabs(advancedModeEnabled: false) == [.applications])
+        precondition(AppTabNavigationPresenter.primaryTabs(advancedModeEnabled: true) == [.overview, .updates, .applications])
+        precondition(AppTabNavigationPresenter.primaryTabs(advancedModeEnabled: false) == [.overview, .applications])
         precondition(AppTabNavigationPresenter.controlTabs(advancedModeEnabled: true) == [.rules, .jobs])
         precondition(AppTabNavigationPresenter.controlTabs(advancedModeEnabled: false).isEmpty)
         precondition(AppTabNavigationPresenter.advancedTabs(advancedModeEnabled: true).isEmpty)
         precondition(AppTabNavigationPresenter.advancedTabs(advancedModeEnabled: false).isEmpty)
         precondition(AppTabNavigationPresenter.footerTabs == [.settings])
-        precondition(AppTabNavigationPresenter.fallbackTab(for: .inbox, advancedModeEnabled: true) == .applications)
-        precondition(AppTabNavigationPresenter.fallbackTab(for: .sources, advancedModeEnabled: false) == .applications)
+        precondition(AppTabNavigationPresenter.fallbackTab(for: .inbox, advancedModeEnabled: true) == .overview)
+        precondition(AppTabNavigationPresenter.fallbackTab(for: .sources, advancedModeEnabled: false) == .overview)
         precondition(!AppTabNavigationPresenter.isAdvancedTool(.jobs, advancedModeEnabled: true))
         precondition(!AppTabNavigationPresenter.isAdvancedTool(.updates, advancedModeEnabled: true))
         precondition(SidebarRowInteractionState.hovered != SidebarRowInteractionState.selected)

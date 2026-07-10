@@ -724,6 +724,8 @@ private struct MainPanel: View {
 
             Group {
                 switch model.selectedTab {
+                case .overview:
+                    MaintenanceOverviewView()
                 case .inbox:
                     InboxView()
                 case .updates:
