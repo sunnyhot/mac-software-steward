@@ -141,7 +141,7 @@ protocol MaintenanceVerifying {
 /// + allowlist 控制（复用 AutoRepairDecider）。
 protocol MaintenanceRecovering {
     /// 为某个失败包推导可执行的恢复动作列表。
-    func recoveryActions(for progress: PackageUpgradeProgress) -> [FailureActionType]
+    func recoveryActions(for progress: PackageUpgradeProgress) -> [RecoveryAction]
 }
 
 // MARK: - Lease

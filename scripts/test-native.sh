@@ -518,4 +518,32 @@ run_test UpgradeVerifierTest \
   "$SRC/UpgradeVerifier.swift" \
   "$TESTS/UpgradeVerifierTest.swift"
 
+run_test MaintenanceVerifierTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/InboxStore.swift" \
+  "$SRC/AutomationProfileStore.swift" \
+  "$SRC/UpgradePolicyStore.swift" \
+  "$SRC/RiskAssessor.swift" \
+  "$SRC/UpgradeVerifier.swift" \
+  "$SRC/MaintenanceWorkflowState.swift" \
+  "$SRC/MaintenancePlanner.swift" \
+  "$SRC/MaintenanceProtocols.swift" \
+  "$SRC/MaintenanceVerifier.swift" \
+  "$TESTS/MaintenanceVerifierTest.swift"
+
+run_test MaintenanceRecoveryCoordinatorTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/InboxStore.swift" \
+  "$SRC/AutomationProfileStore.swift" \
+  "$SRC/UpgradePolicyStore.swift" \
+  "$SRC/RiskAssessor.swift" \
+  "$SRC/RecoveryActionPlanner.swift" \
+  "$SRC/MaintenanceWorkflowState.swift" \
+  "$SRC/MaintenancePlanner.swift" \
+  "$SRC/MaintenanceProtocols.swift" \
+  "$SRC/MaintenanceRecoveryCoordinator.swift" \
+  "$TESTS/MaintenanceRecoveryCoordinatorTest.swift"
+
 echo "All native tests passed."
