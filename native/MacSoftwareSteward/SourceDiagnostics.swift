@@ -15,7 +15,7 @@ struct SourceDiagnosis {
     var terminalHint: String?
 }
 
-/// 管理来源页面的恢复操作类型
+/// 来源诊断卡片支持的恢复操作类型
 enum SourceRecoveryAction: Hashable {
     case rescan
     case installMas

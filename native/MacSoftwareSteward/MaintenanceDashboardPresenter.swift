@@ -63,7 +63,7 @@ enum MaintenanceDashboardPresenter {
         isExecuting: Bool,
         plan: MaintenancePlan?,
         failedCount: Int,
-        lastRun: MaintenanceRunRecord?,
+        lastHistoryRecord: UpgradeHistoryRecord?,
         nextInspectionText: String?
     ) -> MaintenanceDashboardPresentation {
         // 健康判定优先级：扫描中 > 执行中 > 失败 > 有自动项 > 有确认项 > 全部最新 > 就绪
@@ -87,8 +87,7 @@ enum MaintenanceDashboardPresenter {
         let (healthTitle, healthDetail, healthSymbol, healthTintRole) = healthPresentation(
             health: health,
             plan: plan,
-            failedCount: failedCount,
-            lastRun: lastRun
+            failedCount: failedCount
         )
 
         // Metrics
@@ -123,22 +122,12 @@ enum MaintenanceDashboardPresenter {
             }
         }
 
-        // 最近一次 run 摘要
+        // 最近一次维护摘要
         var lastRunSummary: String? = nil
-        if let lastRun {
-            let dateText = formattedDate(lastRun.finishedAt)
-            switch lastRun.terminalStatus {
-            case .completed:
-                lastRunSummary = "\(dateText) 完成：\(lastRun.succeededCount) 项成功"
-            case .partialSuccess:
-                lastRunSummary = "\(dateText) 部分完成：\(lastRun.succeededCount) 成功，\(lastRun.failedCount) 失败"
-            case .cancelled:
-                lastRunSummary = "\(dateText) 已取消"
-            case .failed:
-                lastRunSummary = "\(dateText) 失败"
-            case .interrupted:
-                lastRunSummary = "\(dateText) 中断"
-            }
+        if let lastHistoryRecord {
+            let timestamp = lastHistoryRecord.finishedAt ?? lastHistoryRecord.startedAt
+            let dateText = timestamp.map(formattedDate) ?? "最近"
+            lastRunSummary = "\(dateText) \(lastHistoryRecord.label)：\(lastHistoryRecord.summary)"
         }
 
         return MaintenanceDashboardPresentation(
@@ -157,8 +146,7 @@ enum MaintenanceDashboardPresenter {
     private static func healthPresentation(
         health: MaintenanceDashboardHealth,
         plan: MaintenancePlan?,
-        failedCount: Int,
-        lastRun: MaintenanceRunRecord?
+        failedCount: Int
     ) -> (title: String, detail: String, symbol: String, tintRole: MaintenanceStatusTintRole) {
         switch health {
         case .ready:

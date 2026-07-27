@@ -2,14 +2,10 @@ import AppKit
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var doubleClickZoomMonitor: Any?
-
     func applicationDidFinishLaunching(_ notification: Notification) {
         if activateExistingInstanceIfNeeded() {
             return
         }
-
-        installDoubleClickZoomMonitor()
 
         // 读取 UserDefaults，注意区分「未设值」和「显式设为 false」
         let dockIconVisible: Bool
@@ -53,45 +49,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    private func installDoubleClickZoomMonitor() {
-        guard doubleClickZoomMonitor == nil else { return }
-        doubleClickZoomMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
-            guard let window = event.window,
-                  self?.shouldZoom(window: window, for: event) == true else {
-                return event
-            }
-            window.zoom(nil)
-            return nil
-        }
-    }
-
-    private func shouldZoom(window: NSWindow, for event: NSEvent) -> Bool {
-        guard window.styleMask.contains(.titled),
-              window.styleMask.contains(.resizable),
-              !isStandardWindowButtonHit(event, in: window) else {
-            return false
-        }
-        let contentHeight = window.contentView?.frame.height ?? window.contentLayoutRect.height
-        return AppWindowDoubleClickZoomPolicy.shouldZoomOnDoubleClick(
-            clickCount: event.clickCount,
-            windowLocationY: event.locationInWindow.y,
-            contentHeight: contentHeight
-        )
-    }
-
-    private func isStandardWindowButtonHit(_ event: NSEvent, in window: NSWindow) -> Bool {
-        [
-            NSWindow.ButtonType.closeButton,
-            .miniaturizeButton,
-            .zoomButton
-        ]
-        .compactMap { window.standardWindowButton($0) }
-        .contains { button in
-            guard let superview = button.superview else { return false }
-            let buttonFrameInWindow = superview.convert(button.frame, to: nil)
-            return buttonFrameInWindow.insetBy(dx: -6, dy: -6).contains(event.locationInWindow)
-        }
-    }
 }
 
 @main
@@ -145,7 +102,7 @@ struct MacSoftwareStewardApp: App {
                 }
         }
         .windowStyle(.titleBar)
-        .windowToolbarStyle(.unifiedCompact(showsTitle: false))
+        .windowToolbarStyle(.unified)
 
         MenuBarExtra(menuBarTitle, systemImage: menuBarSymbol) {
             MenuBarUpgradeMenu()

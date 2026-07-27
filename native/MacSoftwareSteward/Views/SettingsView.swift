@@ -17,8 +17,6 @@ struct SettingsView: View {
                     LaunchAtLoginRow()
                     SettingsDivider()
                     DockIconRow()
-                    SettingsDivider()
-                    AdvancedModeRow()
                 }
 
                 SettingsGroupBox {
@@ -151,21 +149,6 @@ struct DockIconRow: View {
             Toggle("", isOn: $dockIconVisible)
                 .toggleStyle(.switch)
                 .labelsHidden()
-        }
-    }
-}
-
-struct PolicyHelpRow: View {
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("单包升级策略")
-                    .font(.body)
-                Text("在可升级列表中可为每个软件设置自动升级、确认后升级、仅提醒或跳过；每日巡检只执行自动升级项。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
         }
     }
 }
@@ -480,29 +463,6 @@ struct AutomationProfileRow: View {
             return "首次开启后只自动处理低风险维护事项"
         }
         return automationProfile.profile.automationEnabled ? "低风险维护可自动处理" : "当前保持手动维护"
-    }
-}
-
-struct AdvancedModeRow: View {
-    @EnvironmentObject private var automationProfile: AutomationProfileStore
-
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("高级模式")
-                    .font(.body)
-                Text("显示可升级、任务日志和高级策略")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Toggle("", isOn: Binding(
-                get: { automationProfile.profile.advancedModeEnabled },
-                set: { automationProfile.setAdvancedMode($0) }
-            ))
-            .toggleStyle(.switch)
-            .labelsHidden()
-        }
     }
 }
 

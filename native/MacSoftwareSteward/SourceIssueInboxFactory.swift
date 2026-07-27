@@ -55,7 +55,7 @@ enum SourceIssueInboxFactory {
             summary: summary,
             sourceID: sourceID,
             actions: [
-                InboxAction(title: "查看来源", systemImage: "tray.full", kind: .openSources),
+                InboxAction(title: "查看来源诊断", systemImage: "stethoscope", kind: .openSources),
                 InboxAction(title: "重新扫描", systemImage: "arrow.clockwise", kind: .rescan)
             ]
         )

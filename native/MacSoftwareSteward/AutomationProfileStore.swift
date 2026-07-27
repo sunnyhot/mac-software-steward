@@ -54,7 +54,6 @@ struct AutomationProfile: Codable, Equatable {
     var automationEnabled: Bool
     var dailyInspectionEnabled: Bool
     var lowRiskAutoUpgradeEnabled: Bool
-    var advancedModeEnabled: Bool
     var notificationPolicy: NotificationPolicy
     var regularAppNetworkPolicy: RegularAppNetworkPolicy
     var autoRepairPolicy: AutoRepairPolicy
@@ -64,7 +63,6 @@ struct AutomationProfile: Codable, Equatable {
         automationEnabled: false,
         dailyInspectionEnabled: false,
         lowRiskAutoUpgradeEnabled: false,
-        advancedModeEnabled: false,
         notificationPolicy: .decisionsAndFailures,
         regularAppNetworkPolicy: .declaredSourcesOnly,
         autoRepairPolicy: .manualOnly
@@ -118,11 +116,6 @@ final class AutomationProfileStore: ObservableObject {
         if enabled {
             profile.automationEnabled = true
         }
-        save()
-    }
-
-    func setAdvancedMode(_ enabled: Bool) {
-        profile.advancedModeEnabled = enabled
         save()
     }
 

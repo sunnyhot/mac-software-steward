@@ -33,7 +33,7 @@ struct AutomationIssueInboxFactoryTest {
         precondition(issueStore.pendingItems.count == 1)
         precondition(issueStore.pendingItems[0].kind == .automationIssue)
         precondition(issueStore.pendingItems[0].sourceID == AutomationIssueInboxFactory.dailyInspectionSourceID)
-        precondition(issueStore.pendingItems[0].actions.map(\.kind) == [.openSettings])
+        precondition(issueStore.pendingItems[0].actions.map(\.kind) == [.openRules])
 
         let secondPublished = AutomationIssueInboxPublisher.publishDailyInspectionIssue(
             profile: profile,

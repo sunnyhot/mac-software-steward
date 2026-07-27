@@ -62,14 +62,6 @@ run_test AppUpdateModelAccelerationTest \
   "$SRC/AppUpdater.swift" \
   "$TESTS/AppUpdateModelAccelerationTest.swift"
 
-run_test AppWindowDoubleClickZoomPolicyTest \
-  "$SRC/AppWindowDoubleClickZoomPolicy.swift" \
-  "$TESTS/AppWindowDoubleClickZoomPolicyTest.swift"
-
-run_test AppWindowChromePolicyTest \
-  "$SRC/AppWindowChromePolicy.swift" \
-  "$TESTS/AppWindowChromePolicyTest.swift"
-
 run_test AppManualUpdatePresenterTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
@@ -95,23 +87,6 @@ run_test MaintenanceStatusPresenterTest \
   "$SRC/MaintenanceStatusPresenter.swift" \
   "$TESTS/MaintenanceStatusPresenterTest.swift"
 
-run_test MaintenanceWorkflowStateTest \
-  "$SRC/MaintenanceWorkflowState.swift" \
-  "$TESTS/MaintenanceWorkflowStateTest.swift"
-
-run_test MaintenanceRunLeaseTest \
-  "$SRC/ScanPerformance.swift" \
-  "$SRC/Models.swift" \
-  "$SRC/InboxStore.swift" \
-  "$SRC/AutomationProfileStore.swift" \
-  "$SRC/UpgradePolicyStore.swift" \
-  "$SRC/RiskAssessor.swift" \
-  "$SRC/MaintenanceWorkflowState.swift" \
-  "$SRC/MaintenancePlanner.swift" \
-  "$SRC/MaintenanceProtocols.swift" \
-  "$SRC/MaintenanceRunLease.swift" \
-  "$TESTS/MaintenanceRunLeaseTest.swift"
-
 run_test SettingsPagePresenterTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
@@ -135,16 +110,6 @@ run_test ScanPerformanceModelTest \
   "$SRC/ScanPerformance.swift" \
   "$TESTS/ScanPerformanceModelTest.swift"
 
-run_test ScanPerformanceStoreTest \
-  "$SRC/ScanPerformance.swift" \
-  "$SRC/ScanPerformanceStore.swift" \
-  "$TESTS/ScanPerformanceStoreTest.swift"
-
-run_test ScanPerformancePresenterTest \
-  "$SRC/ScanPerformance.swift" \
-  "$SRC/ScanPerformancePresenter.swift" \
-  "$TESTS/ScanPerformancePresenterTest.swift"
-
 run_test AutomationProfileStoreTest \
   "$SRC/AutomationProfileStore.swift" \
   "$TESTS/AutomationProfileStoreTest.swift"
@@ -153,31 +118,6 @@ run_test AutomationMaintenanceAccessTest \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/AutomationMaintenanceAccess.swift" \
   "$TESTS/AutomationMaintenanceAccessTest.swift"
-
-run_test AutomationDataBundleTest \
-  "$SRC/ScanPerformance.swift" \
-  "$SRC/Models.swift" \
-  "$SRC/AutomationProfileStore.swift" \
-  "$SRC/UpgradePolicyStore.swift" \
-  "$SRC/UpgradeHistoryStore.swift" \
-  "$SRC/InspectionReportStore.swift" \
-  "$SRC/MaintenanceWorkflowState.swift" \
-  "$SRC/MaintenanceRunStore.swift" \
-  "$SRC/AutomationDataBundle.swift" \
-  "$TESTS/AutomationDataBundleTest.swift"
-
-run_test MaintenanceRunStoreTest \
-  "$SRC/ScanPerformance.swift" \
-  "$SRC/Models.swift" \
-  "$SRC/InspectionReportStore.swift" \
-  "$SRC/MaintenanceWorkflowState.swift" \
-  "$SRC/MaintenanceRunStore.swift" \
-  "$TESTS/MaintenanceRunStoreTest.swift"
-
-run_test RulesConsolePresenterTest \
-  "$SRC/AutomationProfileStore.swift" \
-  "$SRC/RulesConsolePresenter.swift" \
-  "$TESTS/RulesConsolePresenterTest.swift"
 
 run_test HistoryPresenterTest \
   "$SRC/InspectionReportStore.swift" \
@@ -271,11 +211,6 @@ run_test InboxHistoryRecorderTest \
   "$SRC/UpgradeHistoryStore.swift" \
   "$SRC/InboxHistoryRecorder.swift" \
   "$TESTS/InboxHistoryRecorderTest.swift"
-
-run_test InboxFilterPresenterTest \
-  "$SRC/InboxStore.swift" \
-  "$SRC/InboxFilterPresenter.swift" \
-  "$TESTS/InboxFilterPresenterTest.swift"
 
 run_test AppUpdateInboxFactoryTest \
   "$SRC/ScanPerformance.swift" \
@@ -443,7 +378,6 @@ run_test ScannerNormalizeTokenTest \
 run_test StewardModelScanGuardTest \
   "$SRC/CommandRunner.swift" \
   "$SRC/ScanPerformance.swift" \
-  "$SRC/ScanPerformanceStore.swift" \
   "$SRC/Models.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
@@ -479,10 +413,7 @@ run_test StewardModelScanGuardTest \
   "$SRC/ManualAppReplacementInstaller.swift" \
   "$SRC/SourceDiagnostics.swift" \
   "$SRC/UpgradeVerifier.swift" \
-  "$SRC/MaintenanceWorkflowState.swift" \
   "$SRC/MaintenancePlanner.swift" \
-  "$SRC/MaintenanceProtocols.swift" \
-  "$SRC/MaintenanceRunLease.swift" \
   "$SRC/MaintenanceExecutor.swift" \
   "$SRC/StewardModel.swift" \
   "$TESTS/StewardModelScanGuardTest.swift"
@@ -527,33 +458,5 @@ run_test UpgradeVerifierTest \
   "$SRC/Models.swift" \
   "$SRC/UpgradeVerifier.swift" \
   "$TESTS/UpgradeVerifierTest.swift"
-
-run_test MaintenanceVerifierTest \
-  "$SRC/ScanPerformance.swift" \
-  "$SRC/Models.swift" \
-  "$SRC/InboxStore.swift" \
-  "$SRC/AutomationProfileStore.swift" \
-  "$SRC/UpgradePolicyStore.swift" \
-  "$SRC/RiskAssessor.swift" \
-  "$SRC/UpgradeVerifier.swift" \
-  "$SRC/MaintenanceWorkflowState.swift" \
-  "$SRC/MaintenancePlanner.swift" \
-  "$SRC/MaintenanceProtocols.swift" \
-  "$SRC/MaintenanceVerifier.swift" \
-  "$TESTS/MaintenanceVerifierTest.swift"
-
-run_test MaintenanceRecoveryCoordinatorTest \
-  "$SRC/ScanPerformance.swift" \
-  "$SRC/Models.swift" \
-  "$SRC/InboxStore.swift" \
-  "$SRC/AutomationProfileStore.swift" \
-  "$SRC/UpgradePolicyStore.swift" \
-  "$SRC/RiskAssessor.swift" \
-  "$SRC/RecoveryActionPlanner.swift" \
-  "$SRC/MaintenanceWorkflowState.swift" \
-  "$SRC/MaintenancePlanner.swift" \
-  "$SRC/MaintenanceProtocols.swift" \
-  "$SRC/MaintenanceRecoveryCoordinator.swift" \
-  "$TESTS/MaintenanceRecoveryCoordinatorTest.swift"
 
 echo "All native tests passed."

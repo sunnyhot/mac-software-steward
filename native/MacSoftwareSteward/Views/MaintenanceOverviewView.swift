@@ -10,6 +10,7 @@ import SwiftUI
 struct MaintenanceOverviewView: View {
     @EnvironmentObject private var model: StewardModel
     @EnvironmentObject private var automationProfile: AutomationProfileStore
+    @EnvironmentObject private var inboxStore: InboxStore
 
     private var presentation: MaintenanceDashboardPresentation {
         let plan: MaintenancePlan? = {
@@ -30,7 +31,7 @@ struct MaintenanceOverviewView: View {
             failedCount: model.packageProgress.values.filter {
                 [.failed, .timedOut, .cancelled].contains($0.status)
             }.count,
-            lastRun: nil,
+            lastHistoryRecord: model.historyStore.records.first,
             nextInspectionText: model.dailyInspectionEnabled ? "\(String(format: "%02d", model.dailyHour)):\(String(format: "%02d", model.dailyMinute))" : nil
         )
     }
@@ -39,91 +40,16 @@ struct MaintenanceOverviewView: View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 16) {
                 healthSection
-                maintenanceTrackSection
                 if presentation.health != .ready {
                     metricsSection
                 }
+                PendingItemsSection()
                 priorityTasksSection
                 summarySection
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(.bottom, 4)
         }
-    }
-
-    // MARK: - Maintenance Track
-    //
-    // 维护轨道：扫描→评估→执行→校验，作为一条连续的视觉流程。
-    // 当前阶段高亮，已完成的阶段标绿，未开始的阶段灰显。
-
-    private var maintenanceTrackSection: some View {
-        HStack(spacing: 0) {
-            trackNode(title: "扫描", symbol: "magnifyingglass", state: trackState(for: .scanning))
-            trackConnector(state: trackConnectorState(after: .scanning))
-            trackNode(title: "评估", symbol: "chart.bar", state: trackState(for: .assessing))
-            trackConnector(state: trackConnectorState(after: .assessing))
-            trackNode(title: "执行", symbol: "arrow.triangle.2.circlepath", state: trackState(for: .executing))
-            trackConnector(state: trackConnectorState(after: .executing))
-            trackNode(title: "校验", symbol: "checkmark.shield", state: trackState(for: .verifying))
-        }
-        .padding(16)
-        .polishedTaskSurface(tint: .secondary, isActive: presentation.health == .scanning || presentation.health == .executing)
-    }
-
-    private enum TrackPhase { case scanning, assessing, executing, verifying }
-
-    private func trackState(for phase: TrackPhase) -> (color: Color, isActive: Bool, isDone: Bool) {
-        let currentPhase: TrackPhase? = {
-            switch presentation.health {
-            case .scanning: return .scanning
-            case .executing: return .executing
-            case .ready, .allClear, .hasAutomatic, .needsConfirmation, .hasFailures: return nil
-            }
-        }()
-
-        // 已扫描完成 = 扫描和评估都 done
-        let hasScanned = presentation.health != .ready && presentation.health != .scanning
-
-        let isCurrent = currentPhase == phase
-        let isDone: Bool
-        switch phase {
-        case .scanning: isDone = hasScanned
-        case .assessing: isDone = hasScanned
-        case .executing: isDone = presentation.health == .allClear
-        case .verifying: isDone = presentation.health == .allClear
-        }
-
-        let color: Color = isCurrent ? .accentColor : (isDone ? .green : .secondary)
-        return (color, isCurrent, isDone)
-    }
-
-    private func trackConnectorState(after phase: TrackPhase) -> Color {
-        trackState(for: phase).isDone ? .green : .secondary.opacity(0.3)
-    }
-
-    private func trackNode(title: String, symbol: String, state: (color: Color, isActive: Bool, isDone: Bool)) -> some View {
-        VStack(spacing: 4) {
-            ZStack {
-                Circle()
-                    .fill(state.color.opacity(state.isActive ? 0.15 : 0.08))
-                    .frame(width: 36, height: 36)
-                Image(systemName: state.isDone ? "checkmark" : symbol)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(state.color)
-            }
-            Text(title)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(state.color)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func trackConnector(state: Color) -> some View {
-        Rectangle()
-            .fill(state)
-            .frame(height: 2)
-            .frame(maxWidth: 40)
-            .padding(.top, -14)
     }
 
     // MARK: - Health
@@ -236,7 +162,8 @@ struct MaintenanceOverviewView: View {
         // 开始智能维护：先扫描，然后用 MaintenancePlanner 分类，自动执行 automatic 组。
         await model.scanSoftware(
             regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
-            notificationPolicy: automationProfile.profile.notificationPolicy
+            notificationPolicy: automationProfile.profile.notificationPolicy,
+            inboxStore: inboxStore
         )
 
         guard let scan = model.scan else { return }
@@ -266,7 +193,9 @@ struct MaintenanceOverviewView: View {
             model.executor.enqueueJob(
                 label: "智能维护：自动升级 \(steps.count) 个低风险项",
                 steps: steps,
-                rescanAfterSuccess: true
+                rescanAfterSuccess: true,
+                inboxStore: inboxStore,
+                autoRepairProfile: automationProfile.profile
             )
         }
     }

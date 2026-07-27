@@ -16,7 +16,6 @@ struct AutoRepairDeciderTest {
         var profile = AutomationProfile.manualDefault
         profile.onboardingCompleted = true
         profile.automationEnabled = true
-        profile.advancedModeEnabled = true
         profile.autoRepairPolicy = .allowLowRisk
 
         let allowed = AutoRepairDecider.automaticAction(
@@ -33,10 +32,10 @@ struct AutoRepairDeciderTest {
         )
         precondition(attempted == nil)
 
-        profile.advancedModeEnabled = false
+        profile.automationEnabled = false
         precondition(AutoRepairDecider.automaticAction(for: rescanProgress, profile: profile, attemptedPackageIDs: []) == nil)
 
-        profile.advancedModeEnabled = true
+        profile.automationEnabled = true
         profile.autoRepairPolicy = .manualOnly
         precondition(AutoRepairDecider.automaticAction(for: rescanProgress, profile: profile, attemptedPackageIDs: []) == nil)
 

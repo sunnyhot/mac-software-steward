@@ -37,7 +37,6 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     let policyStore = UpgradePolicyStore()
     let historyStore: UpgradeHistoryStore
     let inspectionReportStore = InspectionReportStore()
-    let scanPerformanceStore: ScanPerformanceStore
 
     /// 执行引擎。jobs / packageProgress / upgradeProgress / maxConcurrentUpgrades 的
     /// 真实状态由 executor 持有；StewardModel 通过下面的转发属性暴露给现有 UI。
@@ -69,23 +68,19 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     init(
         scanner: SoftwareScanning = LiveSoftwareScanning(),
         notificationDispatcher: AutomationNotificationDelivering? = nil,
-        scanPerformanceStore: ScanPerformanceStore = ScanPerformanceStore(),
         downloadStrategiesProvider: @escaping () async -> [DownloadAccelerationStrategy] = DownloadAccelerationPolicy.defaultStrategies,
         acceleratedDownloadRunner: AcceleratedDownloader.Runner? = nil
     ) {
         self.scanner = scanner
         self.notificationDispatcher = notificationDispatcher ?? UserNotificationDispatcher()
-        self.scanPerformanceStore = scanPerformanceStore
         self.downloadStrategiesProvider = downloadStrategiesProvider
         self.acceleratedDownloadRunner = acceleratedDownloadRunner
 
         let historyStore = UpgradeHistoryStore()
         self.historyStore = historyStore
-        let runLease = MaintenanceRunLease(directory: MaintenanceRunLease.defaultDirectory)
         let executor = MaintenanceExecutor(
             historyStore: historyStore,
-            downloadStrategiesProvider: downloadStrategiesProvider,
-            runLease: runLease
+            downloadStrategiesProvider: downloadStrategiesProvider
         )
         self.executor = executor
         executor.setHost(self)
@@ -203,7 +198,6 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
             }
         }
         scan = result
-        scanPerformanceStore.append(result.performance)
         executor.prunePackageProgress(keeping: result)
         recomputeDerivedData()
         var newInboxItems: [InboxItem] = []
@@ -647,7 +641,7 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
         DailyInspectionScheduler.helperPath()
     }
 
-    /// 执行管理来源页面的恢复操作
+    /// 执行可升级页来源诊断卡片的恢复操作
     func performSourceRecovery(action: SourceRecoveryAction) async {
         switch action {
         case .rescan:

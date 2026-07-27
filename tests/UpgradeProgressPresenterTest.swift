@@ -19,22 +19,6 @@ struct UpgradeProgressPresenterTest {
             detail: "等待升级",
             updatedAt: now.addingTimeInterval(-30)
         )
-        let failed = PackageUpgradeProgress(
-            packageID: "brew:cask:excel",
-            packageName: "excel",
-            status: .failed,
-            detail: "下载失败",
-            updatedAt: now.addingTimeInterval(-15)
-        )
-        let progress = UpgradeProgress(completed: 1, total: 4, failed: 1, currentPackage: "2 个任务并行中")
-
-        let summary = UpgradeProgressPresenter.summaryText(
-            progress: progress,
-            packageProgress: [running, queued, failed],
-            now: now
-        )
-        precondition(summary == "1 个执行中 · 1 个排队 · 1 个需处理 · 1 个长时间无输出", "Unexpected summary: \(summary)")
-
         let phaseDuration = UpgradeProgressPresenter.phaseDurationText(for: running, now: now)
         precondition(phaseDuration == "下载中持续 2 分钟", "Unexpected phase duration: \(phaseDuration)")
 

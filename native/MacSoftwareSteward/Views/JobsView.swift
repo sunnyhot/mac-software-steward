@@ -1,9 +1,17 @@
 import SwiftUI
 
+private enum JobsPane: String, CaseIterable, Identifiable {
+    case current = "任务"
+    case history = "历史"
+
+    var id: String { rawValue }
+}
+
 struct JobsView: View {
     @EnvironmentObject private var model: StewardModel
     @State private var selectedJobId: UUID?
     @State private var autoScroll = true
+    @State private var selectedPane: JobsPane = .current
 
     var selectedJob: UpgradeJob? {
         let id = selectedJobId ?? model.jobs.first?.id
@@ -11,6 +19,36 @@ struct JobsView: View {
     }
 
     var body: some View {
+        VStack(spacing: 12) {
+            Picker("内容", selection: $selectedPane) {
+                ForEach(JobsPane.allCases) { pane in
+                    Text(pane.rawValue).tag(pane)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 240)
+
+            switch selectedPane {
+            case .current:
+                currentJobs
+            case .history:
+                MaintenanceHistoryContent(
+                    historyStore: model.historyStore,
+                    inspectionReportStore: model.inspectionReportStore
+                )
+            }
+        }
+        .onAppear {
+            model.inspectionReportStore.reload()
+            if model.jobs.isEmpty &&
+                (!model.historyStore.records.isEmpty || !model.inspectionReportStore.reports.isEmpty) {
+                selectedPane = .history
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var currentJobs: some View {
         if model.jobs.isEmpty {
             EmptyStateView(
                 symbol: "terminal",
@@ -19,30 +57,10 @@ struct JobsView: View {
             )
         } else {
             HStack(spacing: 0) {
-                // 任务列表
                 List(selection: $selectedJobId) {
                     ForEach(model.jobs) { job in
                         JobRow(job: job, isSelected: job.id == selectedJobId)
                             .tag(job.id)
-                    }
-
-                    if !model.historyStore.records.isEmpty {
-                        Section {
-                            ForEach(model.historyStore.records.prefix(10)) { record in
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(record.label)
-                                        .font(.caption.bold())
-                                    Text("\(record.status) · \(record.summary)")
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(2)
-                                }
-                            }
-                        } header: {
-                            Text("历史记录")
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
-                        }
                     }
                 }
                 .listStyle(.sidebar)
@@ -50,7 +68,6 @@ struct JobsView: View {
 
                 Divider().opacity(0.5)
 
-                // 日志详情
                 if let job = selectedJob {
                     LogDetailView(job: job, autoScroll: $autoScroll)
                         .environmentObject(model)
@@ -307,5 +324,157 @@ private struct LogLineRow: View {
         case "system": return .secondary
         default: return .secondary
         }
+    }
+}
+
+private struct MaintenanceHistoryContent: View {
+    @ObservedObject var historyStore: UpgradeHistoryStore
+    @ObservedObject var inspectionReportStore: InspectionReportStore
+
+    @State private var kindFilter: HistoryKindFilter = .all
+    @State private var statusFilter: HistoryStatusFilter = .all
+    @State private var query = ""
+
+    private var entries: [HistoryEntry] {
+        HistoryPresenter.entries(
+            reports: inspectionReportStore.reports,
+            records: historyStore.records,
+            kind: kindFilter,
+            status: statusFilter,
+            query: query
+        )
+    }
+
+    var body: some View {
+        if historyStore.records.isEmpty && inspectionReportStore.reports.isEmpty {
+            EmptyStateView(
+                symbol: "clock.arrow.circlepath",
+                title: "暂无历史记录",
+                text: "升级、巡检和待处理事项的处理结果会保存在这里。"
+            )
+        } else {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    historyFilterBar
+
+                    if entries.isEmpty {
+                        EmptyStateView(
+                            symbol: "line.3.horizontal.decrease.circle",
+                            title: "没有匹配的历史",
+                            text: "调整分类、状态或搜索词后再查看。"
+                        )
+                    } else {
+                        ForEach(entries) { entry in
+                            MaintenanceHistoryRow(entry: entry)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var historyFilterBar: some View {
+        HStack(spacing: 10) {
+            TextField("搜索历史、命令、失败原因", text: $query)
+                .textFieldStyle(.roundedBorder)
+
+            Picker("分类", selection: $kindFilter) {
+                ForEach(HistoryKindFilter.allCases) { filter in
+                    Text(filter.title).tag(filter)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(width: 120)
+
+            Picker("状态", selection: $statusFilter) {
+                ForEach(HistoryStatusFilter.allCases) { filter in
+                    Text(filter.title).tag(filter)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(width: 120)
+        }
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+}
+
+private struct MaintenanceHistoryRow: View {
+    var entry: HistoryEntry
+
+    var body: some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 7) {
+                ForEach(entry.detailItems, id: \.self) { item in
+                    HStack(alignment: .top, spacing: 7) {
+                        Image(systemName: item.symbol)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 16)
+                        Text(item.title)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                        Text(item.value)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(.top, 6)
+            .padding(.leading, 26)
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: entry.kind.symbol)
+                        .foregroundStyle(historyStatusColor(entry.status))
+
+                    Text(entry.title)
+                        .font(.system(.headline, design: .rounded))
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    Badge(text: entry.kind.title, color: .blue)
+                    Badge(text: entry.status.title, color: historyStatusColor(entry.status))
+                }
+
+                Text(entry.summary)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+
+                HStack(spacing: 8) {
+                    Text(entry.timestamp, style: .date)
+                    Text(entry.timestamp, style: .time)
+                }
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(14)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+}
+
+private func historyStatusColor(_ status: HistoryEntryStatus) -> Color {
+    switch status {
+    case .succeeded:
+        return .green
+    case .failed:
+        return .orange
+    case .ignored:
+        return .secondary
+    case .pending:
+        return .blue
     }
 }

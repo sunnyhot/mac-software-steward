@@ -4,23 +4,47 @@ struct ContentView: View {
     @EnvironmentObject private var model: StewardModel
     @EnvironmentObject private var updater: AppUpdateModel
     @EnvironmentObject private var automationProfile: AutomationProfileStore
+    @EnvironmentObject private var inboxStore: InboxStore
 
     var body: some View {
         NavigationSplitView {
             TaskFirstSidebar()
                 .environmentObject(model)
-                .environmentObject(automationProfile)
                 .navigationSplitViewColumnWidth(min: 210, ideal: 230)
         } detail: {
-            detailContent
+            MainPanel()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .background(DetailChromeBackground())
+                .background(StewardCanvasBackground().ignoresSafeArea())
                 .animation(.easeInOut(duration: 0.2), value: model.selectedTab)
         }
         .toolbarBackground(Color(nsColor: .windowBackgroundColor), for: .windowToolbar)
         .toolbarBackground(.visible, for: .windowToolbar)
-        .toolbar(removing: AppWindowChromePolicy.removesAutomaticSidebarToggle ? .sidebarToggle : nil)
-        .background(WindowChromeConfigurator().frame(width: 0, height: 0))
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    Task {
+                        await model.scanSoftware(
+                            regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
+                            notificationPolicy: automationProfile.profile.notificationPolicy,
+                            inboxStore: inboxStore
+                        )
+                    }
+                } label: {
+                    Label(model.isScanning ? "扫描中" : "扫描软件", systemImage: "arrow.clockwise")
+                }
+                .disabled(model.isScanning)
+
+                Button {
+                    model.prepareUpgradePlan(inboxStore: inboxStore)
+                } label: {
+                    Label(
+                        model.hasRunningJob ? "升级中" : "一键升级",
+                        systemImage: model.hasRunningJob ? "hourglass" : "bolt.fill"
+                    )
+                }
+                .disabled(model.availableUpdates.isEmpty || model.hasRunningJob || model.isConfirmingUpgradePlan)
+            }
+        }
         .sheet(isPresented: $updater.showUpdateDialog) {
             AppUpdateDialog()
                 .environmentObject(updater)
@@ -29,59 +53,6 @@ struct ContentView: View {
             UpgradePlanView()
                 .environmentObject(model)
         }
-        .onAppear {
-            normalizeSelectedTab()
-        }
-        .onChange(of: automationProfile.profile.advancedModeEnabled) {
-            normalizeSelectedTab()
-        }
-    }
-
-    private func normalizeSelectedTab() {
-        let fallbackTab = AppTabNavigationPresenter.fallbackTab(
-            for: model.selectedTab,
-            advancedModeEnabled: automationProfile.profile.advancedModeEnabled
-        )
-        if model.selectedTab != fallbackTab {
-            model.selectedTab = fallbackTab
-        }
-    }
-
-    @ViewBuilder
-    private var detailContent: some View {
-        if model.selectedTab == .settings {
-            MainPanel()
-        } else {
-            VStack(spacing: 0) {
-                HeaderView()
-                Divider().opacity(0.5)
-                MainPanel()
-            }
-        }
-    }
-}
-
-private struct DetailChromeBackground: View {
-    var body: some View {
-        ZStack(alignment: .top) {
-            StewardCanvasBackground()
-                .ignoresSafeArea()
-            UnifiedTopRail()
-                .allowsHitTesting(false)
-        }
-    }
-}
-
-private struct UnifiedTopRail: View {
-    var body: some View {
-        VStack(spacing: 0) {
-            Color(nsColor: .windowBackgroundColor)
-                .frame(height: AppChromeLayout.topRailHeight)
-            Divider()
-                .opacity(0.35)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .ignoresSafeArea(edges: .top)
     }
 }
 
@@ -89,18 +60,13 @@ private struct UnifiedTopRail: View {
 
 private struct TaskFirstSidebar: View {
     @EnvironmentObject private var model: StewardModel
-    @EnvironmentObject private var automationProfile: AutomationProfileStore
-
-    private var advancedModeEnabled: Bool {
-        automationProfile.profile.advancedModeEnabled
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             sidebarHeader
 
             SidebarSection(title: "日常维护") {
-                ForEach(AppTabNavigationPresenter.primaryTabs(advancedModeEnabled: advancedModeEnabled), id: \.rawValue) { tab in
+                ForEach(AppTabNavigationPresenter.primaryTabs, id: \.rawValue) { tab in
                     SidebarRow(
                         tab: tab,
                         isSelected: model.selectedTab == tab,
@@ -109,15 +75,13 @@ private struct TaskFirstSidebar: View {
                 }
             }
 
-            if advancedModeEnabled {
-                SidebarSection(title: "诊断与控制") {
-                    ForEach(AppTabNavigationPresenter.controlTabs(advancedModeEnabled: advancedModeEnabled), id: \.rawValue) { tab in
-                        SidebarRow(
-                            tab: tab,
-                            isSelected: model.selectedTab == tab,
-                            action: { select(tab) }
-                        )
-                    }
+            SidebarSection(title: "自动化与记录") {
+                ForEach(AppTabNavigationPresenter.controlTabs, id: \.rawValue) { tab in
+                    SidebarRow(
+                        tab: tab,
+                        isSelected: model.selectedTab == tab,
+                        action: { select(tab) }
+                    )
                 }
             }
 
@@ -135,7 +99,7 @@ private struct TaskFirstSidebar: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.top, AppChromeLayout.sidebarTopPadding)
+        .padding(.top, 16)
         .padding(.bottom, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .stewardSurface(role: .sidebar, cornerRadius: 0)
@@ -339,360 +303,6 @@ private struct SidebarRow: View {
     }
 }
 
-// MARK: - Header View
-
-private struct HeaderView: View {
-    @EnvironmentObject private var model: StewardModel
-    @EnvironmentObject private var automationProfile: AutomationProfileStore
-    @EnvironmentObject private var inboxStore: InboxStore
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // Toolbar row: title + actions
-            toolbarRow
-
-            MaintenanceStatusBand(
-                presentation: statusPresentation,
-                updateCount: model.allUpgradeablePackages.count,
-                failedCount: failedPackageCount
-            )
-
-            // Conditional banners
-            VStack(spacing: 8) {
-                if !model.errorMessage.isEmpty {
-                    errorBanner
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .move(edge: .top)),
-                            removal: .opacity
-                        ))
-                }
-                if let progress = model.upgradeProgress, progress.total > 0 {
-                    UpgradeProgressBar(
-                        progress: progress,
-                        packageProgress: Array(model.packageProgress.values)
-                    )
-                        .transition(.opacity)
-                }
-            }
-
-            // Metrics cards
-            metricsRow
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, AppChromeLayout.detailHeaderTopPadding)
-        .padding(.bottom, 14)
-        .background(headerBackground)
-    }
-
-    // MARK: Header Background
-
-    @ViewBuilder
-    private var headerBackground: some View {
-        if #available(macOS 15.0, *) {
-            // 使用系统背景 + subtle bottom border
-            ZStack {
-                Color.clear
-                LinearGradient(
-                    colors: [
-                        Color.accentColor.opacity(0.03),
-                        Color.clear
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
-        } else {
-            Color.clear
-        }
-    }
-
-    // MARK: Toolbar Row
-
-    private var toolbarRow: some View {
-        HStack(alignment: .center, spacing: 12) {
-            // App icon + title
-            HStack(spacing: 8) {
-                Image(systemName: "shield.checkered")
-                    .font(.title3)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.accentColor, .accentColor.opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-
-                Text("Mac 软件管家")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-            }
-
-            Text("本机软件汇总可人工维护的 App、Homebrew 和 App Store 软件。")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .layoutPriority(0)
-
-            Spacer(minLength: 16)
-
-            HeaderButton(
-                title: model.isScanning ? "扫描中" : "扫描",
-                icon: model.isScanning ? "hourglass" : "arrow.clockwise",
-                isProminent: false,
-                isLoading: model.isScanning
-            ) {
-                Task {
-                    await model.scanSoftware(
-                        regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
-                        notificationPolicy: automationProfile.profile.notificationPolicy,
-                        inboxStore: inboxStore
-                    )
-                }
-            }
-            .disabled(model.isScanning)
-
-            HeaderButton(
-                title: model.hasRunningJob ? "升级中" : (model.isConfirmingUpgradePlan ? "准备中" : "一键升级"),
-                icon: model.hasRunningJob || model.isConfirmingUpgradePlan ? "hourglass" : "bolt.fill",
-                isProminent: true,
-                isLoading: model.hasRunningJob || model.isConfirmingUpgradePlan
-            ) {
-                model.prepareUpgradePlan(inboxStore: inboxStore)
-            }
-            .disabled(model.availableUpdates.isEmpty || model.hasRunningJob || model.isConfirmingUpgradePlan)
-            .help(model.upgradeAllHelpText)
-        }
-    }
-
-    // MARK: Error Banner
-
-    private var errorBanner: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.callout)
-            Text(model.errorMessage)
-                .font(.subheadline)
-            Spacer()
-            Button {
-                model.errorMessage = ""
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.red.opacity(0.6))
-            }
-            .buttonStyle(.plain)
-        }
-        .foregroundStyle(.red)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .stewardSurface(cornerRadius: 10, tint: .red)
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(.red.opacity(0.2), lineWidth: 1)
-        )
-    }
-
-    // MARK: Metrics Row
-
-    private var metricsRow: some View {
-        HStack(spacing: 10) {
-            MetricCard(title: "本机软件", value: localSoftwareSummary?.total, symbol: "macwindow", accent: .blue)
-            MetricCard(title: "App", value: localSoftwareSummary?.app, symbol: "app", accent: .green)
-            MetricCard(title: "Brew", value: localSoftwareSummary?.brew, symbol: "shippingbox", accent: .orange)
-            MetricCard(title: "App Store", value: localSoftwareSummary?.appStore, symbol: "bag", accent: .purple)
-        }
-    }
-
-    private var localSoftwareSummary: LocalSoftwareSummary? {
-        guard let scan = model.scan else { return nil }
-        return LocalSoftwarePresenter.summary(for: LocalSoftwarePresenter.rows(from: scan))
-    }
-
-    private var failedPackageCount: Int {
-        model.packageProgress.values.filter { progress in
-            [
-                PackageUpgradeStatus.failed,
-                PackageUpgradeStatus.timedOut,
-                PackageUpgradeStatus.cancelled
-            ].contains(progress.status)
-        }.count
-    }
-
-    private var statusPresentation: MaintenanceStatusPresentation {
-        MaintenanceStatusPresenter.presentation(
-            isScanning: model.isScanning,
-            scanPhaseText: model.scanPhase?.rawValue,
-            scanProgress: model.scanPhase?.progress,
-            hasRunningJob: model.hasRunningJob,
-            upgradeProgress: model.upgradeProgress,
-            updateCount: model.allUpgradeablePackages.count,
-            failedPackageCount: failedPackageCount
-        )
-    }
-}
-
-private struct MaintenanceStatusBand: View {
-    var presentation: MaintenanceStatusPresentation
-    var updateCount: Int
-    var failedCount: Int
-
-    private var tint: Color {
-        tintColor(for: presentation.tintRole)
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                StatusIconPlate(symbol: presentation.symbol, tint: tint, isActive: presentation.isActive)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(presentation.title)
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    Text(presentation.detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-
-                Spacer(minLength: 12)
-
-                statusMetric(title: "可升级", value: updateCount, tint: .orange)
-                statusMetric(title: "需处理", value: failedCount, tint: failedCount > 0 ? .red : .secondary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-
-            if let progress = presentation.progress {
-                ProgressView(value: progress)
-                    .progressViewStyle(.linear)
-                    .tint(tint)
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 10)
-            }
-
-            FlowingAccentLine(tint: tint, isActive: presentation.isActive)
-        }
-        .polishedTaskSurface(tint: tint, isActive: presentation.isActive)
-        .animation(.easeOut(duration: 0.18), value: presentation)
-    }
-
-    private func statusMetric(title: String, value: Int, tint: Color) -> some View {
-        VStack(alignment: .trailing, spacing: 2) {
-            Text("\(value)")
-                .font(.system(size: 17, weight: .bold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(tint)
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .frame(minWidth: 52, alignment: .trailing)
-    }
-}
-
-// MARK: - Header Button
-
-private struct HeaderButton: View {
-    var title: String
-    var icon: String
-    var isProminent: Bool
-    var isLoading: Bool
-    var action: () -> Void
-
-    var body: some View {
-        Group {
-            if isProminent {
-                Button(action: action) {
-                    buttonLabel
-                }
-                .buttonStyle(.borderedProminent)
-            } else {
-                Button(action: action) {
-                    buttonLabel
-                }
-                .buttonStyle(.bordered)
-            }
-        }
-        .controlSize(.small)
-    }
-
-    private var buttonLabel: some View {
-        HStack(spacing: 5) {
-            if isLoading {
-                ProgressView()
-                    .controlSize(.small)
-                    .scaleEffect(0.7)
-            } else {
-                Image(systemName: icon)
-                    .font(.caption)
-            }
-            Text(title)
-                .font(.system(.callout, weight: .medium))
-        }
-    }
-}
-
-// MARK: - Metric Card
-
-private struct MetricCard: View {
-    var title: String
-    var value: Int?
-    var symbol: String
-    var accent: Color
-
-    @State private var isHovered = false
-
-    var body: some View {
-        HStack(spacing: 12) {
-            // Icon with gradient background
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(
-                        LinearGradient(
-                            colors: [accent.opacity(0.15), accent.opacity(0.08)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 34, height: 34)
-
-                Image(systemName: symbol)
-                    .font(.system(.callout, weight: .medium))
-                    .foregroundStyle(accent)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-
-                Text(value.map(String.init) ?? "–")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(.primary)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, minHeight: 58)
-        .stewardSurface(cornerRadius: 12, tint: accent)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(isHovered ? accent.opacity(0.3) : Color.primary.opacity(0.06), lineWidth: 1)
-        )
-        .scaleEffect(isHovered ? 1.02 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
-        .onHover { hovering in
-            isHovered = hovering
-        }
-    }
-}
-
 // MARK: - Main Panel
 
 private struct MainPanel: View {
@@ -714,6 +324,11 @@ private struct MainPanel: View {
                 }
             }
 
+            if !model.errorMessage.isEmpty {
+                AppErrorBanner()
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
             if let notice = model.jobNotice {
                 JobNoticeView(notice: notice)
                     .transition(.asymmetric(
@@ -726,20 +341,12 @@ private struct MainPanel: View {
                 switch model.selectedTab {
                 case .overview:
                     MaintenanceOverviewView()
-                case .inbox:
-                    InboxView()
                 case .updates:
                     UpdatesView()
                 case .applications:
                     ApplicationsView()
-                case .sources:
-                    SourcesView()
                 case .rules:
                     RulesView()
-                case .history:
-                    HistoryView()
-                case .performance:
-                    PerformanceView()
                 case .settings:
                     SettingsView()
                 case .jobs:
@@ -768,6 +375,35 @@ private struct MainPanel: View {
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+}
+
+private struct AppErrorBanner: View {
+    @EnvironmentObject private var model: StewardModel
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+            Text(model.errorMessage)
+                .font(.subheadline)
+            Spacer()
+            Button {
+                model.errorMessage = ""
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("关闭错误提示")
+        }
+        .foregroundStyle(.red)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .stewardSurface(cornerRadius: 10, tint: .red)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(.red.opacity(0.2), lineWidth: 1)
         )
     }
 }

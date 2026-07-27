@@ -31,11 +31,45 @@ struct UpdatesView: View {
     var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 12) {
+                sourceDiagnostics
                 filterHeader
                 updateContent
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(.bottom, 4)
+        }
+    }
+
+    @ViewBuilder
+    private var sourceDiagnostics: some View {
+        if let brew = model.scan?.brew,
+           let diagnosis = SourceDiagnosticEngine.diagnoseBrew(
+               available: brew.available,
+               error: brew.error,
+               hasScan: model.scan != nil
+           ) {
+            ErrorRecoveryCard(
+                diagnosis: diagnosis,
+                onAction: { action in
+                    Task { await model.performSourceRecovery(action: action) }
+                },
+                isProcessing: model.isScanning
+            )
+        }
+
+        if let mas = model.scan?.mas,
+           let diagnosis = SourceDiagnosticEngine.diagnoseMas(
+               available: mas.available,
+               error: mas.error,
+               canInstallMas: model.canInstallMasCLI
+           ) {
+            ErrorRecoveryCard(
+                diagnosis: diagnosis,
+                onAction: { action in
+                    Task { await model.performSourceRecovery(action: action) }
+                },
+                isProcessing: model.isScanning || model.hasRunningJob
+            )
         }
     }
 

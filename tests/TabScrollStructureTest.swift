@@ -12,14 +12,6 @@ do {
         sourceURL: root.appendingPathComponent("ApplicationsView.swift"),
         viewName: "ApplicationsView"
     )
-    try assertBodyStartsWithScrollView(
-        sourceURL: root.appendingPathComponent("InboxView.swift"),
-        viewName: "InboxView"
-    )
-    try assertBodyStartsWithScrollView(
-        sourceURL: root.appendingPathComponent("SourcesView.swift"),
-        viewName: "SourcesView"
-    )
 } catch {
     preconditionFailure("Tab scroll structure test failed: \(error)")
 }

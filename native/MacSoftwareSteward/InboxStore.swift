@@ -33,6 +33,7 @@ enum InboxActionKind: String, Codable, CaseIterable, Identifiable {
     case openApplications
     case openSources
     case openJobs
+    case openRules
     case openSettings
     case rescan
     case retryPackage

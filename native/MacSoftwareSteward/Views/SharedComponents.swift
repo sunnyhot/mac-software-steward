@@ -357,76 +357,6 @@ struct CopyableText: View {
     }
 }
 
-struct UpgradeProgressBar: View {
-    var progress: UpgradeProgress
-    var packageProgress: [PackageUpgradeProgress] = []
-
-    var body: some View {
-        let summary = UpgradeProgressPresenter.summaryText(
-            progress: progress,
-            packageProgress: packageProgress
-        )
-
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .stroke(Color.accentColor.opacity(0.15), lineWidth: 2.5)
-                        .frame(width: 28, height: 28)
-
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.caption)
-                        .foregroundStyle(Color.accentColor)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text("正在升级 \(progress.completed)/\(progress.total)")
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        if let current = progress.currentPackage {
-                            Text("·")
-                                .foregroundStyle(.tertiary)
-                            Text(current)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-                    Text(summary)
-                        .font(.caption)
-                        .foregroundStyle(progress.failed > 0 ? .orange : .secondary)
-                        .lineLimit(1)
-                    if progress.failed > 0 {
-                        Text("失败项会保留在列表中，可直接重试或复制详情。")
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-                }
-
-                Spacer()
-
-                Text("\(Int(progress.fraction * 100))%")
-                    .font(.system(.callout, design: .rounded, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-            }
-
-            ProgressView(value: progress.fraction)
-                .progressViewStyle(.linear)
-                .tint(progressTint)
-
-            FlowingAccentLine(tint: progressTint, isActive: progress.isRunning)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .polishedTaskSurface(tint: progressTint, isActive: progress.isRunning)
-    }
-
-    private var progressTint: Color {
-        progress.failed > 0 && !progress.isRunning ? .orange : .accentColor
-    }
-}
-
 // MARK: - App Update Dialog
 
 struct AppUpdateDialog: View {
@@ -671,7 +601,7 @@ func logLineColor(_ stream: String) -> Color {
     }
 }
 
-// MARK: - 管理来源错误恢复卡片
+// MARK: - 来源错误恢复卡片
 
 struct ErrorRecoveryCard: View {
     var diagnosis: SourceDiagnosis

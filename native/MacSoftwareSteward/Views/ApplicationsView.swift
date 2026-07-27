@@ -323,8 +323,7 @@ struct ApplicationRow: View {
                     .padding(.leading, 40)
             }
 
-            if automationProfile.profile.advancedModeEnabled,
-               let diagnostic = AppDiagnosticsPresenter.row(from: app) {
+            if let diagnostic = AppDiagnosticsPresenter.row(from: app) {
                 AppDiagnosticDetail(row: diagnostic)
                     .padding(.leading, 40)
             }

@@ -24,7 +24,6 @@ struct MaintenancePlannerTest {
             automationEnabled: true,
             dailyInspectionEnabled: true,
             lowRiskAutoUpgradeEnabled: true,
-            advancedModeEnabled: false,
             notificationPolicy: .decisionsAndFailures,
             regularAppNetworkPolicy: .declaredSourcesOnly,
             autoRepairPolicy: .manualOnly

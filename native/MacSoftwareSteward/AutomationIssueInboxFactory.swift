@@ -16,7 +16,7 @@ enum AutomationIssueInboxFactory {
 
         return dailyInspectionItem(
             title: "每日巡检需要重新启用",
-            summary: "自动化配置要求每日巡检，但当前未检测到 LaunchAgent。请打开设置重新启用每日巡检。",
+            summary: "自动化配置要求每日巡检，但当前未检测到 LaunchAgent。请打开自动化策略重新启用每日巡检。",
             status: .pending
         )
     }
@@ -42,7 +42,7 @@ enum AutomationIssueInboxFactory {
             sourceID: dailyInspectionSourceID,
             status: status,
             actions: [
-                InboxAction(title: "打开设置", systemImage: "gearshape", kind: .openSettings)
+                InboxAction(title: "打开自动化策略", systemImage: "switch.2", kind: .openRules)
             ]
         )
     }
