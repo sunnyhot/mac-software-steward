@@ -389,16 +389,16 @@ struct AppUpdateDialog: View {
                     .foregroundStyle(Color.accentColor)
             }
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("发现新版本")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(.green)
                 Text("\(updater.appDisplayName) v\(updater.latestVersion)")
-                    .font(.system(size: AppUpdateDialogLayout.titleSize, weight: .heavy, design: .rounded))
+                    .font(.system(size: AppUpdateDialogLayout.titleSize, weight: .bold, design: .rounded))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 Text("当前 \(updater.currentVersion) · 最新 \(updater.latestVersion)")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
             }
 
@@ -421,8 +421,8 @@ struct AppUpdateDialog: View {
     private var releaseNotesPanel: some View {
         ScrollView {
             Text(updater.releaseNotes.isEmpty ? "暂无更新说明。" : updater.releaseNotes)
-                .font(.system(size: 15, weight: .regular))
-                .lineSpacing(5)
+                .font(.system(size: 12, weight: .regular))
+                .lineSpacing(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
         }
@@ -448,7 +448,7 @@ struct AppUpdateDialog: View {
                         .tint(Color.accentColor)
                 }
                 Text(updater.downloadStatusText)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
             }
         } else if let errorMessage = updater.updateErrorMessage {

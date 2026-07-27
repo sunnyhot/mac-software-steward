@@ -6,10 +6,10 @@ enum AppUpdateDialogLayout {
     static let outerPadding: CGFloat = 24
     static let sectionSpacing: CGFloat = 16
     static let headerSpacing: CGFloat = 14
-    static let iconSize: CGFloat = 56
-    static let iconCornerRadius: CGFloat = 13
-    static let iconSymbolSize: CGFloat = 31
-    static let titleSize: CGFloat = 27
-    static let releaseNotesMaxHeight: CGFloat = 210
+    static let iconSize: CGFloat = 48
+    static let iconCornerRadius: CGFloat = 12
+    static let iconSymbolSize: CGFloat = 26
+    static let titleSize: CGFloat = 20
+    static let releaseNotesMaxHeight: CGFloat = 220
     static let releaseNotesPadding: CGFloat = 14
 }
