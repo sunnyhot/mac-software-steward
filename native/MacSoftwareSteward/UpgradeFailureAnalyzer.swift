@@ -130,4 +130,15 @@ enum UpgradeFailureAnalyzer {
             && lowercasedOutput.contains(".incomplete")
             && lowercasedOutput.contains("please wait for it to finish or terminate it")
     }
+
+    /// 输出是否表明升级卡在 sudo 密码上（与 knownFailureHint 里 sudo 分支同一组关键词）。
+    /// 调用方据此把步骤挂起为 needsSudo，等待批量 osascript 重试，而非直接判失败。
+    static func requiresSudo(in output: String) -> Bool {
+        let lowercased = output.lowercased()
+        guard lowercased.contains("sudo") else { return false }
+        return lowercased.contains("password is required")
+            || lowercased.contains("terminal is required")
+            || lowercased.contains("a password is required")
+            || lowercased.contains("read the password")
+    }
 }
