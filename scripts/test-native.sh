@@ -422,6 +422,12 @@ run_test SelfUpdateInstallScriptTest \
   "$SRC/SelfUpdateInstallScript.swift" \
   "$TESTS/SelfUpdateInstallScriptTest.swift"
 
+run_test SudoScriptBuilderTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/SudoScriptBuilder.swift" \
+  "$TESTS/SudoScriptBuilderTest.swift"
+
 run_test UpgradeFailureAnalyzerTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
