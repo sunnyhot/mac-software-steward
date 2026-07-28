@@ -99,6 +99,8 @@ Dependencies: `ContentView` 导航、设置持久化
 4. WHEN 用户手动打开一键升级计划 THEN 系统 SHALL 默认选中低风险项，并标记高风险项的原因。
 5. IF 升级项需要 `sudo`、运行中应用退出、清理冲突、major 版本、固定版本、依赖异常或开发工具链风险 THEN 系统 SHALL NOT 自动执行该升级。
 
+> **澄清（2026-07-28 sudo cask auto-elevation 设计补充）：** 本规则的「sudo」指**升级项本身在风险评估阶段需要提权**。对已通过风险评估、被批准执行的升级，若执行阶段因 macOS 密码策略卡住，允许通过 `osascript with administrator privileges` 弹原生密码框提权——这是执行方式，不改变风险评估结论。详见 `docs/superpowers/specs/2026-07-28-sudo-cask-auto-elevation-design.md`。
+
 Priority: 高
 Complexity: 高
 Dependencies: `UpgradePlanner`、`UpgradePolicyStore`、`UpgradeFailureAnalyzer`、Homebrew/mas 扫描结果
