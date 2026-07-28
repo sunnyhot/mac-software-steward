@@ -209,7 +209,7 @@ private struct LocalSoftwareRowView: View {
 
     private var rowTint: Color {
         switch progress?.status {
-        case .running, .queued: return Color.accentColor.opacity(0.04)
+        case .running, .queued, .needsSudo: return Color.accentColor.opacity(0.04)
         case .succeeded: return Color.green.opacity(0.04)
         case .failed, .cancelled, .timedOut: return Color.red.opacity(0.04)
         case .warning: return Color.yellow.opacity(0.04)

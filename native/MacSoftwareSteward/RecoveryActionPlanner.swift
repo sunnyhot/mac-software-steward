@@ -34,6 +34,9 @@ enum RecoveryActionPlanner {
             return RecoveryAction(kind: .openStorageSettings, title: "清理空间", systemImage: "internaldrive")
         case .retryInTerminal:
             return RecoveryAction(kind: .copyTerminalCommand, title: "复制终端命令", systemImage: "terminal")
+        case .promptAdminPassword:
+            // sudo 已弹框失败（用户取消/密码错），允许重试 → 再点会再弹密码框。
+            return RecoveryAction(kind: .retryPackage, title: "重试", systemImage: "lock.shield")
         case .openLog:
             return RecoveryAction(kind: .openJobs, title: "查看日志", systemImage: "terminal")
         }

@@ -334,7 +334,7 @@ struct UpdateRow: View {
 
     private var rowAccent: Color {
         switch progress?.status {
-        case .running, .queued:
+        case .running, .queued, .needsSudo:
             return .accentColor
         case .succeeded:
             return .green
@@ -470,12 +470,13 @@ struct PackageProgressBadge: View {
         case .cancelled: return "stop.circle.fill"
         case .timedOut: return "timer"
         case .warning: return "exclamationmark.triangle.fill"
+        case .needsSudo: return "lock.shield"
         }
     }
 
     private var color: Color {
         switch progress.status {
-        case .queued, .running: return .accentColor
+        case .queued, .running, .needsSudo: return .accentColor
         case .succeeded: return .green
         case .failed, .cancelled, .timedOut: return .red
         case .warning: return .yellow
@@ -665,7 +666,7 @@ struct PackageProgressDetail: View {
     @ViewBuilder
     private func actionButton(for action: FailureActionType) -> some View {
         switch action {
-        case .retry, .quitAndRetry, .reimport, .cleanup, .repairPerms:
+        case .retry, .quitAndRetry, .reimport, .cleanup, .repairPerms, .promptAdminPassword:
             Button {
                 Task { await model.retryPackage(progress.packageID, inboxStore: inboxStore) }
             } label: {

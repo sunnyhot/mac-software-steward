@@ -74,6 +74,7 @@ enum PackageUpgradeStatus: String, Hashable {
     case cancelled = "已取消"
     case timedOut = "超时"
     case warning = "需确认"
+    case needsSudo = "等待管理员授权"   /// 需要 sudo 密码，等待批量重试（不立即算失败）
 }
 
 enum AppUpdateDetectorKind: String, Codable, Hashable {
@@ -322,6 +323,11 @@ struct UpgradeStep: Hashable {
     var packageName: String?
 }
 
+/// sudo 重试批次：一批弹一次密码框，串行跑完同批次所有 needsSudo 的 cask。
+struct SudoRetryBatch: Hashable {
+    var steps: [UpgradeStep]
+}
+
 /// 用户可执行的恢复操作类型
 enum FailureActionType: String, Hashable {
     case retry          /// 重试升级
@@ -334,6 +340,7 @@ enum FailureActionType: String, Hashable {
     case checkNetwork   /// 检查网络
     case freeDisk       /// 释放磁盘空间
     case retryInTerminal /// 在终端中手动运行
+    case promptAdminPassword  /// 系统已弹出密码框进行 sudo 升级（失败后允许重试再弹）
 }
 
 enum RecoveryActionKind: String, Codable, Hashable {
