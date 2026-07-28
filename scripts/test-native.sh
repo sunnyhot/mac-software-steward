@@ -415,6 +415,8 @@ run_test StewardModelScanGuardTest \
   "$SRC/UpgradeVerifier.swift" \
   "$SRC/MaintenancePlanner.swift" \
   "$SRC/MaintenanceExecutor.swift" \
+  "$SRC/SudoScriptBuilder.swift" \
+  "$SRC/SudoScriptParser.swift" \
   "$SRC/StewardModel.swift" \
   "$TESTS/StewardModelScanGuardTest.swift"
 

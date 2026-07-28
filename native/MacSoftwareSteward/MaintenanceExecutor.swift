@@ -33,6 +33,8 @@ final class MaintenanceExecutor: ObservableObject {
     private var activeJobCount = 0
     private var pendingJobQueue: [(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool, inboxStore: InboxStore?, autoRepairProfile: AutomationProfile?)] = []
     private var activeCancellationTokens: [UUID: CommandCancellationToken] = [:]
+    /// 当前 job 并发批里挂起等待 sudo 重试的步骤（runJob 结束时结算）。
+    private var sudoPendingSteps: [UpgradeStep] = []
     private var downloadMonitorTasks: [String: Task<Void, Never>] = [:]
     private var downloadSizeTasks: [String: Task<Void, Never>] = [:]
     private var downloadExpectedSizes: [String: Int64] = [:]
@@ -343,6 +345,21 @@ final class MaintenanceExecutor: ObservableObject {
             )
         }
 
+        // 并发批结束后：若收集到 needsSudo 步骤，弹一次密码框批量重试。
+        if !shouldStop && !sudoPendingSteps.isEmpty {
+            let pending = sudoPendingSteps
+            sudoPendingSteps.removeAll()
+            let sudoFailures = await runSudoRetryBatch(jobID: id, steps: pending, token: token)
+            failedCount += sudoFailures
+            if sudoFailures > 0 && firstErrorCode == nil {
+                firstErrorCode = 1
+            }
+        } else {
+            // 批被取消：挂起的 needsSudo 包按取消处理，不留中间态。
+            for step in sudoPendingSteps { markCancelled(step) }
+            sudoPendingSteps.removeAll()
+        }
+
         activeCancellationTokens[id] = nil
 
         var finalStatus: JobStatus = .succeeded
@@ -598,6 +615,14 @@ final class MaintenanceExecutor: ObservableObject {
                 updateJob(id) {
                     $0.log.append(LogLine(stream: "system", text: "已清理失效的 Homebrew Cask：\(step.packageName ?? command.display)"))
                 }
+            } else if UpgradeFailureAnalyzer.requiresSudo(in: result.recentOutput) {
+                // 卡在 sudo 密码：不立即计失败，挂起等待批量 osascript 重试。
+                markNeedsSudo(step)
+                sudoPendingSteps.append(step)
+                host?.executorRequestsDerivedDataRecompute()
+                updateJob(id) {
+                    $0.log.append(LogLine(stream: "system", text: "需要管理员密码：\(command.display)，将批量请求授权后重试"))
+                }
             } else {
                 failedCount += 1
                 if firstErrorCode == nil { firstErrorCode = code }
@@ -619,6 +644,108 @@ final class MaintenanceExecutor: ObservableObject {
         }
 
         return false
+    }
+
+    /// sudo 批次重试：把所有 needsSudo 的 cask 合并成一条 osascript，
+    /// 弹一次系统原生密码框串行跑完，按 __RC__ 标记回填每个包状态。
+    /// 密码由 macOS SecurityServer 处理，本进程绝不接触。
+    /// 返回 sudo 批新增的失败数（供 runJob 累加到 failedCount）。
+    private func runSudoRetryBatch(
+        jobID id: UUID,
+        steps: [UpgradeStep],
+        token: CommandCancellationToken
+    ) async -> Int {
+        var failedInSudo = 0
+        guard !steps.isEmpty else { return 0 }
+
+        // 1. 解析 brew 绝对路径与最小环境（CommandRunner.processEnvironment 是 private，
+        //    这里只取 PATH/HOME 透传给 root shell）。
+        guard let brewPath = try? await requireCommand("brew") else {
+            for step in steps {
+                failedInSudo += 1
+                markFailed(step, analysis: FailureAnalysis(
+                    summary: "未找到 brew 命令，无法请求管理员授权升级。",
+                    suggestion: "请确认 Homebrew 已安装，然后重试。",
+                    action: .rescan,
+                    copyText: "",
+                    command: step.command.display
+                ))
+            }
+            return failedInSudo
+        }
+        let pathEnv = CommandRunner.defaultPath
+        let homeEnv = ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory()
+
+        // 2. 按包名顺序拼脚本。
+        let packageNames = steps.compactMap { $0.packageName }
+        let script = SudoScriptBuilder.script(brewPath: brewPath, packageNames: packageNames, pathEnv: pathEnv, homeEnv: homeEnv)
+        let args = SudoScriptBuilder.osaArguments(script)
+
+        updateJob(id) {
+            $0.log.append(LogLine(stream: "system", text: "sudo 批次：osascript 提权执行 \(packageNames.count) 个 cask 升级"))
+            $0.log.append(LogLine(stream: "system", text: "正在请求管理员密码…"))
+        }
+        updateUpgradeProgress(currentPackage: "等待管理员授权升级 \(packageNames.count) 个软件")
+
+        // 3. 流式跑 osascript，实时回传日志。
+        appendLog(id: id, stream: "command", text: "$ osascript -e <do shell script ... with administrator privileges>（\(packageNames.joined(separator: ", "))）")
+        let result = await CommandRunner.runStreamingDetailed(
+            "/usr/bin/osascript",
+            arguments: args,
+            timeout: 7200,
+            cancellationToken: token
+        ) { [weak self] stream, text in
+            Task { @MainActor in
+                self?.appendLog(id: id, stream: stream, text: text)
+            }
+        }
+
+        // 4. 用户取消密码框 / osascript 整体失败：每个包标失败，允许重试。
+        if result.terminationReason == .cancelled {
+            for step in steps { markCancelled(step) }
+            updateJob(id) { $0.log.append(LogLine(stream: "system", text: "sudo 批次已取消")) }
+            return failedInSudo
+        }
+        if result.code != 0 && !result.recentOutput.contains("__RC_") {
+            // 整条 osascript 失败（如用户在密码框点取消、密码错误 3 次），无任何包完成。
+            for step in steps {
+                failedInSudo += 1
+                markFailed(step, analysis: FailureAnalysis(
+                    summary: "管理员授权未完成，sudo 升级被取消。",
+                    suggestion: "点击「重试」会再次弹出密码框。若密码错误，请确认管理员密码后重试。",
+                    action: .promptAdminPassword,
+                    copyText: step.command.display,
+                    command: step.command.display
+                ))
+            }
+            updateJob(id) { $0.log.append(LogLine(stream: "system", text: "sudo 批次授权未完成，退出码 \(result.code)")) }
+            return failedInSudo
+        }
+
+        // 5. 解析 __RC__ 标记，回填每个包。
+        let parsed = SudoScriptParser.outcomes(in: result.recentOutput, count: packageNames.count)
+        for (index, step) in steps.enumerated() {
+            let pkgIndex = index + 1
+            let outcome = parsed.first { $0.packageIndex == pkgIndex }
+                ?? SudoScriptParser.Outcome(packageIndex: pkgIndex, exitCode: -1, outputSegment: "")
+
+            if outcome.exitCode == 0 {
+                markSucceeded(step)
+                host?.executorRequestsDerivedDataRecompute()
+                updateJob(id) { $0.log.append(LogLine(stream: "system", text: "sudo 升级完成：\(step.packageName ?? "")")) }
+            } else {
+                // 已 sudo 过仍失败：不是密码问题，走常规失败分析，但 action 降级为可重试。
+                var analysis = failureAnalysis(command: step.command.display, code: outcome.exitCode, output: outcome.outputSegment)
+                if analysis.action == .retryInTerminal {
+                    analysis.action = .promptAdminPassword
+                }
+                failedInSudo += 1
+                markFailed(step, analysis: analysis)
+                host?.executorRequestsDerivedDataRecompute()
+                updateJob(id) { $0.log.append(LogLine(stream: "system", text: "sudo 升级失败：\(step.packageName ?? "")，退出码 \(outcome.exitCode)")) }
+            }
+        }
+        return failedInSudo
     }
 
     private func cleanupStaleBrewCaskIfNeeded(
@@ -882,6 +1009,16 @@ final class MaintenanceExecutor: ObservableObject {
             packageName: packageName,
             status: .cancelled,
             detail: "升级已取消"
+        )
+    }
+
+    private func markNeedsSudo(_ step: UpgradeStep) {
+        guard let packageID = step.packageID, let packageName = step.packageName else { return }
+        packageProgress[packageID] = PackageUpgradeProgress(
+            packageID: packageID,
+            packageName: packageName,
+            status: .needsSudo,
+            detail: "等待管理员授权升级"
         )
     }
 
