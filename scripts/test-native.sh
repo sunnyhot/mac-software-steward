@@ -428,6 +428,12 @@ run_test SudoScriptBuilderTest \
   "$SRC/SudoScriptBuilder.swift" \
   "$TESTS/SudoScriptBuilderTest.swift"
 
+run_test SudoScriptParserTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/SudoScriptParser.swift" \
+  "$TESTS/SudoScriptParserTest.swift"
+
 run_test UpgradeFailureAnalyzerTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
