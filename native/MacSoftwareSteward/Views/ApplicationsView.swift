@@ -70,8 +70,6 @@ struct ApplicationsView: View {
 
 private struct LocalSoftwareRowView: View {
     @EnvironmentObject private var model: StewardModel
-    @EnvironmentObject private var inboxStore: InboxStore
-    @EnvironmentObject private var automationProfile: AutomationProfileStore
     var row: LocalSoftwareRow
 
     @State private var isHovered = false
@@ -120,21 +118,6 @@ private struct LocalSoftwareRowView: View {
                     Badge(text: statusTitle, color: statusColor)
                 }
 
-                if row.isOutdated, let package = row.package {
-                    Button {
-                        Task {
-                            await model.upgrade(
-                                package,
-                                inboxStore: inboxStore,
-                                autoRepairProfile: automationProfile.profile
-                            )
-                        }
-                    } label: {
-                        Label("升级", systemImage: "play")
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(!row.isUpgradeable || model.isPackageActive(package.id))
-                }
             }
 
             HStack(spacing: 8) {
@@ -222,7 +205,6 @@ private struct LocalSoftwareRowView: View {
 
 struct ApplicationRow: View {
     @EnvironmentObject private var model: StewardModel
-    @EnvironmentObject private var automationProfile: AutomationProfileStore
     var app: AppItem
 
     @State private var isHovered = false
@@ -270,7 +252,7 @@ struct ApplicationRow: View {
                     .controlSize(.small)
                     .help(updatePresentation.primaryTitle)
 
-                    ForEach(updatePresentation.secondaryActions.filter { $0.kind != .directReplace }, id: \.self) { action in
+                    ForEach(updatePresentation.secondaryActions, id: \.self) { action in
                         Button {
                             model.performUpdateAction(action, for: app)
                         } label: {
@@ -399,17 +381,6 @@ private struct ManualUpdateActionCallout: View {
                 .controlSize(.small)
             }
 
-            if let directReplaceAction {
-                Button {
-                    model.performUpdateAction(directReplaceAction, for: app)
-                } label: {
-                    Label(directReplaceAction.title, systemImage: directReplaceAction.systemImage)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .tint(.orange)
-                .help("下载更新包并直接覆盖当前 App，风险自负")
-            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -420,9 +391,6 @@ private struct ManualUpdateActionCallout: View {
         )
     }
 
-    private var directReplaceAction: AppUpdateAction? {
-        presentation.secondaryActions.first { $0.kind == .directReplace }
-    }
 }
 
 private struct AppDiagnosticDetail: View {

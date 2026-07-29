@@ -4,8 +4,6 @@ import Foundation
 struct AutomationIssueInboxFactoryTest {
     static func main() {
         var profile = AutomationProfile.manualDefault
-        profile.onboardingCompleted = true
-        profile.automationEnabled = true
         profile.dailyInspectionEnabled = true
 
         let healthyURL = FileManager.default.temporaryDirectory

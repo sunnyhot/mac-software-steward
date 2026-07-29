@@ -181,7 +181,7 @@ struct BrewUpdateRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("升级前 brew update")
                     .font(.body)
-                Text("一键升级和自动升级前先执行 brew update")
+                Text("维护计划和自动升级执行前先运行 brew update")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -222,18 +222,14 @@ struct DailyInspectionToggleRow: View {
     @EnvironmentObject private var model: StewardModel
     @EnvironmentObject private var automationProfile: AutomationProfileStore
 
-    private var access: AutomationMaintenanceAccess {
-        AutomationMaintenanceAccessPresenter.dailyInspectionAccess(for: automationProfile.profile)
-    }
-
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("启用每日巡检")
                     .font(.body)
-                Text(access.caption)
+                Text("按计划扫描软件，并根据低风险处理方式执行或提醒")
                     .font(.caption)
-                    .foregroundStyle(access.canEnable || model.dailyInspectionEnabled ? Color.secondary : .orange)
+                    .foregroundStyle(.secondary)
             }
             Spacer()
             Toggle("", isOn: Binding(
@@ -241,7 +237,6 @@ struct DailyInspectionToggleRow: View {
                 set: { enabled in
                     Task {
                         if enabled {
-                            guard access.canEnable else { return }
                             automationProfile.setDailyInspectionEnabled(true)
                             await model.enableDailyInspection()
                         } else {
@@ -253,8 +248,7 @@ struct DailyInspectionToggleRow: View {
             ))
             .toggleStyle(.switch)
             .labelsHidden()
-            .disabled(!access.canEnable && !model.dailyInspectionEnabled)
-            .help(access.disabledReason ?? access.caption)
+            .help("启用或停用每日后台巡检")
         }
     }
 }
@@ -423,46 +417,30 @@ struct AutoDownloadUpdateRow: View {
     }
 }
 
-struct AutomationProfileRow: View {
+struct LowRiskHandlingRow: View {
     @EnvironmentObject private var automationProfile: AutomationProfileStore
 
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("自动化管家")
+                Text("低风险项目")
                     .font(.body)
-                Text(statusText)
+                Text("选择每日巡检发现低风险更新后的处理方式")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            if automationProfile.profile.onboardingCompleted {
-                Toggle("", isOn: Binding(
-                    get: { automationProfile.profile.automationEnabled },
-                    set: { automationProfile.setAutomationEnabled($0) }
-                ))
-                .toggleStyle(.switch)
-                .labelsHidden()
-            } else {
-                Button("开启") {
-                    automationProfile.completeOnboarding(enableAutomation: true)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                Button("保持手动") {
-                    automationProfile.completeOnboarding(enableAutomation: false)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+            Picker("", selection: Binding(
+                get: { automationProfile.profile.lowRiskAutoUpgradeEnabled },
+                set: { automationProfile.setLowRiskAutoUpgradeEnabled($0) }
+            )) {
+                Text("仅提醒").tag(false)
+                Text("自动处理").tag(true)
             }
+            .pickerStyle(.segmented)
+            .frame(width: 180)
+            .labelsHidden()
         }
-    }
-
-    private var statusText: String {
-        if !automationProfile.profile.onboardingCompleted {
-            return "首次开启后只自动处理低风险维护事项"
-        }
-        return automationProfile.profile.automationEnabled ? "低风险维护可自动处理" : "当前保持手动维护"
     }
 }
 

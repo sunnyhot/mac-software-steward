@@ -50,8 +50,6 @@ enum AutoRepairPolicy: String, Codable, CaseIterable, Identifiable {
 }
 
 struct AutomationProfile: Codable, Equatable {
-    var onboardingCompleted: Bool
-    var automationEnabled: Bool
     var dailyInspectionEnabled: Bool
     var lowRiskAutoUpgradeEnabled: Bool
     var notificationPolicy: NotificationPolicy
@@ -59,8 +57,6 @@ struct AutomationProfile: Codable, Equatable {
     var autoRepairPolicy: AutoRepairPolicy
 
     static let manualDefault = AutomationProfile(
-        onboardingCompleted: false,
-        automationEnabled: false,
         dailyInspectionEnabled: false,
         lowRiskAutoUpgradeEnabled: false,
         notificationPolicy: .decisionsAndFailures,
@@ -90,22 +86,6 @@ final class AutomationProfileStore: ObservableObject {
         profile = Self.load(from: fileURL)
     }
 
-    func completeOnboarding(enableAutomation: Bool) {
-        profile.onboardingCompleted = true
-        profile.automationEnabled = enableAutomation
-        profile.dailyInspectionEnabled = enableAutomation
-        profile.lowRiskAutoUpgradeEnabled = enableAutomation
-        save()
-    }
-
-    func setAutomationEnabled(_ enabled: Bool) {
-        profile.automationEnabled = enabled
-        if !enabled {
-            profile.lowRiskAutoUpgradeEnabled = false
-        }
-        save()
-    }
-
     func setDailyInspectionEnabled(_ enabled: Bool) {
         profile.dailyInspectionEnabled = enabled
         save()
@@ -113,9 +93,6 @@ final class AutomationProfileStore: ObservableObject {
 
     func setLowRiskAutoUpgradeEnabled(_ enabled: Bool) {
         profile.lowRiskAutoUpgradeEnabled = enabled
-        if enabled {
-            profile.automationEnabled = true
-        }
         save()
     }
 

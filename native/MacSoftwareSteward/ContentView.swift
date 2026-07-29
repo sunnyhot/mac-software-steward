@@ -35,14 +35,21 @@ struct ContentView: View {
                 .disabled(model.isScanning)
 
                 Button {
-                    model.prepareUpgradePlan(inboxStore: inboxStore)
+                    Task {
+                        await model.checkAndPrepareMaintenance(
+                            regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
+                            notificationPolicy: automationProfile.profile.notificationPolicy,
+                            inboxStore: inboxStore
+                        )
+                    }
                 } label: {
                     Label(
-                        model.hasRunningJob ? "升级中" : "一键升级",
+                        maintenanceActionTitle,
                         systemImage: model.hasRunningJob ? "hourglass" : "bolt.fill"
                     )
                 }
-                .disabled(model.availableUpdates.isEmpty || model.hasRunningJob || model.isConfirmingUpgradePlan)
+                .disabled(model.isScanning || model.hasRunningJob || model.isConfirmingUpgradePlan)
+                .help("重新扫描软件并生成可确认的维护计划")
             }
         }
         .sheet(isPresented: $updater.showUpdateDialog) {
@@ -53,6 +60,13 @@ struct ContentView: View {
             UpgradePlanView()
                 .environmentObject(model)
         }
+    }
+
+    private var maintenanceActionTitle: String {
+        if model.isScanning { return "检查中" }
+        if model.hasRunningJob { return "维护中" }
+        if model.isConfirmingUpgradePlan { return "准备中" }
+        return "检查并维护"
     }
 }
 

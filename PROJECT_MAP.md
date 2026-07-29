@@ -5,7 +5,7 @@
 原生 macOS 应用，扫描本机软件并管理升级。覆盖 `/Applications`、Homebrew（formula/cask）和 Mac App Store（通过 `mas` CLI）。SwiftUI + AppKit，arm64-only，macOS 14.0+。仓库没有 Xcode 工程文件，构建由脚本直接调用 `xcrun swiftc`。
 
 - **Bundle ID**: `local.codex.MacSoftwareSteward`
-- **版本**: 0.13.20（`package.json` 与 `native/Info.plist` 需要同步）
+- **版本**: 0.17.0（`package.json` 与 `native/Info.plist` 需要同步）
 - **GitHub 仓库**: `sunnyhot/mac-software-steward`
 
 ## 文件结构
@@ -14,17 +14,17 @@
 
 | 文件 | 行数 | 职责 |
 |------|------|------|
-| `App.swift` | 约 268 | `@main` 入口、窗口/menu bar、命令菜单、全局 model 注入 |
-| `ContentView.swift` | 约 454 | 应用主导航与页面容器，具体页面已拆到 `Views/` |
-| `Views/*.swift` | 约 4960 | 可升级、本机应用、管理来源、性能、设置、任务日志和共享 UI 组件 |
+| `App.swift` | 约 280 | `@main` 入口、原生窗口/menu bar、命令菜单、全局 model 注入 |
+| `ContentView.swift` | 约 430 | 应用主导航、原生工具栏与页面容器 |
+| `Views/*.swift` | 约 4400 | 维护总览、可升级、本机软件、自动化策略、任务/历史、设置和共享 UI 组件 |
 | `Models.swift` | 约 419 | 扫描结果、包、任务、进度、策略等核心数据模型 |
-| `StewardModel.swift` | 约 1296 | `@MainActor ObservableObject` 核心 ViewModel，负责扫描、升级队列、性能记录、进度、巡检状态与派生数据 |
+| `StewardModel.swift` | 约 690 | `@MainActor ObservableObject` 核心 ViewModel，负责扫描、升级队列、进度、巡检状态与派生数据 |
 | `SoftwareScanning.swift` | 约 12 | 扫描协议与线上实现，用于隔离 `StewardModel` 与扫描器并支持测试替身 |
 | `Scanner.swift` | 约 742 | `SoftwareScanner`：扫描 Applications/Homebrew/mas，记录阶段耗时，缓存普通 App 更新能力，并有界并发检查 Sparkle appcast |
 | `RegularAppUpdateDiscovery.swift` / `RegularAppUpdateDiscoveryCache.swift` | 约 415 | 普通 `.app` 更新能力识别和基于 `Info.plist` 元数据的本机缓存 |
-| `ScanPerformance.swift` / `ScanPerformanceStore.swift` / `ScanPerformancePresenter.swift` | 约 304 | 扫描阶段耗时模型、本机性能历史持久化和性能页展示数据 |
+| `ScanPerformance.swift` | 约 125 | 扫描阶段耗时模型，用于扫描结果和诊断日志，不单独持久化 |
 | `CommandRunner.swift` | 约 398 | `Process` 封装，支持超时、流式输出、PATH 查找和并发安全输出收集 |
-| `UpgradePlanner.swift` / `UpgradePolicyStore.swift` | 约 300 | 一键升级计划、包级策略、跳过原因和选择状态 |
+| `UpgradePlanner.swift` / `UpgradePolicyStore.swift` | 约 300 | 维护计划、包级策略、跳过原因和选择状态 |
 | `UpgradeProgressPresenter.swift` / `PackageProgressParser.swift` | 约 251 | Homebrew/mas 输出解析与包级阶段展示 |
 | `UpgradeFailureAnalyzer.swift` / `UpgradeVerifier.swift` | 约 161 | 升级失败解释与升级后状态校验 |
 | `BrewCaskCleanupDetector.swift` | 约 53 | Cask 残留、覆盖冲突和清理动作识别 |
@@ -55,7 +55,7 @@
 
 ### 测试 (`tests/`)
 
-`tests/` 目前包含 40+ 个 Swift 单文件测试，覆盖应用外观策略、单实例策略、更新弹框布局、自更新 SHA-256 校验、安装脚本回滚、普通 App 更新诊断、规则/历史 presenter、导入导出 bundle、扫描 token 规范化、扫描防重入、升级策略/计划/历史、失败分析、下载监控、进度解析和升级校验等核心逻辑。
+`tests/` 包含 Swift 单文件测试，覆盖应用外观、单实例策略、更新弹框、自更新安全、普通 App 更新诊断、历史展示、扫描防重入、升级策略/计划/历史、失败分析、下载监控、进度解析和升级校验等核心逻辑。
 
 ## 架构与数据流
 
@@ -67,7 +67,7 @@ App.swift (@main)
   │   │   ├─ scanBrew() → brew list/outdated/info
   │   │   ├─ scanMas() → mas list/outdated
   │   │   └─ classify() → 关联 .app 与 brew-cask/mas
-  │   ├─ UpgradePlanner + UpgradePolicyStore → 一键升级计划
+  │   ├─ UpgradePlanner + UpgradePolicyStore → 可确认的维护计划
   │   ├─ CommandRunner.runStreaming() → UpgradeJob + PackageProgress
   │   └─ DailyInspectionScheduler → LaunchAgent → MacSoftwareStewardAgent
   ├─ AppUpdateModel

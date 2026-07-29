@@ -16,9 +16,8 @@ struct AppManualUpdatePresenterTest {
         precondition(updatePresentation.statusTitle == "需手动更新")
         precondition(updatePresentation.primaryAction?.kind == .openApp)
         precondition(updatePresentation.primaryTitle == "打开应用更新")
-        precondition(updatePresentation.guidanceText.contains("直接替换"))
-        precondition(updatePresentation.secondaryActions.map(\.kind.rawValue) == ["directReplace", "revealInFinder"])
-        precondition(updatePresentation.secondaryActions.first?.title == "直接替换（风险自负）")
+        precondition(updatePresentation.guidanceText.contains("应用内提示"))
+        precondition(updatePresentation.secondaryActions.map(\.kind) == [.revealInFinder])
 
         let checkableWithUpdater = makeApp(
             updateState: "checkable",

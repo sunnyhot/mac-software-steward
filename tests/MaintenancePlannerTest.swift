@@ -20,8 +20,6 @@ struct MaintenancePlannerTest {
 
         // MARK: profile.lowRiskAutoUpgradeEnabled = true 的完整分类
         let profileOn = AutomationProfile(
-            onboardingCompleted: true,
-            automationEnabled: true,
             dailyInspectionEnabled: true,
             lowRiskAutoUpgradeEnabled: true,
             notificationPolicy: .decisionsAndFailures,

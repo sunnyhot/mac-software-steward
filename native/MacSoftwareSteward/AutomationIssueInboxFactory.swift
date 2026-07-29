@@ -7,9 +7,7 @@ enum AutomationIssueInboxFactory {
         profile: AutomationProfile,
         dailyInspectionEnabled: Bool
     ) -> InboxItem? {
-        guard profile.onboardingCompleted,
-              profile.automationEnabled,
-              profile.dailyInspectionEnabled,
+        guard profile.dailyInspectionEnabled,
               !dailyInspectionEnabled else {
             return nil
         }

@@ -125,11 +125,17 @@ struct MacSoftwareStewardApp: App {
                 .keyboardShortcut("r", modifiers: [.command])
                 .disabled(model.isScanning)
 
-                Button("一键升级可管理软件") {
-                    model.prepareUpgradePlan(inboxStore: inboxStore)
+                Button("检查并维护") {
+                    Task {
+                        await model.checkAndPrepareMaintenance(
+                            regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
+                            notificationPolicy: automationProfile.profile.notificationPolicy,
+                            inboxStore: inboxStore
+                        )
+                    }
                 }
                 .keyboardShortcut("u", modifiers: [.command, .shift])
-                .disabled(model.availableUpdates.isEmpty || model.hasRunningJob || model.isConfirmingUpgradePlan)
+                .disabled(model.isScanning || model.hasRunningJob || model.isConfirmingUpgradePlan)
 
                 Button("检查应用更新") {
                     Task { await updater.checkForUpdates() }
@@ -220,11 +226,17 @@ private struct MenuBarUpgradeMenu: View {
 
         Button {
             openMainWindowOnce()
-            model.prepareUpgradePlan(inboxStore: inboxStore)
+            Task {
+                await model.checkAndPrepareMaintenance(
+                    regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
+                    notificationPolicy: automationProfile.profile.notificationPolicy,
+                    inboxStore: inboxStore
+                )
+            }
         } label: {
-            Label(model.isConfirmingUpgradePlan ? "准备中" : "一键升级", systemImage: model.isConfirmingUpgradePlan ? "hourglass" : "bolt.fill")
+            Label(maintenanceActionTitle, systemImage: model.isConfirmingUpgradePlan ? "hourglass" : "bolt.fill")
         }
-        .disabled(model.availableUpdates.isEmpty || model.hasRunningJob || model.isConfirmingUpgradePlan)
+        .disabled(model.isScanning || model.hasRunningJob || model.isConfirmingUpgradePlan)
 
         if model.hasRunningJob {
             Text(activeUpgradeCount > 0 ? "\(activeUpgradeCount) 个升级任务执行中" : "升级任务运行中")
@@ -259,6 +271,13 @@ private struct MenuBarUpgradeMenu: View {
 
     private var summaryText: String {
         menuBarPresentation.summary
+    }
+
+    private var maintenanceActionTitle: String {
+        if model.isScanning { return "检查中..." }
+        if model.hasRunningJob { return "维护中" }
+        if model.isConfirmingUpgradePlan { return "准备中" }
+        return "检查并维护"
     }
 
     private var menuBarPresentation: MenuBarStatusPresentation {

@@ -53,7 +53,6 @@ struct MaintenanceDashboardPresentation: Equatable {
     var metrics: [MaintenanceDashboardMetric]
     var priorityTasks: [MaintenanceDashboardTaskRow]
     var lastRunSummary: String?
-    var canStartSmartMaintenance: Bool
 }
 
 enum MaintenanceDashboardPresenter {
@@ -138,8 +137,7 @@ enum MaintenanceDashboardPresenter {
             healthTintRole: healthTintRole,
             metrics: metrics,
             priorityTasks: priorityTasks,
-            lastRunSummary: lastRunSummary,
-            canStartSmartMaintenance: !isScanning && !isExecuting
+            lastRunSummary: lastRunSummary
         )
     }
 
@@ -150,16 +148,16 @@ enum MaintenanceDashboardPresenter {
     ) -> (title: String, detail: String, symbol: String, tintRole: MaintenanceStatusTintRole) {
         switch health {
         case .ready:
-            return ("准备就绪", "点击「开始智能维护」扫描并升级本机软件", "checkmark.shield", .neutral)
+            return ("准备就绪", "点击「检查并维护」扫描软件并生成维护计划", "checkmark.shield", .neutral)
         case .scanning:
             return ("正在扫描", "正在检查本机软件更新状态", "magnifyingglass", .scanning)
         case .executing:
-            return ("正在维护", "正在自动升级低风险软件", "bolt.circle", .accent)
+            return ("正在维护", "正在执行已确认的升级任务", "bolt.circle", .accent)
         case .hasFailures:
             return ("有 \(failedCount) 个失败需处理", "失败项保留在列表中，可重试或查看日志", "exclamationmark.triangle", .failure)
         case .hasAutomatic:
             let count = plan?.automaticItems.count ?? 0
-            return ("发现 \(count) 个可自动升级", "点击「开始智能维护」自动处理低风险项", "arrow.down.circle", .attention)
+            return ("发现 \(count) 个可自动升级", "点击「检查并维护」查看并确认维护计划", "arrow.down.circle", .attention)
         case .needsConfirmation:
             let count = plan?.confirmationItems.count ?? 0
             return ("\(count) 个升级需确认", "部分软件需要你确认后才能升级", "hand.raised", .attention)

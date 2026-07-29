@@ -75,14 +75,20 @@ struct MaintenanceOverviewView: View {
             Spacer(minLength: 12)
 
             Button {
-                Task { await startSmartMaintenance() }
+                Task {
+                    await model.checkAndPrepareMaintenance(
+                        regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
+                        notificationPolicy: automationProfile.profile.notificationPolicy,
+                        inboxStore: inboxStore
+                    )
+                }
             } label: {
-                Label("开始智能维护", systemImage: "bolt.fill")
+                Label("检查并维护", systemImage: "bolt.fill")
                     .font(.system(size: 14, weight: .medium, design: .rounded))
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(!presentation.canStartSmartMaintenance)
+            .disabled(model.isScanning || model.hasRunningJob || model.isConfirmingUpgradePlan)
         }
         .padding(16)
         .polishedTaskSurface(tint: tintColor(for: presentation.healthTintRole), isActive: presentation.health == .scanning || presentation.health == .executing)
@@ -156,49 +162,6 @@ struct MaintenanceOverviewView: View {
         }
     }
 
-    // MARK: - Actions
-
-    private func startSmartMaintenance() async {
-        // 开始智能维护：先扫描，然后用 MaintenancePlanner 分类，自动执行 automatic 组。
-        await model.scanSoftware(
-            regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
-            notificationPolicy: automationProfile.profile.notificationPolicy,
-            inboxStore: inboxStore
-        )
-
-        guard let scan = model.scan else { return }
-        let plan = MaintenancePlanner.makePlan(
-            scan: scan,
-            policyStore: model.policyStore,
-            includeGreedy: model.includeGreedy,
-            profile: automationProfile.profile
-        )
-
-        // 只执行 automatic 组。
-        guard plan.hasAutomatic else { return }
-
-        var steps: [UpgradeStep] = []
-        for item in plan.automaticItems {
-            guard let package = item.package else { continue }
-            do {
-                let command = try await model.executor.command(for: package, includeGreedy: model.includeGreedy)
-                steps.append(UpgradeStep(command: command, packageID: package.id, packageName: package.name))
-            } catch {
-                // command 构建失败（如 brew 不在 PATH），跳过该项，错误会在逐包升级时暴露。
-                continue
-            }
-        }
-
-        if !steps.isEmpty {
-            model.executor.enqueueJob(
-                label: "智能维护：自动升级 \(steps.count) 个低风险项",
-                steps: steps,
-                rescanAfterSuccess: true,
-                inboxStore: inboxStore,
-                autoRepairProfile: automationProfile.profile
-            )
-        }
-    }
 }
 
 // tintColor(for:) 复用 SharedComponents.swift 中的全局实现。

@@ -110,7 +110,6 @@ enum AppUpdateActionKind: String, Codable, Hashable {
     case openApp
     case openUpdater
     case revealInFinder
-    case directReplace
 }
 
 struct AppUpdateAction: Codable, Hashable {
@@ -321,11 +320,6 @@ struct UpgradeStep: Hashable {
     var command: UpgradeCommand
     var packageID: String?
     var packageName: String?
-}
-
-/// sudo 重试批次：一批弹一次密码框，串行跑完同批次所有 needsSudo 的 cask。
-struct SudoRetryBatch: Hashable {
-    var steps: [UpgradeStep]
 }
 
 /// 用户可执行的恢复操作类型

@@ -29,7 +29,7 @@ struct MaintenanceStatusPresenterTest {
             failedPackageCount: 0
         )
         precondition(pending.title == "发现 3 个可升级项目", "Unexpected pending title: \(pending.title)")
-        precondition(pending.detail == "可先检查策略，再执行一键升级", "Unexpected pending detail: \(pending.detail)")
+        precondition(pending.detail == "使用“检查并维护”生成可确认的维护计划", "Unexpected pending detail: \(pending.detail)")
         precondition(pending.symbol == "arrow.down.circle", "Unexpected pending symbol: \(pending.symbol)")
         precondition(pending.tintRole == .attention)
         precondition(!pending.isActive)

@@ -74,7 +74,7 @@ enum MaintenanceStatusPresenter {
         if updateCount > 0 {
             return MaintenanceStatusPresentation(
                 title: "发现 \(updateCount) 个可升级项目",
-                detail: "可先检查策略，再执行一键升级",
+                detail: "使用“检查并维护”生成可确认的维护计划",
                 symbol: "arrow.down.circle",
                 tintRole: .attention,
                 isActive: false,

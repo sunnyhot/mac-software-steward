@@ -6,7 +6,6 @@ enum AutoRepairDecider {
         profile: AutomationProfile,
         attemptedPackageIDs: Set<String>
     ) -> RecoveryAction? {
-        guard profile.automationEnabled else { return nil }
         guard profile.autoRepairPolicy == .allowLowRisk else { return nil }
         guard !attemptedPackageIDs.contains(progress.packageID) else { return nil }
         return RecoveryActionPlanner.actions(for: progress)

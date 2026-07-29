@@ -37,7 +37,7 @@ build/MacSoftwareSteward.app
 - `brew outdated --json=v2` 可升级项检测，支持 `--greedy`
 - 可选的 Mac App Store 扫描与升级，依赖 `mas` CLI
 - `mas` CLI 缺失时可从原生 App Store 页自动执行 `brew install mas`
-- 单个软件手动升级与一键升级可管理来源
+- “检查并维护”会重新扫描并生成可确认的维护计划
 - 任务日志与命令输出追踪
 - 每日巡检：通过用户级 LaunchAgent 定时扫描，发现可升级项后自动升级
 - 维护总览：集中展示健康状态、待处理事项、优先任务和最近维护摘要
@@ -55,11 +55,11 @@ build/MacSoftwareSteward.app
 | Homebrew formula | 是 | 是，`brew upgrade <name>` |
 | Homebrew cask | 是 | 是，`brew upgrade --cask <name>` |
 | Mac App Store | 需要 `mas` | 是，`mas upgrade <app-id>` |
-| 普通 `.app` | 是 | 不通用；Sparkle 更新源若提供 `.zip/.dmg` 安装包，可选择“直接替换（风险自负）” |
+| 普通 `.app` | 是 | 不通用；提供应用内更新或厂商更新器指引 |
 
 如果 `mas` CLI 未安装，但 Homebrew 可用，原生应用会显示“安装 mas CLI”按钮。安装任务会进入任务日志，成功后自动重新扫描。
 
-普通 `.app` 没有统一升级协议。很多应用使用 Sparkle、Chrome Keystone、Adobe 更新器、JetBrains Toolbox、Microsoft AutoUpdate、内置更新器或专有安装器；应用会识别并直接展示这些更新能力。对 Sparkle 已发现新版本且 appcast 提供 `.zip/.dmg` 包的应用，界面会额外提供“直接替换（风险自负）”，执行前会二次确认并校验 bundle id，其他普通 App 仍建议走应用内或厂商更新器。
+普通 `.app` 没有统一升级协议。很多应用使用 Sparkle、Chrome Keystone、Adobe 更新器、JetBrains Toolbox、Microsoft AutoUpdate、内置更新器或专有安装器；应用会识别并展示这些更新能力，引导用户使用应用内或厂商更新器，不直接覆盖已安装的 App。
 
 本机软件列表会展开普通 App 的更新诊断：
 
@@ -67,14 +67,14 @@ build/MacSoftwareSteward.app
 - 无法确认版本：例如只能识别厂商更新器，但没有可靠可用版本
 - 诊断详情：识别器、置信度、安装版本、可用版本、Feed URL、来源和建议处理动作
 
-## 一键升级安全策略
+## 维护计划安全策略
 
-一键升级会先生成升级计划，展示将执行的命令、来源、版本变化、风险标签与跳过原因。用户确认后才会执行选中的项目。
+“检查并维护”会先重新扫描，再生成维护计划，展示将执行的命令、来源、版本变化、风险标签与跳过原因。用户确认后才会执行选中的项目。
 
 每个可管理软件可以设置升级策略：
 
-- 自动升级：进入一键升级计划并允许每日巡检自动执行
-- 确认后升级：进入一键升级计划，但每日巡检不会自动执行
+- 自动升级：进入维护计划并允许每日巡检自动执行
+- 确认后升级：进入维护计划，但每日巡检不会自动执行
 - 仅提醒：显示更新，不默认执行
 - 跳过：显示跳过原因，不进入自动执行
 

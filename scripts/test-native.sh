@@ -68,10 +68,6 @@ run_test AppManualUpdatePresenterTest \
   "$SRC/AppManualUpdatePresenter.swift" \
   "$TESTS/AppManualUpdatePresenterTest.swift"
 
-run_test ManualAppReplacementInstallerTest \
-  "$SRC/ManualAppReplacementInstaller.swift" \
-  "$TESTS/ManualAppReplacementInstallerTest.swift"
-
 run_test AppTabVisibilityTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
@@ -113,11 +109,6 @@ run_test ScanPerformanceModelTest \
 run_test AutomationProfileStoreTest \
   "$SRC/AutomationProfileStore.swift" \
   "$TESTS/AutomationProfileStoreTest.swift"
-
-run_test AutomationMaintenanceAccessTest \
-  "$SRC/AutomationProfileStore.swift" \
-  "$SRC/AutomationMaintenanceAccess.swift" \
-  "$TESTS/AutomationMaintenanceAccessTest.swift"
 
 run_test HistoryPresenterTest \
   "$SRC/InspectionReportStore.swift" \
@@ -410,7 +401,6 @@ run_test StewardModelScanGuardTest \
   "$SRC/DownloadAcceleration.swift" \
   "$SRC/AcceleratedDownloader.swift" \
   "$SRC/PackageProgressParser.swift" \
-  "$SRC/ManualAppReplacementInstaller.swift" \
   "$SRC/SourceDiagnostics.swift" \
   "$SRC/UpgradeVerifier.swift" \
   "$SRC/MaintenancePlanner.swift" \

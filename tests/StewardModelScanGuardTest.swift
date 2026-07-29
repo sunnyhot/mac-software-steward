@@ -102,7 +102,6 @@ struct StewardModelScanGuardTest {
             recoveryAction: .rescan
         )
         var autoRepairProfile = AutomationProfile.manualDefault
-        autoRepairProfile.automationEnabled = true
         autoRepairProfile.autoRepairPolicy = .allowLowRisk
 
         let repairTask = Task {
@@ -196,40 +195,9 @@ struct StewardModelScanGuardTest {
         await manualCaskModel.scanSoftware()
         precondition(manualCaskModel.allUpgradeablePackages.map(\.id) == [executableFormula.id, manualCask.id])
         precondition(manualCaskModel.availableUpdates.map(\.id) == [executableFormula.id])
-
-        let directReplacementWorkDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("direct-replacement-download-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directReplacementWorkDirectory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directReplacementWorkDirectory) }
-
-        let acceleratedStrategies = [
-            DownloadAccelerationStrategy(kind: .inheritedProxy, proxyURLString: "http://127.0.0.1:7890"),
-            DownloadAccelerationStrategy(kind: .direct, proxyURLString: nil)
-        ]
-        let acceleratedSource = FileManager.default.temporaryDirectory
-            .appendingPathComponent("direct-replacement-source-\(UUID().uuidString).zip")
-        var directReplacementAttempts: [String] = []
-        let directReplacementModel = StewardModel(
-            scanner: StaticScanner(result: appUpdateScanResult()),
-            downloadStrategiesProvider: { acceleratedStrategies },
-            acceleratedDownloadRunner: { attempt, _ in
-                directReplacementAttempts.append(attempt.strategy.title)
-                if attempt.index == 0 {
-                    throw AcceleratedDownloadError.retryable("模拟慢下载")
-                }
-                try Data("replacement".utf8).write(to: acceleratedSource)
-                return acceleratedSource
-            }
-        )
-
-        let directReplacementArchive = try await directReplacementModel.downloadManualReplacement(
-            from: URL(string: "https://example.com/TestApp.zip")!,
-            into: directReplacementWorkDirectory
-        )
-        let directReplacementText = try String(contentsOf: directReplacementArchive, encoding: .utf8)
-        precondition(directReplacementAttempts == ["环境代理", "直连"], "Unexpected direct replacement attempts: \(directReplacementAttempts)")
-        precondition(directReplacementArchive.lastPathComponent == "TestApp.zip")
-        precondition(directReplacementText == "replacement")
+        await manualCaskModel.checkAndPrepareMaintenance()
+        precondition(manualCaskModel.showingUpgradePlan)
+        precondition(Set(manualCaskModel.upgradePlanRows.map(\.packageID)) == [executableFormula.id, manualCask.id])
 
         let notificationDispatcher = RecordingNotificationDispatcher()
         let notificationModel = StewardModel(

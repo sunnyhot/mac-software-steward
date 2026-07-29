@@ -235,17 +235,6 @@ struct VersionChangeLabel: View {
     }
 }
 
-struct InfoLine: View {
-    var text: String
-
-    var body: some View {
-        Label(text, systemImage: "info.circle")
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
 struct WarningLine: View {
     var text: String
 
@@ -262,37 +251,6 @@ struct WarningLine: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .polishedTaskSurface(tint: .red, isActive: false)
-    }
-}
-
-struct InstallToolPrompt: View {
-    var title: String
-    var text: String
-    var symbol: String
-
-    var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.accentColor.opacity(0.1))
-                    .frame(width: 40, height: 40)
-
-                Image(systemName: symbol)
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(.headline, design: .rounded))
-                Text(text)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-        .padding(14)
-        .polishedTaskSurface(tint: .accentColor, isActive: false)
     }
 }
 
