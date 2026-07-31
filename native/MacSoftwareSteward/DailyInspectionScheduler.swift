@@ -122,26 +122,6 @@ enum DailyInspectionScheduler {
         }
     }
 
-    static func runNowCommand(includeGreedy: Bool, runBrewUpdate: Bool, helperPath: String) throws -> UpgradeCommand {
-        guard FileManager.default.isExecutableFile(atPath: helperPath) else {
-            throw StewardError.message("未找到后台巡检 helper，请先重新构建原生应用。")
-        }
-
-        var arguments = ["daily-check", "--auto-upgrade"]
-        if includeGreedy {
-            arguments.append("--greedy")
-        }
-        if runBrewUpdate {
-            arguments.append("--brew-update")
-        }
-
-        return UpgradeCommand(
-            executable: helperPath,
-            arguments: arguments,
-            display: ([helperPath] + arguments).joined(separator: " ")
-        )
-    }
-
     static func recentLog(maxBytes: Int = 60_000) -> String {
         guard let handle = try? FileHandle(forReadingFrom: logURL) else {
             return ""

@@ -91,7 +91,7 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     /// 所有待处理升级/提醒（用于 UI 显示，包含需手动处理的自更新 cask）
     @Published var allUpgradeablePackages: [UpdatablePackage] = []
 
-    /// 未在升级中的可升级包（用于 upgradeAll，排除 queued/running/succeeded）
+    /// 未在升级中的可升级包（排除 queued/running/succeeded）
     @Published var availableUpdates: [UpdatablePackage] = []
 
     /// 数据变化时一次性计算并更新 allUpgradeablePackages 和 availableUpdates
@@ -153,13 +153,6 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
         }
 
         return nil
-    }
-
-    var upgradeAllHelpText: String {
-        if availableUpdates.isEmpty {
-            return "没有可自动升级的项目。"
-        }
-        return "升级 \(availableUpdates.count) 个可管理软件（已跳过正在升级的项）。"
     }
 
     var canInstallMasCLI: Bool {
@@ -339,10 +332,6 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
         showingUpgradePlan = false
     }
 
-    func upgradeAll() async {
-        prepareUpgradePlan()
-    }
-
     private func upgradeSelectedPlanRows(
         _ rows: [UpgradePlanRow],
         inboxStore: InboxStore? = nil,
@@ -481,20 +470,6 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
         do {
             try await DailyInspectionScheduler.uninstall()
             refreshDailyInspectionStatus()
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    func runDailyInspectionNow() {
-        do {
-            let command = try DailyInspectionScheduler.runNowCommand(
-                includeGreedy: includeGreedy,
-                runBrewUpdate: runBrewUpdate,
-                helperPath: dailyAgentPath
-            )
-            executor.startJob(label: "立即巡检并自动升级", commands: [command], rescanAfterSuccess: true)
-            selectedTab = .jobs
         } catch {
             errorMessage = error.localizedDescription
         }

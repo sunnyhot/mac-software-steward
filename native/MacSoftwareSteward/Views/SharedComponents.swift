@@ -551,14 +551,6 @@ func statusColor(_ status: JobStatus) -> Color {
     }
 }
 
-func logLineColor(_ stream: String) -> Color {
-    switch stream {
-    case "stdout": return .green
-    case "stderr": return .red
-    default: return .secondary
-    }
-}
-
 // MARK: - 来源错误恢复卡片
 
 struct ErrorRecoveryCard: View {

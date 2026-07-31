@@ -49,11 +49,6 @@ final class UpgradePolicyStore: ObservableObject {
         save()
     }
 
-    func clearOverride(forPackageID packageID: String) {
-        overrides.removeValue(forKey: packageID)
-        save()
-    }
-
     func replaceOverrides(_ newOverrides: [String: UpgradePolicy]) {
         overrides = newOverrides
         save()

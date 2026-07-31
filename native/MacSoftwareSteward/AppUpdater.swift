@@ -79,10 +79,6 @@ final class AppUpdateModel: ObservableObject {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Mac 软件管家"
     }
 
-    var repositoryName: String {
-        "\(owner)/\(repo)"
-    }
-
     var downloadStatusText: String {
         if let fraction = downloadFraction {
             let percent = "\(Int(fraction * 100))%"

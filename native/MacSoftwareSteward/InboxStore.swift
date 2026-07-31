@@ -139,12 +139,6 @@ final class InboxStore: ObservableObject {
         save()
     }
 
-    func replaceAll(_ newItems: [InboxItem]) {
-        items = newItems
-        sortNewestFirst()
-        save()
-    }
-
     func reload() {
         items = Self.load(from: fileURL)
     }
