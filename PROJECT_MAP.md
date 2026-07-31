@@ -25,6 +25,9 @@
 | `ScanPerformance.swift` | 约 125 | 扫描阶段耗时模型，用于扫描结果和诊断日志，不单独持久化 |
 | `CommandRunner.swift` | 约 398 | `Process` 封装，支持超时、流式输出、PATH 查找和并发安全输出收集 |
 | `UpgradePlanner.swift` / `UpgradePolicyStore.swift` | 约 300 | 维护计划、包级策略、跳过原因和选择状态 |
+| `MaintenanceExecutor.swift` | 约 1158 | 升级任务队列、并发执行、进度、下载加速与 sudo 批量提权的执行器 |
+| `MaintenanceCommandResolver.swift` | 约 43 | 从 `MaintenanceExecutor` 提取的无状态命令解析（包→命令、token 校验、PATH 定位） |
+| `MaintenanceFailureAnalyzer.swift` | 约 82 | 从 `MaintenanceExecutor` 提取的无状态失败分析（退出码/输出→摘要、建议、动作） |
 | `UpgradeProgressPresenter.swift` / `PackageProgressParser.swift` | 约 251 | Homebrew/mas 输出解析与包级阶段展示 |
 | `UpgradeFailureAnalyzer.swift` / `UpgradeVerifier.swift` | 约 161 | 升级失败解释与升级后状态校验 |
 | `BrewCaskCleanupDetector.swift` | 约 53 | Cask 残留、覆盖冲突和清理动作识别 |

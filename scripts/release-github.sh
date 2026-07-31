@@ -33,6 +33,8 @@ git restore --worktree --staged native/Resources/AppIcon.iconset >/dev/null 2>&1
 git add \
   .gitignore \
   README.md \
+  CHANGELOG.md \
+  PROJECT_MAP.md \
   package.json \
   native \
   scripts \
