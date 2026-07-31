@@ -83,12 +83,6 @@ run_test MaintenanceStatusPresenterTest \
   "$SRC/MaintenanceStatusPresenter.swift" \
   "$TESTS/MaintenanceStatusPresenterTest.swift"
 
-run_test SettingsPagePresenterTest \
-  "$SRC/ScanPerformance.swift" \
-  "$SRC/Models.swift" \
-  "$SRC/SettingsPagePresenter.swift" \
-  "$TESTS/SettingsPagePresenterTest.swift"
-
 run_test ApplicationVisibilityPresenterTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
@@ -404,6 +398,8 @@ run_test StewardModelScanGuardTest \
   "$SRC/SourceDiagnostics.swift" \
   "$SRC/UpgradeVerifier.swift" \
   "$SRC/MaintenancePlanner.swift" \
+  "$SRC/MaintenanceCommandResolver.swift" \
+  "$SRC/MaintenanceFailureAnalyzer.swift" \
   "$SRC/MaintenanceExecutor.swift" \
   "$SRC/SudoScriptBuilder.swift" \
   "$SRC/SudoScriptParser.swift" \

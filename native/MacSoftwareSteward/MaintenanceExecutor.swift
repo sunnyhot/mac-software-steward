@@ -42,7 +42,6 @@ final class MaintenanceExecutor: ObservableObject {
     private var downloadAccelerationAttempts: [String: CommandAccelerationAttempt] = [:]
     private var downloadAccelerationRetryRequests: [String: SlowDownloadDecision] = [:]
     private var downloadAccelerationTokens: [String: CommandCancellationToken] = [:]
-    private var downloadAccelerationCleanups: [String: Int] = [:]
     private var downloadSlowSampleState: [String: (startedAt: Date, lastGrowthAt: Date, lastByteCount: Int64, consecutiveSlowSamples: Int)] = [:]
     private var autoRepairAttemptedPackageIDs: Set<String> = []
 
@@ -477,22 +476,6 @@ final class MaintenanceExecutor: ObservableObject {
             if result.terminationReason == .cancelled,
                let decision = downloadAccelerationRetryRequests.removeValue(forKey: key),
                let next = attempt.next() {
-                if let packageName = step.packageName,
-                   isHomebrewCaskUpgrade(step),
-                   DownloadAccelerationPolicy.shouldCleanPartialDownload(
-                       for: decision,
-                       cleanupCount: downloadAccelerationCleanups[key] ?? 0,
-                       maxCleanups: DownloadAccelerationConfig.production.maxCacheCleanups
-                   ) {
-                    do {
-                        if let removed = try HomebrewDownloadMonitor.removeIncompleteDownload(packageName: packageName) {
-                            downloadAccelerationCleanups[key, default: 0] += 1
-                            appendLog(id: id, stream: "system", text: "检测到 Homebrew 缓存文件无增长，已清理当前 cask 的未完成下载：\(removed.lastPathComponent)")
-                        }
-                    } catch {
-                        appendLog(id: id, stream: "system", text: "清理 Homebrew 未完成下载失败：\(error.localizedDescription)")
-                    }
-                }
                 appendLog(id: id, stream: "system", text: "\(decision.message)，正在切换到\(next.currentStrategy.title)重试。")
                 attempt = next
                 continue
@@ -853,39 +836,11 @@ final class MaintenanceExecutor: ObservableObject {
     // MARK: - Command resolution
 
     func command(for package: UpdatablePackage, includeGreedy: Bool) async throws -> UpgradeCommand {
-        switch package {
-        case .brew(let brewPackage):
-            try validateBrewToken(brewPackage.name)
-            let brew = try await requireCommand("brew")
-            var args = ["upgrade"]
-            if brewPackage.kind == "cask" {
-                args.append("--cask")
-                if includeGreedy { args.append("--greedy") }
-            }
-            args.append(brewPackage.name)
-            return UpgradeCommand(executable: brew, arguments: args, display: (["brew"] + args).joined(separator: " "))
-
-        case .mas(let app):
-            guard app.appId.allSatisfy(\.isNumber) else {
-                throw StewardError.message("无效的 Mac App Store app id。")
-            }
-            let mas = try await requireCommand("mas")
-            return UpgradeCommand(executable: mas, arguments: ["upgrade", app.appId], display: "mas upgrade \(app.appId)")
-        }
+        try await MaintenanceCommandResolver.command(for: package, includeGreedy: includeGreedy)
     }
 
     func requireCommand(_ command: String) async throws -> String {
-        if let path = await CommandRunner.commandPath(command) {
-            return path
-        }
-        throw StewardError.message("\(command) is not installed or not in PATH.")
-    }
-
-    private func validateBrewToken(_ token: String) throws {
-        let pattern = "^[A-Za-z0-9][A-Za-z0-9@._+-]*$"
-        if token.range(of: pattern, options: .regularExpression) == nil {
-            throw StewardError.message("无效的 Homebrew token。")
-        }
+        try await MaintenanceCommandResolver.requireCommand(command)
     }
 
     // MARK: - Download acceleration
@@ -1104,7 +1059,6 @@ final class MaintenanceExecutor: ObservableObject {
         downloadAccelerationRetryRequests[packageID] = nil
         downloadAccelerationAttempts[packageID] = nil
         downloadAccelerationStrategies[packageID] = nil
-        downloadAccelerationCleanups[packageID] = nil
         downloadSlowSampleState[packageID] = nil
     }
 
@@ -1185,82 +1139,11 @@ final class MaintenanceExecutor: ObservableObject {
     // MARK: - Failure analysis
 
     private func failureAnalysis(command: String, code: Int32, output: String) -> FailureAnalysis {
-        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
-        let summary: String
-        let suggestion: String
-        let action: FailureActionType?
-
-        let signalNum = code - 128
-        if code < 0 || (signalNum > 0 && signalNum < 32) {
-            if code < 0 {
-                summary = "升级命令超时被终止。"
-                suggestion = "请点击「重试」，如果持续超时，可能是网络或依赖问题。"
-            } else {
-                summary = "升级命令崩溃（信号 \(signalNum)），进程异常退出。"
-                suggestion = "请尝试在终端手动运行 `\(command)` 检查具体错误，然后点击「重试」。如果持续崩溃，该工具可能与当前系统版本不兼容。"
-            }
-            action = .retry
-            var copyText = ""
-            copyText += "失败原因：\(summary)\n"
-            copyText += "解决方案：\(suggestion)\n"
-            copyText += "命令：\(command)"
-            if !trimmed.isEmpty {
-                copyText += "\n最近输出：\n\(trimmed)"
-            }
-            return FailureAnalysis(summary: summary, suggestion: suggestion, action: action, copyText: copyText, command: command)
-        }
-
-        if let hint = UpgradeFailureAnalyzer.knownFailureHint(in: trimmed) {
-            summary = hint.summary
-            suggestion = hint.suggestion
-            action = hint.action
-        } else if let errorLine = firstErrorLine(in: trimmed) {
-            summary = errorLine
-            suggestion = "请点击「查看日志」了解详情，或尝试重新升级。"
-            action = .retry
-        } else {
-            summary = "升级过程中遇到未知错误。"
-            suggestion = "请点击「查看日志」查看完整信息，或稍后再试一次。"
-            action = .openLog
-        }
-
-        var copyText = ""
-        copyText += "失败原因：\(summary)\n"
-        copyText += "解决方案：\(suggestion)\n"
-        copyText += "命令：\(command)"
-        if !trimmed.isEmpty {
-            copyText += "\n最近输出：\n\(trimmed)"
-        }
-
-        return FailureAnalysis(summary: summary, suggestion: suggestion, action: action, copyText: copyText, command: command)
-    }
-
-    private func firstErrorLine(in output: String) -> String? {
-        output
-            .split(whereSeparator: \.isNewline)
-            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            .first { line in
-                let lowercased = line.lowercased()
-                return lowercased.contains("error")
-                    || lowercased.contains("failed")
-                    || lowercased.contains("failure")
-                    || lowercased.contains("permission denied")
-                    || lowercased.contains("already exists")
-                    || lowercased.contains("checksum")
-                    || lowercased.contains("not found")
-            }
+        MaintenanceFailureAnalyzer.failureAnalysis(command: command, code: code, output: output)
     }
 }
 
 // MARK: - Supporting types (moved from StewardModel)
-
-struct FailureAnalysis {
-    var summary: String
-    var suggestion: String
-    var action: FailureActionType?
-    var copyText: String
-    var command: String
-}
 
 enum JobRescanPolicy {
     static func shouldRescanAfterJobCompletion(rescanAfterSuccess: Bool, status: JobStatus) -> Bool {

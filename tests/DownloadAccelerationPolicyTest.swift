@@ -105,11 +105,5 @@ struct DownloadAccelerationPolicyTest {
         }
         """
         precondition(DownloadAccelerationPolicy.systemProxyURLString(from: disabledScutilOutput) == nil)
-
-        precondition(!DownloadAccelerationPolicy.shouldCleanPartialDownload(for: .stalled("下载长时间没有增长"), cleanupCount: 0, maxCleanups: 2), "Automatic strategy switching should preserve Homebrew incomplete downloads for resume")
-        precondition(!DownloadAccelerationPolicy.shouldCleanPartialDownload(for: .stalled("下载长时间没有增长"), cleanupCount: 1, maxCleanups: 2))
-        precondition(!DownloadAccelerationPolicy.shouldCleanPartialDownload(for: .stalled("下载长时间没有增长"), cleanupCount: 2, maxCleanups: 2))
-        precondition(!DownloadAccelerationPolicy.shouldCleanPartialDownload(for: .slow("下载速度持续偏低"), cleanupCount: 0, maxCleanups: 2))
-        precondition(!DownloadAccelerationPolicy.shouldCleanPartialDownload(for: .healthy, cleanupCount: 0, maxCleanups: 2))
     }
 }

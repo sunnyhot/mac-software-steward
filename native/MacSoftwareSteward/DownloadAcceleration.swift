@@ -219,17 +219,6 @@ enum DownloadAccelerationPolicy {
         }
     }
 
-    static func shouldCleanPartialDownload(
-        for decision: SlowDownloadDecision,
-        cleanupCount: Int,
-        maxCleanups: Int
-    ) -> Bool {
-        _ = decision
-        _ = cleanupCount
-        _ = maxCleanups
-        return false
-    }
-
     static func systemProxyURLString(from scutilOutput: String) -> String? {
         let lines = scutilOutput.components(separatedBy: .newlines)
 

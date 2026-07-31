@@ -17,18 +17,3 @@ enum SettingsPageGroup: String, Equatable {
         }
     }
 }
-
-enum SettingsPagePresenter {
-    static let visibleGroups: [SettingsPageGroup] = [.general, .appUpdates]
-    static let automationPolicyDestination: AppTab = .rules
-
-    private static let automationStrategyOwnedGroupTitles: Set<String> = [
-        "自动化管家",
-        "扫描与升级策略",
-        "每日巡检"
-    ]
-
-    static func settingsOwnsGroup(title: String) -> Bool {
-        !automationStrategyOwnedGroupTitles.contains(title)
-    }
-}
