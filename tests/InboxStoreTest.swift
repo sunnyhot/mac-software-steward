@@ -77,5 +77,30 @@ struct InboxStoreTest {
 
         foregroundStore.reload()
         precondition(foregroundStore.items.map(\.id) == [externalID, secondID])
+
+        // 扫描恢复正常后，旧的问题条目需要被主动清理。
+        // 复现“扫描错误一直显示”的回归：扫描成功时 factory 不再生成 source:homebrew 条目，
+        // 因此必须由 store 按残留 sourceID 退出，否则旧错误条目会永久残留。
+        let staleBrewIssue = InboxItem(
+            kind: .sourceIssue,
+            severity: .warning,
+            title: "Homebrew 来源需要处理",
+            summary: "Homebrew 扫描遇到错误：boom",
+            sourceID: "source:homebrew",
+            createdAt: Date(timeIntervalSince1970: 40),
+            actions: [
+                InboxAction(title: "重新扫描", systemImage: "arrow.clockwise", kind: .rescan)
+            ]
+        )
+        precondition(externalStore.add(staleBrewIssue) == true)
+        precondition(externalStore.items.map(\.sourceID).contains("source:homebrew"))
+
+        externalStore.retireSourceIssues(notPresentIn: ["source:mas"])
+        precondition(!externalStore.items.contains { $0.sourceID == "source:homebrew" })
+        precondition(externalStore.items.contains { $0.sourceID == "job:failed" })
+        precondition(externalStore.items.contains { $0.sourceID == "app:/Applications/Sparkle.app" })
+
+        let persistedAfterRetire = InboxStore(fileURL: url)
+        precondition(!persistedAfterRetire.items.contains { $0.sourceID == "source:homebrew" })
     }
 }

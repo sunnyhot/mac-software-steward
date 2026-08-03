@@ -190,8 +190,14 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
         recomputeDerivedData()
         var newInboxItems: [InboxItem] = []
         if let inboxStore {
-            let inboxItems = SourceIssueInboxFactory.items(from: result)
-                + AppUpdateInboxFactory.items(from: result.applications.items)
+            let sourceIssueItems = SourceIssueInboxFactory.items(from: result)
+            let appUpdateItems = AppUpdateInboxFactory.items(from: result.applications.items)
+            // 扫描恢复正常时 factory 不再生成对应来源条目，需主动退出残留的旧问题条目，
+            // 否则“扫描错误”会永久停留在收件箱（且已落盘，重启仍在）。
+            inboxStore.retireSourceIssues(
+                notPresentIn: Set(sourceIssueItems.compactMap(\.sourceID))
+            )
+            let inboxItems = sourceIssueItems + appUpdateItems
             for item in inboxItems {
                 if inboxStore.add(item) {
                     newInboxItems.append(item)

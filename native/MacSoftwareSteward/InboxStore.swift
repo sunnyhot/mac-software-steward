@@ -139,6 +139,22 @@ final class InboxStore: ObservableObject {
         save()
     }
 
+    /// 主动退出已不存在的来源问题条目。
+    ///
+    /// 扫描恢复正常后，`SourceIssueInboxFactory` 不再为对应来源生成条目，
+    /// 仅靠 `add(_:)` 无法清除旧条目（没有新条目触发覆盖）。
+    /// 调用方传入本次扫描仍存在的来源 sourceID 集合，
+    /// 其余 `sourceIssue` 条目会被移除，避免错误提示永久残留。
+    func retireSourceIssues(notPresentIn presentSourceIDs: Set<String>) {
+        let before = items.count
+        items.removeAll { item in
+            item.kind == .sourceIssue
+                && item.sourceID.map { !presentSourceIDs.contains($0) } ?? false
+        }
+        guard items.count != before else { return }
+        save()
+    }
+
     func reload() {
         items = Self.load(from: fileURL)
     }
