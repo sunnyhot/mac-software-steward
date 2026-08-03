@@ -123,6 +123,15 @@ enum MaintenancePlanner {
         if policy == .skip {
             return blockedItem(package: package, risk: risk, policy: policy, reason: "策略设置为跳过", commandDisplay: commandDisplay)
         }
+        if package.manualUpdateOnly {
+            return reminderItem(
+                package: package,
+                risk: risk,
+                policy: policy,
+                reason: "Homebrew 尚未收录目标版本，请使用应用内更新或官方安装包",
+                commandDisplay: commandDisplay
+            )
+        }
         if risk.automationDecision == .blockExecution {
             return blockedItem(package: package, risk: risk, policy: policy, reason: blockedReason(for: risk), commandDisplay: commandDisplay)
         }

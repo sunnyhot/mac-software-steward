@@ -6,6 +6,7 @@ struct HomebrewCaskMetadata: Hashable {
     var autoUpdates: Bool
     var releaseFeedURLString: String
     var releasePageURLString: String
+    var appArtifactPaths: [String]
 }
 
 struct HomebrewCaskUpdateAdvisory: Hashable {
@@ -93,8 +94,35 @@ enum HomebrewCaskUpdateAdvisor {
             version: version,
             autoUpdates: autoUpdates,
             releaseFeedURLString: repository.map { "https://github.com/\($0.owner)/\($0.repo)/releases.atom" } ?? "",
-            releasePageURLString: repository.map { "https://github.com/\($0.owner)/\($0.repo)/releases/latest" } ?? ""
+            releasePageURLString: repository.map { "https://github.com/\($0.owner)/\($0.repo)/releases/latest" } ?? "",
+            appArtifactPaths: appArtifactPaths(from: item)
         )
+    }
+
+    private static func appArtifactPaths(from item: [String: Any]) -> [String] {
+        guard let artifacts = item["artifacts"] as? [[String: Any]] else { return [] }
+        var paths: [String] = []
+        for artifact in artifacts where artifact["app"] != nil {
+            if let target = artifact["target"] as? String, !target.isEmpty {
+                paths.append(expandHomeDirectory(in: target))
+                continue
+            }
+            let appNames: [String]
+            if let names = artifact["app"] as? [String] {
+                appNames = names
+            } else if let name = artifact["app"] as? String {
+                appNames = [name]
+            } else {
+                appNames = []
+            }
+            paths.append(contentsOf: appNames.map { "/Applications/\($0)" })
+        }
+        return Array(Set(paths)).sorted()
+    }
+
+    private static func expandHomeDirectory(in path: String) -> String {
+        guard path == "~" || path.hasPrefix("~/") else { return path }
+        return NSString(string: path).expandingTildeInPath
     }
 
     private static func githubRepository(from values: [String]) -> (owner: String, repo: String)? {

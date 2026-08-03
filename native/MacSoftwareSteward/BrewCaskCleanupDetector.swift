@@ -6,6 +6,13 @@ struct BrewCaskAppPresence {
 }
 
 enum BrewCaskCleanupDetector {
+    static func hasStaleInstallRecord(
+        expectedAppPaths: [String],
+        fileExists: (String) -> Bool = FileManager.default.fileExists(atPath:)
+    ) -> Bool {
+        !expectedAppPaths.isEmpty && expectedAppPaths.allSatisfy { !fileExists($0) }
+    }
+
     static func cleanupCandidate(
         command: UpgradeCommand,
         output: String,

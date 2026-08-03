@@ -3,6 +3,16 @@ import Foundation
 @main
 struct BrewCaskCleanupDetectorTest {
     static func main() {
+        precondition(!BrewCaskCleanupDetector.hasStaleInstallRecord(expectedAppPaths: []))
+        precondition(BrewCaskCleanupDetector.hasStaleInstallRecord(
+            expectedAppPaths: ["/Applications/Missing.app"],
+            fileExists: { _ in false }
+        ))
+        precondition(!BrewCaskCleanupDetector.hasStaleInstallRecord(
+            expectedAppPaths: ["/Applications/Present.app", "/Applications/Missing.app"],
+            fileExists: { $0.hasSuffix("Present.app") }
+        ))
+
         let command = UpgradeCommand(
             executable: "/opt/homebrew/bin/brew",
             arguments: ["upgrade", "--cask", "--greedy", "microsoft-excel"],

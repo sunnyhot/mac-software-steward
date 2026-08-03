@@ -175,6 +175,19 @@ struct StewardModelScanGuardTest {
             upgradeable: false,
             manualUpdateOnly: true
         )
+        let staleCask = BrewPackage(
+            id: "brew:cask:removed-app",
+            kind: "cask",
+            name: "removed-app",
+            installedVersion: "1.0",
+            currentVersion: "",
+            pinned: false,
+            autoUpdates: false,
+            outdated: false,
+            upgradeable: false,
+            expectedAppPaths: ["/Applications/Removed App.app"],
+            hasStaleInstallRecord: true
+        )
         let manualCaskModel = StewardModel(scanner: StaticScanner(result: ScanResult(
             scannedAt: Date(timeIntervalSince1970: 0),
             includeGreedy: false,
@@ -188,18 +201,22 @@ struct StewardModelScanGuardTest {
                 error: "",
                 includeGreedy: false,
                 formulae: [executableFormula],
-                casks: [manualCask]
+                casks: [manualCask, staleCask]
             ),
             mas: MasScan(available: false, path: "", error: "", apps: [])
         )))
         await manualCaskModel.scanSoftware()
         precondition(manualCaskModel.allUpgradeablePackages.map(\.id) == [executableFormula.id, manualCask.id])
+        precondition(manualCaskModel.staleCaskRecords.map(\.id) == [staleCask.id])
         precondition(
-            Set(manualCaskModel.executableUpdates.map(\.id)) == [executableFormula.id, manualCask.id],
-            "可执行集合应包含 Formula 与 auto_updates Cask，实际：\(manualCaskModel.executableUpdates.map(\.id))"
+            Set(manualCaskModel.updateAttentionPackages.map(\.id)) == [executableFormula.id, manualCask.id, staleCask.id]
         )
         precondition(
-            Set(manualCaskModel.availableUpdates.map(\.id)) == [executableFormula.id, manualCask.id],
+            Set(manualCaskModel.executableUpdates.map(\.id)) == [executableFormula.id],
+            "Homebrew 尚未收录的 Cask 不应进入可执行集合，实际：\(manualCaskModel.executableUpdates.map(\.id))"
+        )
+        precondition(
+            Set(manualCaskModel.availableUpdates.map(\.id)) == [executableFormula.id],
             "一键升级集合应与可执行集合一致，实际：\(manualCaskModel.availableUpdates.map(\.id))"
         )
         await manualCaskModel.checkAndPrepareMaintenance()

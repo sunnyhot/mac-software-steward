@@ -7,7 +7,7 @@ struct UpdatesView: View {
     @State private var selectedFilter: UpdateFilter = .all
 
     var updates: [UpdatablePackage] {
-        let base = filter(model.executableUpdates, query: model.query) { package in
+        let base = filter(model.updateAttentionPackages, query: model.query) { package in
             "\(package.name) \(package.source) \(package.installedVersion) \(package.currentVersion)"
         }
         return base.filter { package in
@@ -84,9 +84,9 @@ struct UpdatesView: View {
     private var filterHeader: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("可执行升级")
+                Text("升级与解决建议")
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
-                Text("Homebrew 与 Mac App Store 中可直接执行的升级会出现在这里。")
+                Text("可直接执行的升级，以及需要切换渠道或使用官方更新器的项目会出现在这里。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -232,9 +232,16 @@ struct UpdateRow: View {
     @EnvironmentObject private var inboxStore: InboxStore
     @EnvironmentObject private var automationProfile: AutomationProfileStore
     var package: UpdatablePackage
+    @State private var showingChannelSwitchConfirmation = false
+    @State private var showingStaleCleanupConfirmation = false
 
     var progress: PackageUpgradeProgress? {
         model.packageProgress[package.id]
+    }
+
+    private var manualResolution: ManualCaskUpdateResolution? {
+        guard !package.hasStaleInstallRecord else { return nil }
+        return ManualCaskUpdateResolver.resolution(for: package)
     }
 
     private var packageActionDisabled: Bool {
@@ -255,7 +262,11 @@ struct UpdateRow: View {
 
                 Spacer()
 
-                if let progress {
+                if package.hasStaleInstallRecord {
+                    Badge(text: "安装记录残留", color: .red)
+                } else if manualResolution != nil {
+                    Badge(text: "渠道待同步", color: .yellow)
+                } else if let progress {
                     PackageProgressBadge(progress: progress)
                 } else {
                     PackageStatusBadge(package: package)
@@ -273,7 +284,13 @@ struct UpdateRow: View {
             }
             .padding(.leading, 40)
 
-            if let progress {
+            if package.hasStaleInstallRecord {
+                staleInstallRecordDetail
+            } else if let manualResolution {
+                manualResolutionDetail(manualResolution)
+            }
+
+            if let progress, manualResolution == nil {
                 PackageProgressDetail(progress: progress)
             }
 
@@ -285,6 +302,40 @@ struct UpdateRow: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .polishedTaskSurface(tint: rowAccent, isActive: isActiveRow)
+        .alert("切换 Homebrew 渠道？", isPresented: $showingChannelSwitchConfirmation) {
+            Button("取消", role: .cancel) {}
+                .keyboardShortcut(.cancelAction)
+            Button("切换并安装", role: .destructive) {
+                guard let resolution = manualResolution else { return }
+                Task {
+                    await model.performManualCaskResolution(
+                        resolution,
+                        for: package,
+                        inboxStore: inboxStore,
+                        autoRepairProfile: automationProfile.profile
+                    )
+                }
+            }
+        } message: {
+            if let resolution = manualResolution {
+                Text("将移除当前 \(package.name) 的 Homebrew 安装记录，并安装 \(resolution.targetCaskToken) \(resolution.targetVersion)。不会使用 --zap 删除个人配置。")
+            }
+        }
+        .alert("移除 Homebrew 残留记录？", isPresented: $showingStaleCleanupConfirmation) {
+            Button("取消", role: .cancel) {}
+                .keyboardShortcut(.cancelAction)
+            Button("移除记录", role: .destructive) {
+                Task {
+                    await model.removeStaleCaskRecord(
+                        package,
+                        inboxStore: inboxStore,
+                        autoRepairProfile: automationProfile.profile
+                    )
+                }
+            }
+        } message: {
+            Text("应用文件已经不存在。此操作将执行 brew uninstall --cask --force，清除 Homebrew receipt 和 Caskroom 残留；不会使用 --zap 删除个人配置。")
+        }
     }
 
     // MARK: Source Icon Colors
@@ -297,7 +348,41 @@ struct UpdateRow: View {
 
     @ViewBuilder
     private var actionButton: some View {
-        if progress?.status == .failed {
+        if package.hasStaleInstallRecord {
+            Button(role: .destructive) {
+                showingStaleCleanupConfirmation = true
+            } label: {
+                Label("移除残留记录", systemImage: "trash")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(packageActionDisabled)
+            .help("应用文件已不存在，清除对应的 Homebrew cask 安装记录")
+        } else if let resolution = manualResolution {
+            Button {
+                if resolution.kind == .switchChannel {
+                    showingChannelSwitchConfirmation = true
+                } else {
+                    Task {
+                        await model.performManualCaskResolution(
+                            resolution,
+                            for: package,
+                            inboxStore: inboxStore,
+                            autoRepairProfile: automationProfile.profile
+                        )
+                    }
+                }
+            } label: {
+                Label(
+                    resolution.actionTitle,
+                    systemImage: resolution.kind == .switchChannel ? "arrow.triangle.swap" : "arrow.up.forward.app"
+                )
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(packageActionDisabled)
+            .help(resolution.explanation)
+        } else if progress?.status == .failed {
             Button {
                 Task { await model.retryPackage(package.id, inboxStore: inboxStore) }
             } label: {
@@ -324,6 +409,44 @@ struct UpdateRow: View {
         }
     }
 
+    private func manualResolutionDetail(_ resolution: ManualCaskUpdateResolution) -> some View {
+        HStack(alignment: .top, spacing: 7) {
+            Image(systemName: "info.circle.fill")
+                .foregroundStyle(.yellow)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Homebrew 渠道尚未提供目标版本")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                Text(resolution.explanation)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.leading, 40)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var staleInstallRecordDetail: some View {
+        HStack(alignment: .top, spacing: 7) {
+            Image(systemName: "externaldrive.badge.xmark")
+                .foregroundStyle(.red)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("应用已删除，但 Homebrew 仍保留安装记录")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                Text("缺少：\(package.expectedAppPaths.joined(separator: "、"))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(.leading, 40)
+        .accessibilityElement(children: .combine)
+    }
+
     // MARK: Row Style
 
     private var isActiveRow: Bool {
@@ -331,6 +454,8 @@ struct UpdateRow: View {
     }
 
     private var rowAccent: Color {
+        if package.hasStaleInstallRecord { return .red }
+        if manualResolution != nil { return .yellow }
         switch progress?.status {
         case .running, .queued, .needsSudo:
             return .accentColor

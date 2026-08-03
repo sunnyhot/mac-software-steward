@@ -83,7 +83,7 @@ enum SoftwareScanner {
         let masTimed = await masTask
 
         var applications = applicationsTimed.value
-        let brew = brewTimed.value
+        var brew = brewTimed.value
         let mas = masTimed.value
 
         onPhaseChange?(.classifying)
@@ -91,6 +91,14 @@ enum SoftwareScanner {
             classify(applications.items, brew: brew, mas: mas)
         }
         applications.items = classificationTimed.value
+
+        // auto_updates cask 可能已通过应用内更新器升级，而 Homebrew receipt 仍是旧版本。
+        // 以实际 .app 版本为准，避免厂商更新完成后仍循环提醒。
+        brew.casks = reconcileManualCaskAdvisories(
+            brew.casks,
+            applications: applications.items
+        )
+        applications.items = classify(applications.items, brew: brew, mas: mas)
 
         let discoveryTimed = timedSync(.regularAppDiscovery) {
             attachUpdateCapabilities(to: applications.items, cache: regularAppUpdateDiscoveryCache)
@@ -496,6 +504,10 @@ enum SoftwareScanner {
             let pinned = pending?["pinned"] as? Bool ?? false
             let autoUpdates = pending?["auto_updates"] as? Bool ?? metadata?.autoUpdates ?? false
             let manualUpdateOnly = pending == nil && advisory != nil
+            let expectedAppPaths = metadata?.appArtifactPaths ?? []
+            let hasStaleInstallRecord = BrewCaskCleanupDetector.hasStaleInstallRecord(
+                expectedAppPaths: expectedAppPaths
+            )
 
             return BrewPackage(
                 id: "brew:\(kind):\(item.name)",
@@ -507,12 +519,50 @@ enum SoftwareScanner {
                 autoUpdates: autoUpdates,
                 outdated: pending != nil || advisory != nil,
                 upgradeable: pending != nil && !pinned,
-                manualUpdateOnly: manualUpdateOnly
+                manualUpdateOnly: manualUpdateOnly,
+                advisoryURLString: advisory?.sourceURLString ?? "",
+                expectedAppPaths: expectedAppPaths,
+                hasStaleInstallRecord: hasStaleInstallRecord
             )
         }
         .sorted {
             if $0.outdated != $1.outdated { return $0.outdated && !$1.outdated }
             return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    static func reconcileManualCaskAdvisories(
+        _ casks: [BrewPackage],
+        applications: [AppItem]
+    ) -> [BrewPackage] {
+        let appsByPackageID = Dictionary(
+            applications.compactMap { app in
+                app.relatedPackageID.isEmpty ? nil : (app.relatedPackageID, app)
+            },
+            uniquingKeysWith: { _, last in last }
+        )
+
+        return casks.map { cask in
+            guard cask.manualUpdateOnly,
+                  !cask.currentVersion.isEmpty,
+                  let app = appsByPackageID[cask.id] ?? applications.first(where: {
+                      normalizeToken($0.name) == normalizeToken(cask.name.split(separator: "@").first.map(String.init) ?? cask.name)
+                  }),
+                  !app.version.isEmpty else {
+                return cask
+            }
+            let targetIsNewer = SparkleAppcastChecker.isNewerVersion(cask.currentVersion, than: app.version)
+            guard !targetIsNewer else { return cask }
+
+            var current = cask
+            current.installedVersion = app.version
+            current.currentVersion = ""
+            current.outdated = false
+            current.upgradeable = false
+            current.manualUpdateOnly = false
+            current.advisoryURLString = ""
+            current.hasStaleInstallRecord = false
+            return current
         }
     }
 
@@ -752,7 +802,14 @@ enum SoftwareScanner {
     }
 
     private static func classify(_ apps: [AppItem], brew: BrewScan, mas: MasScan) -> [AppItem] {
-        let caskByToken = Dictionary(brew.casks.map { (normalizeToken($0.name), $0) }, uniquingKeysWith: { _, last in last })
+        let caskByToken = Dictionary(
+            brew.casks.flatMap { cask -> [(String, BrewPackage)] in
+                let fullToken = normalizeToken(cask.name)
+                let baseToken = normalizeToken(cask.name.split(separator: "@").first.map(String.init) ?? cask.name)
+                return fullToken == baseToken ? [(fullToken, cask)] : [(fullToken, cask), (baseToken, cask)]
+            },
+            uniquingKeysWith: { _, last in last }
+        )
         let masByToken = Dictionary(mas.apps.map { (normalizeToken($0.name), $0) }, uniquingKeysWith: { _, last in last })
 
         return apps.map { app in

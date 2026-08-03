@@ -56,6 +56,19 @@ struct RiskAssessorTest {
             outdated: true,
             upgradeable: true
         ))
+        let staleCask = UpdatablePackage.brew(BrewPackage(
+            id: "brew:cask:removed-app",
+            kind: "cask",
+            name: "removed-app",
+            installedVersion: "1.0",
+            currentVersion: "2.0",
+            pinned: false,
+            autoUpdates: true,
+            outdated: true,
+            upgradeable: true,
+            expectedAppPaths: ["/Applications/Removed.app"],
+            hasStaleInstallRecord: true
+        ))
 
         let baseScan = ScanResult(
             scannedAt: Date(timeIntervalSince1970: 0),
@@ -85,6 +98,11 @@ struct RiskAssessorTest {
         precondition(blocked.level == .high)
         precondition(blocked.automationDecision == .blockExecution)
         precondition(blocked.reasons.contains(.pinned))
+
+        let stale = RiskAssessor.assess(package: staleCask, scan: baseScan, includeGreedy: true)
+        precondition(stale.level == .high)
+        precondition(stale.automationDecision == .blockExecution)
+        precondition(stale.reasons.contains(.staleInstallRecord))
 
         var missingMasScan = baseScan
         missingMasScan.mas = MasScan(available: false, path: "", error: "missing", apps: [])

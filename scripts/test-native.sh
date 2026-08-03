@@ -182,6 +182,8 @@ run_test HomebrewCaskUpdateAdvisorTest \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
   "$SRC/HomebrewCaskUpdateAdvisor.swift" \
+  "$SRC/BrewCaskCleanupDetector.swift" \
+  "$SRC/ManualCaskUpdateResolver.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
   "$SRC/RegularAppUpdateDiscoveryCache.swift" \
   "$SRC/Scanner.swift" \
@@ -321,6 +323,7 @@ run_test ScannerBrewListFallbackTest \
   "$SRC/RegularAppUpdateDiscoveryCache.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
   "$SRC/HomebrewCaskUpdateAdvisor.swift" \
+  "$SRC/BrewCaskCleanupDetector.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerBrewListFallbackTest.swift"
 
@@ -333,6 +336,7 @@ run_test ScannerAppUpdateCapabilityTest \
   "$SRC/RegularAppUpdateDiscoveryCache.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
   "$SRC/HomebrewCaskUpdateAdvisor.swift" \
+  "$SRC/BrewCaskCleanupDetector.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerAppUpdateCapabilityTest.swift"
 
@@ -345,6 +349,7 @@ run_test ScannerSparkleAppcastPolicyTest \
   "$SRC/RegularAppUpdateDiscoveryCache.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
   "$SRC/HomebrewCaskUpdateAdvisor.swift" \
+  "$SRC/BrewCaskCleanupDetector.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerSparkleAppcastPolicyTest.swift"
 
@@ -357,6 +362,7 @@ run_test ScannerNormalizeTokenTest \
   "$SRC/RegularAppUpdateDiscoveryCache.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
   "$SRC/HomebrewCaskUpdateAdvisor.swift" \
+  "$SRC/BrewCaskCleanupDetector.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerNormalizeTokenTest.swift"
 
@@ -375,6 +381,8 @@ run_test StewardModelScanGuardTest \
   "$SRC/AutoRepairDecider.swift" \
   "$SRC/SparkleAppcastChecker.swift" \
   "$SRC/HomebrewCaskUpdateAdvisor.swift" \
+  "$SRC/BrewCaskCleanupDetector.swift" \
+  "$SRC/ManualCaskUpdateResolver.swift" \
   "$SRC/Scanner.swift" \
   "$SRC/SoftwareScanning.swift" \
   "$SRC/InboxStore.swift" \
@@ -388,7 +396,6 @@ run_test StewardModelScanGuardTest \
   "$SRC/InspectionReportStore.swift" \
   "$SRC/DailyInspectionScheduler.swift" \
   "$SRC/UpgradeHistoryStore.swift" \
-  "$SRC/BrewCaskCleanupDetector.swift" \
   "$SRC/UpgradeFailureAnalyzer.swift" \
   "$SRC/HomebrewDownloadMonitor.swift" \
   "$SRC/HomebrewCaskDownloadSizeResolver.swift" \

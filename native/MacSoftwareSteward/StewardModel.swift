@@ -107,6 +107,19 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     /// 侧栏、升级列表、菜单栏和一键升级都以此为唯一数据源。
     @Published var executableUpdates: [UpdatablePackage] = []
 
+    /// Homebrew 仍有 cask receipt，但其明确声明的所有 `.app` 目标都已不存在。
+    @Published var staleCaskRecords: [UpdatablePackage] = []
+
+    /// 升级页需要展示的全部项目：可执行升级、厂商手动更新、Homebrew 残留记录。
+    var updateAttentionPackages: [UpdatablePackage] {
+        var seen: Set<String> = []
+        return (
+            executableUpdates
+                + allUpgradeablePackages.filter(\.manualUpdateOnly)
+                + staleCaskRecords
+        ).filter { seen.insert($0.id).inserted }
+    }
+
     var shouldShowUpgradeReminder: Bool {
         let currentIDs = Set(availableUpdates.map(\.id))
         return !currentIDs.isEmpty && !currentIDs.subtracting(dismissedUpgradeReminderIDs).isEmpty
@@ -122,12 +135,14 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
             allUpgradeablePackages = []
             availableUpdates = []
             executableUpdates = []
+            staleCaskRecords = []
             dismissedUpgradeReminderIDs = []
             return
         }
         allUpgradeablePackages = scan.brew.formulae.filter { $0.outdated || $0.upgradeable }.map(UpdatablePackage.brew)
             + scan.brew.casks.filter { $0.outdated || $0.upgradeable }.map(UpdatablePackage.brew)
             + scan.mas.apps.filter { $0.outdated || $0.upgradeable }.map(UpdatablePackage.mas)
+        staleCaskRecords = scan.brew.casks.filter(\.hasStaleInstallRecord).map(UpdatablePackage.brew)
         executableUpdates = UpgradePlanner.executablePackages(
             scan: scan,
             policyStore: policyStore,
@@ -453,6 +468,114 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
             selectedTab = .updates
         } catch {
             errorMessage = "安装 mas CLI 需要可用的 Homebrew：\(error.localizedDescription)"
+        }
+    }
+
+    func performManualCaskResolution(
+        _ resolution: ManualCaskUpdateResolution,
+        for package: UpdatablePackage,
+        inboxStore: InboxStore? = nil,
+        autoRepairProfile: AutomationProfile? = nil
+    ) async {
+        guard case .brew(let cask) = package, cask.kind == "cask", cask.manualUpdateOnly else {
+            errorMessage = "该项目不需要渠道修复。"
+            return
+        }
+
+        switch resolution.kind {
+        case .openOfficialUpdate:
+            if let app = scan?.applications.items.first(where: {
+                $0.relatedPackageID == package.id && FileManager.default.fileExists(atPath: $0.path)
+            }) {
+                open(app)
+                return
+            }
+            guard let url = URL(string: resolution.officialURLString), NSWorkspace.shared.open(url) else {
+                errorMessage = "没有可用的官方更新地址。"
+                return
+            }
+
+        case .switchChannel:
+            guard !isScanning, !hasRunningJob, !isConfirmingUpgradePlan else { return }
+            do {
+                let brew = try await executor.requireCommand("brew")
+                let info = await CommandRunner.run(
+                    brew,
+                    arguments: ["info", "--cask", "--json=v2", resolution.targetCaskToken],
+                    timeout: 30
+                )
+                guard info.ok,
+                      let availableVersion = ManualCaskUpdateResolver.caskVersion(
+                        fromBrewInfoJSON: info.stdout,
+                        token: resolution.targetCaskToken
+                      ),
+                      ManualCaskUpdateResolver.versionsMatch(availableVersion, resolution.targetVersion) else {
+                    errorMessage = "Homebrew 尚未提供 \(resolution.targetCaskToken) \(resolution.targetVersion)，暂时无法一键切换。"
+                    return
+                }
+
+                let uninstall = UpgradeCommand(
+                    executable: brew,
+                    arguments: ["uninstall", "--cask", "--force", cask.name],
+                    display: "brew uninstall --cask --force \(cask.name)"
+                )
+                let install = UpgradeCommand(
+                    executable: brew,
+                    arguments: ["install", "--cask", resolution.targetCaskToken],
+                    display: "brew install --cask \(resolution.targetCaskToken)"
+                )
+                executor.enqueueJob(
+                    label: "将 \(cask.name) 切换到 \(resolution.targetCaskToken)",
+                    steps: [
+                        UpgradeStep(command: uninstall, packageID: nil, packageName: nil),
+                        UpgradeStep(command: install, packageID: package.id, packageName: cask.name)
+                    ],
+                    rescanAfterSuccess: true,
+                    inboxStore: inboxStore,
+                    autoRepairProfile: autoRepairProfile
+                )
+                selectedTab = .updates
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func removeStaleCaskRecord(
+        _ package: UpdatablePackage,
+        inboxStore: InboxStore? = nil,
+        autoRepairProfile: AutomationProfile? = nil
+    ) async {
+        guard case .brew(let cask) = package,
+              cask.kind == "cask",
+              cask.hasStaleInstallRecord,
+              !cask.expectedAppPaths.isEmpty else {
+            errorMessage = "该项目不是可清理的 Homebrew 残留记录。"
+            return
+        }
+        guard BrewCaskCleanupDetector.hasStaleInstallRecord(expectedAppPaths: cask.expectedAppPaths) else {
+            errorMessage = "检测到应用文件已重新出现，请先重新扫描。"
+            return
+        }
+        guard !isScanning, !hasRunningJob, !isConfirmingUpgradePlan else { return }
+
+        do {
+            let brew = try await executor.requireCommand("brew")
+            let command = UpgradeCommand(
+                executable: brew,
+                arguments: ["uninstall", "--cask", "--force", cask.name],
+                display: "brew uninstall --cask --force \(cask.name)"
+            )
+            executor.enqueueJob(
+                label: "移除 \(cask.name) 的 Homebrew 残留记录",
+                steps: [UpgradeStep(command: command, packageID: package.id, packageName: cask.name)],
+                rescanAfterSuccess: true,
+                inboxStore: inboxStore,
+                autoRepairProfile: autoRepairProfile
+            )
+            selectedTab = .updates
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 

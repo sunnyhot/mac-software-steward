@@ -164,6 +164,12 @@ struct BrewPackage: Identifiable, Hashable {
     var outdated: Bool
     var upgradeable: Bool
     var manualUpdateOnly: Bool = false
+    /// Homebrew 尚未收录目标版本时，对应的厂商更新页面。
+    var advisoryURLString: String = ""
+    /// Homebrew cask 元数据声明的 `.app` 安装目标。
+    var expectedAppPaths: [String] = []
+    /// cask 仍有安装记录，但它声明的所有 `.app` 目标均已不存在。
+    var hasStaleInstallRecord: Bool = false
 }
 
 struct MasApp: Identifiable, Hashable {
@@ -299,6 +305,20 @@ enum UpdatablePackage: Identifiable, Hashable {
     var manualUpdateOnly: Bool {
         if case .brew(let package) = self {
             return package.manualUpdateOnly
+        }
+        return false
+    }
+
+    var expectedAppPaths: [String] {
+        if case .brew(let package) = self {
+            return package.expectedAppPaths
+        }
+        return []
+    }
+
+    var hasStaleInstallRecord: Bool {
+        if case .brew(let package) = self {
+            return package.hasStaleInstallRecord
         }
         return false
     }

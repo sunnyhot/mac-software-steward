@@ -93,6 +93,7 @@ run_or_explain "Building ${APP_NAME}Agent" xcrun swiftc \
   "$ROOT_DIR"/native/MacSoftwareSteward/RegularAppUpdateDiscoveryCache.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/SparkleAppcastChecker.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/HomebrewCaskUpdateAdvisor.swift \
+  "$ROOT_DIR"/native/MacSoftwareSteward/BrewCaskCleanupDetector.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/Scanner.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/SoftwareScanning.swift \
   "$ROOT_DIR"/native/MacSoftwareStewardAgent/*.swift \

@@ -31,6 +31,7 @@ enum RiskReason: String, Codable, Hashable {
     case unknownTargetVersion
     case notUpgradeable
     case majorVersion
+    case staleInstallRecord
 
     var label: String {
         switch self {
@@ -44,6 +45,7 @@ enum RiskReason: String, Codable, Hashable {
         case .unknownTargetVersion: return "unknown target version"
         case .notUpgradeable: return "not upgradeable"
         case .majorVersion: return "major version"
+        case .staleInstallRecord: return "stale cask record"
         }
     }
 
@@ -59,6 +61,7 @@ enum RiskReason: String, Codable, Hashable {
         case .unknownTargetVersion: return "目标版本未知"
         case .notUpgradeable: return "当前不可执行升级"
         case .majorVersion: return "检测到 major 版本变化"
+        case .staleInstallRecord: return "Homebrew 安装记录对应的 App 已不存在"
         }
     }
 }
@@ -113,6 +116,9 @@ enum RiskAssessor {
             if brew.autoUpdates {
                 reasons.append(.autoUpdates)
             }
+            if brew.hasStaleInstallRecord {
+                reasons.append(.staleInstallRecord)
+            }
             if brew.kind == "cask", scan.applications.items.contains(where: { $0.relatedPackageID == brew.id }) {
                 reasons.append(.appMayBeRunning)
             }
@@ -150,6 +156,7 @@ enum RiskAssessor {
         if reasons.contains(.brewUnavailable) ||
             reasons.contains(.masUnavailable) ||
             reasons.contains(.pinned) ||
+            reasons.contains(.staleInstallRecord) ||
             (reasons.contains(.notUpgradeable) && !canRunGreedyCask(package, includeGreedy: includeGreedy)) {
             return .blockExecution
         }
@@ -163,6 +170,7 @@ enum RiskAssessor {
     private static func riskLevel(for reasons: [RiskReason], decision: AutomationDecision) -> RiskLevel {
         if decision == .blockExecution ||
             reasons.contains(.majorVersion) ||
+            reasons.contains(.staleInstallRecord) ||
             reasons.contains(.pinned) ||
             reasons.contains(.brewUnavailable) ||
             reasons.contains(.masUnavailable) {
@@ -180,6 +188,7 @@ enum RiskAssessor {
         return brew.kind == "cask"
             && brew.outdated
             && !brew.pinned
+            && !brew.manualUpdateOnly
             && (includeGreedy || brew.autoUpdates)
     }
 
