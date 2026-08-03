@@ -16,7 +16,7 @@
 |------|------|------|
 | `App.swift` | 约 280 | `@main` 入口、原生窗口/menu bar、命令菜单、全局 model 注入 |
 | `ContentView.swift` | 约 430 | 应用主导航、原生工具栏与页面容器 |
-| `Views/*.swift` | 约 4400 | 维护总览、可升级、本机软件、自动化策略、任务/历史、设置和共享 UI 组件 |
+| `Views/*.swift` | 约 4400 | 可升级、本机软件、自动化策略、任务/历史、设置和共享 UI 组件 |
 | `Models.swift` | 约 419 | 扫描结果、包、任务、进度、策略等核心数据模型 |
 | `StewardModel.swift` | 约 690 | `@MainActor ObservableObject` 核心 ViewModel，负责扫描、升级队列、进度、巡检状态与派生数据 |
 | `SoftwareScanning.swift` | 约 12 | 扫描协议与线上实现，用于隔离 `StewardModel` 与扫描器并支持测试替身 |

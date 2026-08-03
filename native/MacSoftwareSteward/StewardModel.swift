@@ -4,7 +4,7 @@ import Foundation
 
 @MainActor
 final class StewardModel: ObservableObject, MaintenanceExecutorHost {
-    @Published var selectedTab: AppTab = .overview
+    @Published var selectedTab: AppTab = .updates
     @Published var scan: ScanResult?
     @Published var isScanning = false
     @Published var scanPhase: ScanPhase?

@@ -4,7 +4,6 @@ import Foundation
 struct AppTabVisibilityTest {
     static func main() {
         precondition(AppTabNavigationPresenter.visibleTabs == [
-            .overview,
             .updates,
             .applications,
             .rules,
@@ -12,7 +11,7 @@ struct AppTabVisibilityTest {
             .settings
         ])
         precondition(AppTab.allCases == AppTabNavigationPresenter.visibleTabs)
-        precondition(AppTabNavigationPresenter.primaryTabs == [.overview, .updates, .applications])
+        precondition(AppTabNavigationPresenter.primaryTabs == [.updates, .applications])
         precondition(AppTabNavigationPresenter.controlTabs == [.rules, .jobs])
         precondition(AppTabNavigationPresenter.footerTabs == [.settings])
         precondition(SidebarRowInteractionState.hovered != SidebarRowInteractionState.selected)

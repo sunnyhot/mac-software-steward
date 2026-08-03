@@ -26,7 +26,6 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
 }
 
 enum AppTab: String, CaseIterable, Identifiable {
-    case overview = "维护总览"
     case updates = "可升级"
     case applications = "本机软件"
     case rules = "自动化策略"
@@ -37,7 +36,6 @@ enum AppTab: String, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
-        case .overview: return "shield.lefthalf.filled"
         case .updates: return "arrow.triangle.2.circlepath"
         case .applications: return "macwindow"
         case .rules: return "list.bullet.clipboard"
@@ -50,7 +48,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .updates, .applications:
             return true
-        case .overview, .rules, .settings, .jobs:
+        case .rules, .settings, .jobs:
             return false
         }
     }

@@ -50,7 +50,7 @@ enum AutomationNotificationDecider {
     private static func pendingDecision(count: Int) -> AutomationNotificationDecision {
         AutomationNotificationDecision(
             title: "有 \(count) 项需要处理",
-            body: "需要确认的升级或失败恢复已显示在维护总览。",
+            body: "需要确认的升级或失败恢复已显示在待处理列表。",
             isUrgent: true
         )
     }
