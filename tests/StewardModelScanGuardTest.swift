@@ -232,6 +232,19 @@ struct StewardModelScanGuardTest {
         )
         precondition(notificationDispatcher.decisions.count == 1)
 
+        let upgradeNotificationDispatcher = RecordingNotificationDispatcher()
+        let upgradeNotificationModel = StewardModel(
+            scanner: StaticScanner(result: upgradeNotificationScanResult()),
+            notificationDispatcher: upgradeNotificationDispatcher
+        )
+        await upgradeNotificationModel.scanSoftware(notificationPolicy: .decisionsAndFailures)
+        precondition(upgradeNotificationDispatcher.decisions.map(\.title) == ["发现 1 个可升级项目"])
+        precondition(upgradeNotificationModel.shouldShowUpgradeReminder)
+        upgradeNotificationModel.dismissUpgradeReminder()
+        precondition(!upgradeNotificationModel.shouldShowUpgradeReminder)
+        await upgradeNotificationModel.scanSoftware(notificationPolicy: .decisionsAndFailures)
+        precondition(upgradeNotificationDispatcher.decisions.count == 1, "重复扫描不应重复提醒同一升级")
+
         let first = Task { await model.scanSoftware() }
 
         while scanner.callCount == 0 {
@@ -350,6 +363,28 @@ struct StewardModelScanGuardTest {
             applications: ApplicationsScan(source: "test", ok: true, error: "", items: [app]),
             brew: BrewScan(available: false, path: "", prefix: "", version: "", error: "", includeGreedy: false, formulae: [], casks: []),
             mas: MasScan(available: false, path: "", error: "", apps: [])
+        )
+    }
+
+    private static func upgradeNotificationScanResult() -> ScanResult {
+        let formula = BrewPackage(
+            id: "brew:formula:jq",
+            kind: "formula",
+            name: "jq",
+            installedVersion: "1.6",
+            currentVersion: "1.7",
+            pinned: false,
+            autoUpdates: false,
+            outdated: true,
+            upgradeable: true
+        )
+        return ScanResult(
+            scannedAt: Date(timeIntervalSince1970: 0),
+            includeGreedy: false,
+            summary: ScanSummary(applications: 0, brewFormulae: 1, brewCasks: 0, masApps: 0, outdated: 1, actionable: 1, scanMs: 1),
+            applications: ApplicationsScan(source: "test", ok: true, error: "", items: []),
+            brew: BrewScan(available: true, path: "/opt/homebrew/bin/brew", prefix: "/opt/homebrew", version: "Homebrew 5", error: "", includeGreedy: false, formulae: [formula], casks: []),
+            mas: MasScan(available: true, path: "/opt/homebrew/bin/mas", error: "", apps: [])
         )
     }
 }

@@ -1,7 +1,8 @@
 import AppKit
 import SwiftUI
+import UserNotifications
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         if activateExistingInstanceIfNeeded() {
             return
@@ -16,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSApp.setActivationPolicy(dockIconVisible ? .regular : .accessory)
+        UNUserNotificationCenter.current().delegate = self
 
         // 如果 Dock 图标隐藏，延迟隐藏已创建的主窗口
         if !dockIconVisible {
@@ -27,6 +29,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping @Sendable (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .list, .sound])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping @Sendable () -> Void
+    ) {
+        NSApp.activate(ignoringOtherApps: true)
+        for window in NSApp.windows where window.styleMask.contains(.titled) {
+            window.makeKeyAndOrderFront(nil)
+        }
+        completionHandler()
     }
 
     private func activateExistingInstanceIfNeeded() -> Bool {

@@ -333,6 +333,11 @@ private struct MainPanel: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
+            if model.shouldShowUpgradeReminder {
+                UpgradeReminderBanner()
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
             if let notice = model.jobNotice {
                 JobNoticeView(notice: notice)
                     .transition(.asymmetric(
@@ -373,6 +378,65 @@ private struct MainPanel: View {
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+}
+
+private struct UpgradeReminderBanner: View {
+    @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
+    @EnvironmentObject private var inboxStore: InboxStore
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.up.circle.fill")
+                .foregroundStyle(.orange)
+                .font(.title3)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("发现 \(model.availableUpdates.count) 个可升级项目")
+                    .font(.headline)
+                Text("可前往升级列表查看，或直接一键升级全部可执行项目。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 12)
+
+            Button("查看升级") {
+                model.selectedTab = .updates
+            }
+            .buttonStyle(.bordered)
+
+            Button {
+                Task {
+                    await model.upgradeAllExecutable(
+                        inboxStore: inboxStore,
+                        autoRepairProfile: automationProfile.profile
+                    )
+                }
+            } label: {
+                Label("一键升级", systemImage: "arrow.up.circle.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(model.isScanning || model.hasRunningJob || model.isConfirmingUpgradePlan)
+
+            Button {
+                model.dismissUpgradeReminder()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel("关闭升级提醒")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .stewardSurface(cornerRadius: 10, tint: .orange)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(.orange.opacity(0.22), lineWidth: 1)
         )
     }
 }

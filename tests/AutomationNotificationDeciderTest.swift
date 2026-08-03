@@ -38,6 +38,25 @@ struct AutomationNotificationDeciderTest {
         let quietSuccess = AutomationNotificationDecider.decision(policy: .decisionsAndFailures, newInboxItems: [], automaticUpgradeCount: 2)
         precondition(quietSuccess == nil)
 
+        let upgrades = AutomationNotificationDecider.decision(
+            policy: .decisionsAndFailures,
+            newInboxItems: [],
+            automaticUpgradeCount: 0,
+            availableUpgradeCount: 3
+        )
+        precondition(upgrades?.title == "发现 3 个可升级项目")
+        precondition(upgrades?.body.contains("一键升级") == true)
+        precondition(upgrades?.isUrgent == true)
+
+        let combined = AutomationNotificationDecider.decision(
+            policy: .decisionsAndFailures,
+            newInboxItems: [warning],
+            automaticUpgradeCount: 0,
+            availableUpgradeCount: 2
+        )
+        precondition(combined?.title == "有 3 项需要处理")
+        precondition(combined?.body.contains("2 个可升级项目") == true)
+
         let everyInspection = AutomationNotificationDecider.decision(policy: .everyInspection, newInboxItems: [], automaticUpgradeCount: 2)
         precondition(everyInspection?.title == "巡检完成")
         precondition(everyInspection?.isUrgent == false)

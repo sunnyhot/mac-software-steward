@@ -48,6 +48,8 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     private let notificationDispatcher: AutomationNotificationDelivering
     private var debounceTask: Task<Void, Never>?
     private var executorObserver: AnyCancellable?
+    private var lastNotifiedUpgradeIDs: Set<String> = []
+    @Published private var dismissedUpgradeReminderIDs: Set<String> = []
 
     // MARK: - Executor-backed forwarding properties
     //
@@ -105,12 +107,22 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     /// 侧栏、升级列表、菜单栏和一键升级都以此为唯一数据源。
     @Published var executableUpdates: [UpdatablePackage] = []
 
+    var shouldShowUpgradeReminder: Bool {
+        let currentIDs = Set(availableUpdates.map(\.id))
+        return !currentIDs.isEmpty && !currentIDs.subtracting(dismissedUpgradeReminderIDs).isEmpty
+    }
+
+    func dismissUpgradeReminder() {
+        dismissedUpgradeReminderIDs.formUnion(availableUpdates.map(\.id))
+    }
+
     /// 数据变化时一次性更新发现项、可执行项和当前可一键升级项。
     private func recomputeDerivedData() {
         guard let scan else {
             allUpgradeablePackages = []
             availableUpdates = []
             executableUpdates = []
+            dismissedUpgradeReminderIDs = []
             return
         }
         allUpgradeablePackages = scan.brew.formulae.filter { $0.outdated || $0.upgradeable }.map(UpdatablePackage.brew)
@@ -125,6 +137,8 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
             let status = packageProgress[package.id]?.status
             return status != .succeeded && status != .running && status != .queued
         }
+        let currentIDs = Set(availableUpdates.map(\.id))
+        dismissedUpgradeReminderIDs.formIntersection(currentIDs)
     }
 
     var hasRunningJob: Bool {
@@ -205,6 +219,9 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
         scan = result
         executor.prunePackageProgress(keeping: result)
         recomputeDerivedData()
+        let currentUpgradeIDs = Set(availableUpdates.map(\.id))
+        lastNotifiedUpgradeIDs.formIntersection(currentUpgradeIDs)
+        let newlyAvailableUpgradeCount = currentUpgradeIDs.subtracting(lastNotifiedUpgradeIDs).count
         var newInboxItems: [InboxItem] = []
         if let inboxStore {
             let sourceIssueItems = SourceIssueInboxFactory.items(from: result)
@@ -220,9 +237,11 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
         if let decision = AutomationNotificationDecider.decision(
             policy: notificationPolicy,
             newInboxItems: newInboxItems,
-            automaticUpgradeCount: 0
+            automaticUpgradeCount: 0,
+            availableUpgradeCount: newlyAvailableUpgradeCount
         ) {
             await notificationDispatcher.deliver(decision)
+            lastNotifiedUpgradeIDs.formUnion(currentUpgradeIDs)
         }
     }
 

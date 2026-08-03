@@ -10,7 +10,8 @@ enum AutomationNotificationDecider {
     static func decision(
         policy: NotificationPolicy,
         newInboxItems: [InboxItem],
-        automaticUpgradeCount: Int
+        automaticUpgradeCount: Int,
+        availableUpgradeCount: Int = 0
     ) -> AutomationNotificationDecision? {
         let actionableItems = newInboxItems.filter { item in
             item.status == .pending && (item.severity != .info || !item.actions.isEmpty)
@@ -21,12 +22,18 @@ enum AutomationNotificationDecider {
             return nil
 
         case .decisionsAndFailures:
-            guard !actionableItems.isEmpty else { return nil }
-            return pendingDecision(count: actionableItems.count)
+            guard !actionableItems.isEmpty || availableUpgradeCount > 0 else { return nil }
+            return pendingDecision(
+                actionableCount: actionableItems.count,
+                availableUpgradeCount: availableUpgradeCount
+            )
 
         case .everyInspection:
-            if !actionableItems.isEmpty {
-                return pendingDecision(count: actionableItems.count)
+            if !actionableItems.isEmpty || availableUpgradeCount > 0 {
+                return pendingDecision(
+                    actionableCount: actionableItems.count,
+                    availableUpgradeCount: availableUpgradeCount
+                )
             }
             return AutomationNotificationDecision(
                 title: "巡检完成",
@@ -35,8 +42,11 @@ enum AutomationNotificationDecider {
             )
 
         case .everyAction:
-            if !actionableItems.isEmpty {
-                return pendingDecision(count: actionableItems.count)
+            if !actionableItems.isEmpty || availableUpgradeCount > 0 {
+                return pendingDecision(
+                    actionableCount: actionableItems.count,
+                    availableUpgradeCount: availableUpgradeCount
+                )
             }
             guard automaticUpgradeCount > 0 else { return nil }
             return AutomationNotificationDecision(
@@ -47,10 +57,29 @@ enum AutomationNotificationDecider {
         }
     }
 
-    private static func pendingDecision(count: Int) -> AutomationNotificationDecision {
-        AutomationNotificationDecision(
-            title: "有 \(count) 项需要处理",
-            body: "需要确认的升级或失败恢复已显示在待处理列表。",
+    private static func pendingDecision(
+        actionableCount: Int,
+        availableUpgradeCount: Int
+    ) -> AutomationNotificationDecision {
+        if actionableCount == 0 {
+            return AutomationNotificationDecision(
+                title: "发现 \(availableUpgradeCount) 个可升级项目",
+                body: "打开“可升级”页面可查看并一键升级。",
+                isUrgent: true
+            )
+        }
+
+        if availableUpgradeCount > 0 {
+            return AutomationNotificationDecision(
+                title: "有 \(actionableCount + availableUpgradeCount) 项需要处理",
+                body: "包含 \(availableUpgradeCount) 个可升级项目和 \(actionableCount) 个其他事项。",
+                isUrgent: true
+            )
+        }
+
+        return AutomationNotificationDecision(
+            title: "有 \(actionableCount) 项需要处理",
+            body: "打开 Mac 软件管家可查看详情并处理。",
             isUrgent: true
         )
     }
