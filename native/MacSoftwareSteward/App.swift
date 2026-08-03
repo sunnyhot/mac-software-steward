@@ -153,7 +153,7 @@ struct MacSoftwareStewardApp: App {
             hasRunningJob: model.hasRunningJob,
             activeUpgradeCount: activeUpgradeCount,
             remainingUpgradeableCount: model.availableUpdates.count,
-            totalUpgradeableCount: model.allUpgradeablePackages.count
+            totalUpgradeableCount: model.executableUpdates.count
         )
     }
 
@@ -268,7 +268,7 @@ private struct MenuBarUpgradeMenu: View {
             hasRunningJob: model.hasRunningJob,
             activeUpgradeCount: activeUpgradeCount,
             remainingUpgradeableCount: model.availableUpdates.count,
-            totalUpgradeableCount: model.allUpgradeablePackages.count
+            totalUpgradeableCount: model.executableUpdates.count
         )
     }
 

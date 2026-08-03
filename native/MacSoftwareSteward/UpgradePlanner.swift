@@ -30,6 +30,16 @@ struct UpgradePlanRow: Identifiable, Hashable {
 }
 
 enum UpgradePlanner {
+    static func executablePackages(
+        scan: ScanResult,
+        policyStore: UpgradePolicyStore,
+        includeGreedy: Bool
+    ) -> [UpdatablePackage] {
+        makePlan(scan: scan, policyStore: policyStore, includeGreedy: includeGreedy)
+            .filter(\.canExecute)
+            .compactMap(\.package)
+    }
+
     static func makePlan(
         scan: ScanResult,
         policyStore: UpgradePolicyStore,
@@ -136,11 +146,11 @@ enum UpgradePlanner {
         switch package {
         case .brew(let brew):
             if brew.kind == "cask" {
-                if brew.manualUpdateOnly {
+                if brew.manualUpdateOnly && !brew.autoUpdates {
                     return "应用内更新器"
                 }
                 var parts = ["brew", "upgrade", "--cask"]
-                if includeGreedy {
+                if includeGreedy || brew.autoUpdates {
                     parts.append("--greedy")
                 }
                 parts.append(brew.name)

@@ -8,7 +8,9 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     @Published var scan: ScanResult?
     @Published var isScanning = false
     @Published var scanPhase: ScanPhase?
-    @Published var includeGreedy = true
+    @Published var includeGreedy = true {
+        didSet { recomputeDerivedData() }
+    }
     @Published var runBrewUpdate = true
     @Published var debouncedQuery = ""
     @Published var query = "" {
@@ -99,19 +101,29 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     /// 未在升级中的可升级包（排除 queued/running/succeeded）
     @Published var availableUpdates: [UpdatablePackage] = []
 
-    /// 数据变化时一次性计算并更新 allUpgradeablePackages 和 availableUpdates
+    /// 当前扫描中可由应用直接执行的完整升级集合。
+    /// 侧栏、升级列表、菜单栏和一键升级都以此为唯一数据源。
+    @Published var executableUpdates: [UpdatablePackage] = []
+
+    /// 数据变化时一次性更新发现项、可执行项和当前可一键升级项。
     private func recomputeDerivedData() {
         guard let scan else {
             allUpgradeablePackages = []
             availableUpdates = []
+            executableUpdates = []
             return
         }
         allUpgradeablePackages = scan.brew.formulae.filter { $0.outdated || $0.upgradeable }.map(UpdatablePackage.brew)
             + scan.brew.casks.filter { $0.outdated || $0.upgradeable }.map(UpdatablePackage.brew)
             + scan.mas.apps.filter { $0.outdated || $0.upgradeable }.map(UpdatablePackage.mas)
-        availableUpdates = allUpgradeablePackages.filter { package in
+        executableUpdates = UpgradePlanner.executablePackages(
+            scan: scan,
+            policyStore: policyStore,
+            includeGreedy: includeGreedy
+        )
+        availableUpdates = executableUpdates.filter { package in
             let status = packageProgress[package.id]?.status
-            return package.upgradeable && status != .succeeded && status != .running && status != .queued
+            return status != .succeeded && status != .running && status != .queued
         }
     }
 
@@ -348,7 +360,8 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     func upgradeAllExecutable(inboxStore: InboxStore? = nil, autoRepairProfile: AutomationProfile? = nil) async {
         guard let scan, !isScanning, !hasRunningJob, !isConfirmingUpgradePlan else { return }
         let rows = UpgradePlanner.makePlan(scan: scan, policyStore: policyStore, includeGreedy: includeGreedy)
-        let executable = rows.filter(\.canExecute)
+        let availableIDs = Set(availableUpdates.map(\.id))
+        let executable = rows.filter { $0.canExecute && availableIDs.contains($0.packageID) }
         guard !executable.isEmpty else {
             errorMessage = "没有可执行的升级项。"
             return

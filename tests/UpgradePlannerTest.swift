@@ -134,9 +134,9 @@ struct UpgradePlannerTest {
         let upgradeAllStore = UpgradePolicyStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("upgrade-all-\(UUID().uuidString).json"))
         let upgradeAllRows = UpgradePlanner.makePlan(scan: upgradeAllScan, policyStore: upgradeAllStore, includeGreedy: false)
         let executable = upgradeAllRows.filter(\.canExecute)
-        // 只有低风险、可自动执行的 jq 进入选包集合；固定的 locked 和高风险 greedy cask 被排除。
-        precondition(executable.map(\.packageID) == [autoFormula.id], "一键升级应只选可执行包，实际：\(executable.map(\.packageID))")
+        // auto_updates cask 即使关闭全局 greedy 扫描，也可通过逐包 --greedy 执行；固定包仍排除。
+        precondition(executable.map(\.packageID) == [autoFormula.id, greedyCask.id], "一键升级应包含全部可执行包，实际：\(executable.map(\.packageID))")
         precondition(executable.contains { $0.packageID == pinnedFormula.id } == false, "固定包不得进入一键升级")
-        precondition(executable.contains { $0.packageID == greedyCask.id } == false, "高风险 cask 不得进入一键升级")
+        precondition(executable.first { $0.packageID == greedyCask.id }?.commandDisplay.contains("--greedy") == true, "auto_updates cask 必须使用 --greedy")
     }
 }

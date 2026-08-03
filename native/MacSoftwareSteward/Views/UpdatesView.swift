@@ -7,13 +7,10 @@ struct UpdatesView: View {
     @State private var selectedFilter: UpdateFilter = .all
 
     var updates: [UpdatablePackage] {
-        let base = filter(model.allUpgradeablePackages, query: model.query) { package in
+        let base = filter(model.executableUpdates, query: model.query) { package in
             "\(package.name) \(package.source) \(package.installedVersion) \(package.currentVersion)"
         }
         return base.filter { package in
-            // 只保留真能升级的包；正在进行（有进度记录）的也保留以展示进度。
-            // “需手动”的包（upgradeable=false 且无进度）不属此页，归本机软件页。
-            guard package.upgradeable || model.packageProgress[package.id] != nil else { return false }
             switch selectedFilter {
             case .all:
                 return true
@@ -144,7 +141,11 @@ struct UpdatesView: View {
             let resolvedUpdates = updates
             VStack(spacing: 8) {
                 if resolvedUpdates.isEmpty {
-                    EmptyStateView(symbol: "checkmark.circle", title: "没有发现可操作升级", text: "如果需要包含自动更新类 cask，请打开 greedy cask 后重新扫描。")
+                    EmptyStateView(
+                        symbol: "checkmark.circle",
+                        title: model.executableUpdates.isEmpty ? "没有发现可操作升级" : "当前筛选下没有升级项目",
+                        text: model.executableUpdates.isEmpty ? "扫描完成后，可直接执行的升级会显示在这里。" : "请调整筛选条件或搜索内容。"
+                    )
                 } else {
                     LazyVStack(spacing: 8) {
                         ForEach(resolvedUpdates) { package in
@@ -429,11 +430,11 @@ struct PackageStatusBadge: View {
     }
 
     private var text: String {
-        package.upgradeable ? "可升级" : "已最新"
+        package.outdated || package.upgradeable ? "可升级" : "已最新"
     }
 
     private var color: Color {
-        package.upgradeable ? .orange : .green
+        package.outdated || package.upgradeable ? .orange : .green
     }
 }
 

@@ -13,7 +13,7 @@ enum MaintenanceCommandResolver {
             var args = ["upgrade"]
             if brewPackage.kind == "cask" {
                 args.append("--cask")
-                if includeGreedy { args.append("--greedy") }
+                if includeGreedy || brewPackage.autoUpdates { args.append("--greedy") }
             }
             args.append(brewPackage.name)
             return UpgradeCommand(executable: brew, arguments: args, display: (["brew"] + args).joined(separator: " "))

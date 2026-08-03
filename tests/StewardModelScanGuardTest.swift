@@ -194,7 +194,14 @@ struct StewardModelScanGuardTest {
         )))
         await manualCaskModel.scanSoftware()
         precondition(manualCaskModel.allUpgradeablePackages.map(\.id) == [executableFormula.id, manualCask.id])
-        precondition(manualCaskModel.availableUpdates.map(\.id) == [executableFormula.id])
+        precondition(
+            Set(manualCaskModel.executableUpdates.map(\.id)) == [executableFormula.id, manualCask.id],
+            "可执行集合应包含 Formula 与 auto_updates Cask，实际：\(manualCaskModel.executableUpdates.map(\.id))"
+        )
+        precondition(
+            Set(manualCaskModel.availableUpdates.map(\.id)) == [executableFormula.id, manualCask.id],
+            "一键升级集合应与可执行集合一致，实际：\(manualCaskModel.availableUpdates.map(\.id))"
+        )
         await manualCaskModel.checkAndPrepareMaintenance()
         precondition(manualCaskModel.showingUpgradePlan)
         precondition(Set(manualCaskModel.upgradePlanRows.map(\.packageID)) == [executableFormula.id, manualCask.id])

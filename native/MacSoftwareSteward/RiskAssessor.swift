@@ -173,11 +173,14 @@ enum RiskAssessor {
     }
 
     private static func canRunGreedyCask(_ package: UpdatablePackage, includeGreedy: Bool) -> Bool {
-        guard includeGreedy, case .brew(let brew) = package else {
+        guard case .brew(let brew) = package else {
             return false
         }
 
-        return brew.kind == "cask" && brew.outdated && !brew.manualUpdateOnly
+        return brew.kind == "cask"
+            && brew.outdated
+            && !brew.pinned
+            && (includeGreedy || brew.autoUpdates)
     }
 
     private static func isMajorVersionChange(installed: String, current: String) -> Bool {

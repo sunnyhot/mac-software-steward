@@ -171,7 +171,7 @@ private struct SidebarStatusChip: View {
             scanProgress: model.scanPhase?.progress,
             hasRunningJob: model.hasRunningJob,
             upgradeProgress: model.upgradeProgress,
-            updateCount: model.allUpgradeablePackages.count,
+            updateCount: model.executableUpdates.count,
             failedPackageCount: model.packageProgress.values.filter { progress in
                 [
                     PackageUpgradeStatus.failed,
