@@ -128,6 +128,32 @@ final class InboxStore: ObservableObject {
         return !replacesExisting
     }
 
+    /// 批量添加条目，只在末尾保存一次。
+    /// 避免在 scanSoftware 的循环里逐条 add 导致每条都全量 encode + 写盘。
+    @discardableResult
+    func addAll(_ newItems: [InboxItem]) -> [InboxItem] {
+        guard !newItems.isEmpty else { return [] }
+        var appended: [InboxItem] = []
+        for item in newItems {
+            if let sourceID = item.sourceID, !sourceID.isEmpty {
+                let isNew = !items.contains { existing in
+                    existing.kind == item.kind && existing.sourceID == sourceID
+                }
+                items.removeAll { existing in
+                    existing.kind == item.kind && existing.sourceID == sourceID
+                }
+                if isNew { appended.append(item) }
+            } else if !items.contains(where: { $0.id == item.id }) {
+                appended.append(item)
+            }
+            items.removeAll { $0.id == item.id }
+            items.append(item)
+        }
+        sortNewestFirst()
+        save()
+        return appended
+    }
+
     func updateStatus(id: UUID, status: InboxStatus) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         items[index].status = status

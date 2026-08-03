@@ -81,9 +81,14 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
         executor.setHost(self)
 
         // 合并 executor 的 objectWillChange 到 StewardModel，让 UI 能观察到 executor 状态变化。
-        executorObserver = executor.objectWillChange.sink { [weak self] in
-            self?.objectWillChange.send()
-        }
+        // 节流到 ~10Hz：升级时 brew 每秒输出几十行 stdout，每行都会触发 executor publish，
+        // 无条件桥接会让所有观察 StewardModel 的 view 每帧都重算。节流后刷新频率降到人眼
+        // 无感但足够流畅的程度（100ms 间隔），同时保证最后一次变更不会被丢弃（latest: true）。
+        executorObserver = executor.objectWillChange
+            .throttle(for: .milliseconds(100), scheduler: RunLoop.main, latest: true)
+            .sink { [weak self] in
+                self?.objectWillChange.send()
+            }
 
         refreshDailyInspectionStatus()
     }
@@ -197,12 +202,8 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
             inboxStore.retireSourceIssues(
                 notPresentIn: Set(sourceIssueItems.compactMap(\.sourceID))
             )
-            let inboxItems = sourceIssueItems + appUpdateItems
-            for item in inboxItems {
-                if inboxStore.add(item) {
-                    newInboxItems.append(item)
-                }
-            }
+            // 批量添加，只写盘一次（避免循环里逐条全量 encode + 写盘）。
+            newInboxItems = inboxStore.addAll(sourceIssueItems + appUpdateItems)
         }
         if let decision = AutomationNotificationDecider.decision(
             policy: notificationPolicy,

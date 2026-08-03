@@ -140,17 +140,15 @@ struct UpdatesView: View {
         if model.isScanning {
             scanningView
         } else {
+            // 只计算一次 filter+sort，避免 body 内多次读取 updates 导致重复全量计算。
+            let resolvedUpdates = updates
             VStack(spacing: 8) {
-                if updates.isEmpty {
+                if resolvedUpdates.isEmpty {
                     EmptyStateView(symbol: "checkmark.circle", title: "没有发现可操作升级", text: "如果需要包含自动更新类 cask，请打开 greedy cask 后重新扫描。")
                 } else {
                     LazyVStack(spacing: 8) {
-                        ForEach(updates) { package in
+                        ForEach(resolvedUpdates) { package in
                             UpdateRow(package: package)
-                                .transition(.asymmetric(
-                                    insertion: .opacity.combined(with: .move(edge: .top)),
-                                    removal: .opacity
-                                ))
                         }
                     }
                 }
@@ -234,8 +232,6 @@ struct UpdateRow: View {
     @EnvironmentObject private var automationProfile: AutomationProfileStore
     var package: UpdatablePackage
 
-    @State private var isHovered = false
-
     var progress: PackageUpgradeProgress? {
         model.packageProgress[package.id]
     }
@@ -288,11 +284,6 @@ struct UpdateRow: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .polishedTaskSurface(tint: rowAccent, isActive: isActiveRow)
-        .scaleEffect(isHovered && progress == nil ? 1.005 : 1.0)
-        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isHovered)
-        .onHover { hovering in
-            isHovered = hovering
-        }
     }
 
     // MARK: Source Icon Colors
@@ -587,12 +578,10 @@ struct PackageProgressDetail: View {
                 ProgressView(value: fraction)
                     .progressViewStyle(.linear)
                     .tint(.accentColor)
-                FlowingAccentLine(tint: .accentColor, isActive: true)
                 downloadMetricRow(percentText: "\(Int(fraction * 100))%")
             } else {
                 ProgressView()
                     .progressViewStyle(.linear)
-                FlowingAccentLine(tint: .accentColor, isActive: true)
                 if progress.downloadSizeText != nil || progress.downloadSpeedText != nil {
                     downloadMetricRow(percentText: nil)
                 }
