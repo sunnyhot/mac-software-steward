@@ -194,8 +194,6 @@ private struct MenuBarUpgradeMenu: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Text(summaryText)
-
         Button {
             openMainWindowOnce()
         } label: {
@@ -231,12 +229,6 @@ private struct MenuBarUpgradeMenu: View {
         }
         .disabled(model.isScanning || model.hasRunningJob || model.isConfirmingUpgradePlan)
 
-        if model.hasRunningJob {
-            Text(activeUpgradeCount > 0 ? "\(activeUpgradeCount) 个升级任务执行中" : "升级任务运行中")
-        } else if model.isConfirmingUpgradePlan {
-            Text("正在准备升级任务")
-        }
-
         Divider()
 
         Button("退出") {
@@ -260,10 +252,6 @@ private struct MenuBarUpgradeMenu: View {
             openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
         }
-    }
-
-    private var summaryText: String {
-        menuBarPresentation.summary
     }
 
     private var maintenanceActionTitle: String {
