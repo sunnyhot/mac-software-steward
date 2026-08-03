@@ -74,7 +74,6 @@ struct MacSoftwareStewardApp: App {
                 .preferredColorScheme(AppAppearanceResolver.colorScheme(for: currentAppearanceMode))
                 .frame(minWidth: 1120, minHeight: 720)
                 .task {
-                    AppAppearanceResolver.apply(currentAppearanceMode)
                     applyDockIconPolicy()
                     model.refreshDailyInspectionStatus()
                     publishAutomationIssues()
@@ -86,12 +85,6 @@ struct MacSoftwareStewardApp: App {
                         )
                     }
                     await updater.autoCheckIfNeeded()
-                }
-                .onAppear {
-                    AppAppearanceResolver.apply(currentAppearanceMode)
-                }
-                .onChange(of: appearanceMode) {
-                    AppAppearanceResolver.apply(currentAppearanceMode)
                 }
                 .onChange(of: dockIconVisible) {
                     applyDockIconPolicy()

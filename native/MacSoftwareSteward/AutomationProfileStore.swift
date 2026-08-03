@@ -17,6 +17,10 @@ enum NotificationPolicy: String, Codable, CaseIterable, Identifiable {
         case .silent: return "静默记录"
         }
     }
+
+    /// UI 可选的选项。everyInspection/everyAction 是历史遗留的过度细分，
+    /// 解码时仍需识别（避免旧 profile 整份重置），但不再向用户展示。
+    static let visibleCases: [NotificationPolicy] = [.decisionsAndFailures, .silent]
 }
 
 enum RegularAppNetworkPolicy: String, Codable, CaseIterable, Identifiable {
@@ -33,6 +37,11 @@ enum RegularAppNetworkPolicy: String, Codable, CaseIterable, Identifiable {
         case .localOnly: return "仅本地识别"
         }
     }
+
+    /// UI 可选的选项。`aggressive` 是历史遗留值——解码时仍需识别（避免旧 profile 整份重置），
+    /// 但代码库中没有任何消费分支会区别对待它（行为等同 declaredSourcesOnly），
+    /// 故不再向用户展示，避免承诺一个实际不存在的"积极检查"行为。
+    static let visibleCases: [RegularAppNetworkPolicy] = [.declaredSourcesOnly, .localOnly]
 }
 
 enum AutoRepairPolicy: String, Codable, CaseIterable, Identifiable {

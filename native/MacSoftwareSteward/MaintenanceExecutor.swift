@@ -820,7 +820,7 @@ final class MaintenanceExecutor: ObservableObject {
         if let system = job.log.reversed().first(where: { $0.stream == "system" }) {
             return system.text
         }
-        return "请打开任务日志查看完整输出。"
+        return "升级未成功完成，可重试或在终端运行相关命令检查。"
     }
 
     func prunePackageProgress(keeping result: ScanResult) {

@@ -89,16 +89,6 @@ private struct TaskFirstSidebar: View {
                 }
             }
 
-            SidebarSection(title: "自动化与记录") {
-                ForEach(AppTabNavigationPresenter.controlTabs, id: \.rawValue) { tab in
-                    SidebarRow(
-                        tab: tab,
-                        isSelected: model.selectedTab == tab,
-                        action: { select(tab) }
-                    )
-                }
-            }
-
             Spacer(minLength: 12)
 
             VStack(spacing: 4) {
@@ -357,12 +347,8 @@ private struct MainPanel: View {
                     UpdatesView()
                 case .applications:
                     ApplicationsView()
-                case .rules:
-                    RulesView()
                 case .settings:
                     SettingsView()
-                case .jobs:
-                    JobsView()
                 }
             }
             .id(model.selectedTab)
@@ -452,14 +438,6 @@ private struct JobNoticeView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
             }
-
-            Button {
-                model.selectedTab = .jobs
-            } label: {
-                Label("查看日志", systemImage: "terminal")
-                    .font(.caption)
-            }
-            .buttonStyle(.borderless)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

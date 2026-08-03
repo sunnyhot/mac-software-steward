@@ -38,9 +38,8 @@ build/MacSoftwareSteward.app
 - 可选的 Mac App Store 扫描与升级，依赖 `mas` CLI
 - `mas` CLI 缺失时可从原生 App Store 页自动执行 `brew install mas`
 - “检查并维护”会重新扫描并生成可确认的维护计划
-- 任务日志与命令输出追踪
 - 每日巡检：通过用户级 LaunchAgent 定时扫描，发现可升级项后自动升级
-- 来源诊断、自动化策略、任务日志与巡检/升级历史
+- 来源诊断与巡检/升级历史
 - 应用自更新：从 GitHub Releases 检查、下载、安装并重启应用
 
 ## 能自动升级什么
@@ -52,7 +51,7 @@ build/MacSoftwareSteward.app
 | Mac App Store | 需要 `mas` | 是，`mas upgrade <app-id>` |
 | 普通 `.app` | 是 | 不通用；提供应用内更新或厂商更新器指引 |
 
-如果 `mas` CLI 未安装，但 Homebrew 可用，原生应用会显示“安装 mas CLI”按钮。安装任务会进入任务日志，成功后自动重新扫描。
+如果 `mas` CLI 未安装，但 Homebrew 可用，原生应用会显示“安装 mas CLI”按钮。点击后自动安装，成功后自动重新扫描。
 
 普通 `.app` 没有统一升级协议。很多应用使用 Sparkle、Chrome Keystone、Adobe 更新器、JetBrains Toolbox、Microsoft AutoUpdate、内置更新器或专有安装器；应用会识别并展示这些更新能力，引导用户使用应用内或厂商更新器，不直接覆盖已安装的 App。
 
@@ -73,7 +72,7 @@ build/MacSoftwareSteward.app
 - 仅提醒：显示更新，不默认执行
 - 跳过：显示跳过原因，不进入自动执行
 
-“自动化策略”页直接提供自动化、风险与恢复设置。“任务日志”页包含当前任务和历史两个视图；历史支持按巡检、升级、待办处理记录筛选，并可搜索命令、失败原因和处理结果。
+“设置”页集中提供通用、应用更新、自动化、风险与恢复设置。
 
 ## 应用自更新
 
@@ -101,7 +100,7 @@ Release 清单中的 `sha256` 必须对应 `MacSoftwareSteward.zip`。客户端�
 
 ## 每日巡检
 
-原生应用的“自动化策略”页可以启用后台自动升级。启用后会写入用户级 LaunchAgent：
+原生应用的“设置”页可以启用后台自动升级。启用后会写入用户级 LaunchAgent：
 
 ```text
 ~/Library/LaunchAgents/local.codex.MacSoftwareSteward.daily.plist

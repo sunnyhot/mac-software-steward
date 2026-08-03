@@ -76,5 +76,67 @@ struct UpgradePlannerTest {
         precondition(masRow?.riskLabels.contains("mas unavailable") == true)
         precondition(masRow?.selection == .notSelectable)
         precondition(masRow?.automationDecision == .blockExecution)
+
+        // 一键升级的选包语义：makePlan 后 filter(\.canExecute) 必须只保留可执行包，
+        // 排除被固定(notSelectable)、策略跳过(notSelected 但 canExecute=true 仍会被纳入)、
+        // 以及高风险被阻断(notSelectable)的项。这是 upgradeAllExecutable 的核心契约：
+        // 它把 canExecute 集合作为单次批量任务入队。
+        let autoFormula = BrewPackage(
+            id: "brew:formula:jq",
+            kind: "formula",
+            name: "jq",
+            installedVersion: "1.6",
+            currentVersion: "1.7",
+            pinned: false,
+            autoUpdates: false,
+            outdated: true,
+            upgradeable: true
+        )
+        let pinnedFormula = BrewPackage(
+            id: "brew:formula:locked",
+            kind: "formula",
+            name: "locked",
+            installedVersion: "1.0",
+            currentVersion: "2.0",
+            pinned: true,
+            autoUpdates: false,
+            outdated: true,
+            upgradeable: false
+        )
+        let greedyCask = BrewPackage(
+            id: "brew:cask:greedy",
+            kind: "cask",
+            name: "greedy",
+            installedVersion: "1.0",
+            currentVersion: "2.0",
+            pinned: false,
+            autoUpdates: true,
+            outdated: true,
+            upgradeable: false
+        )
+        let upgradeAllScan = ScanResult(
+            scannedAt: Date(timeIntervalSince1970: 0),
+            includeGreedy: false,
+            summary: ScanSummary(applications: 0, brewFormulae: 2, brewCasks: 1, masApps: 0, outdated: 3, actionable: 1, scanMs: 1),
+            applications: ApplicationsScan(source: "test", ok: true, error: "", items: []),
+            brew: BrewScan(
+                available: true,
+                path: "/opt/homebrew/bin/brew",
+                prefix: "/opt/homebrew",
+                version: "Homebrew 5",
+                error: "",
+                includeGreedy: false,
+                formulae: [autoFormula, pinnedFormula],
+                casks: [greedyCask]
+            ),
+            mas: MasScan(available: false, path: "", error: "", apps: [])
+        )
+        let upgradeAllStore = UpgradePolicyStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("upgrade-all-\(UUID().uuidString).json"))
+        let upgradeAllRows = UpgradePlanner.makePlan(scan: upgradeAllScan, policyStore: upgradeAllStore, includeGreedy: false)
+        let executable = upgradeAllRows.filter(\.canExecute)
+        // 只有低风险、可自动执行的 jq 进入选包集合；固定的 locked 和高风险 greedy cask 被排除。
+        precondition(executable.map(\.packageID) == [autoFormula.id], "一键升级应只选可执行包，实际：\(executable.map(\.packageID))")
+        precondition(executable.contains { $0.packageID == pinnedFormula.id } == false, "固定包不得进入一键升级")
+        precondition(executable.contains { $0.packageID == greedyCask.id } == false, "高风险 cask 不得进入一键升级")
     }
 }

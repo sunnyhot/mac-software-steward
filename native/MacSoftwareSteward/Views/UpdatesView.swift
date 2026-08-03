@@ -3,6 +3,7 @@ import SwiftUI
 struct UpdatesView: View {
     @EnvironmentObject private var model: StewardModel
     @EnvironmentObject private var automationProfile: AutomationProfileStore
+    @EnvironmentObject private var inboxStore: InboxStore
     @State private var selectedFilter: UpdateFilter = .all
 
     var updates: [UpdatablePackage] {
@@ -86,6 +87,19 @@ struct UpdatesView: View {
 
             Spacer(minLength: 12)
 
+            Button {
+                Task {
+                    await model.upgradeAllExecutable(
+                        inboxStore: inboxStore,
+                        autoRepairProfile: automationProfile.profile
+                    )
+                }
+            } label: {
+                Label("一键升级 \(upgradableCount) 项", systemImage: "arrow.up.circle.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(upgradableCount == 0 || model.isScanning || model.hasRunningJob || model.isConfirmingUpgradePlan)
+
             Picker("", selection: $selectedFilter) {
                 ForEach(UpdateFilter.allCases) { filter in
                     Text(filter.rawValue).tag(filter)
@@ -95,15 +109,20 @@ struct UpdatesView: View {
             .pickerStyle(.segmented)
             .frame(width: 420)
             Button {
-                model.selectedTab = .rules
+                model.selectedTab = .settings
             } label: {
-                Label("升级策略", systemImage: "slider.horizontal.3")
+                Label("设置", systemImage: "gearshape")
                     .font(.caption)
             }
             .buttonStyle(.borderless)
         }
         .padding(12)
         .polishedTaskSurface(tint: .accentColor, isActive: false)
+    }
+
+    /// 全机可执行升级项的数量（不受当前筛选/搜索影响），用于「一键升级」按钮计数。
+    private var upgradableCount: Int {
+        model.availableUpdates.count
     }
 
     @ViewBuilder
@@ -217,7 +236,7 @@ struct UpdateRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            // 主行：图标 + 名称 + 标签 + 操作
+            // 主行：图标 + 名称 + 状态 + 操作
             HStack(spacing: 10) {
                 StatusIconPlate(
                     symbol: package.source.contains("Brew") ? "shippingbox" : "bag",
@@ -229,24 +248,6 @@ struct UpdateRow: View {
 
                 Spacer()
 
-                if package.isPinned {
-                    Badge(text: "固定", color: .red)
-                }
-                if package.autoUpdates {
-                    Badge(text: "自更新", color: .blue)
-                }
-
-                Picker("", selection: Binding(
-                    get: { model.policyStore.effectivePolicy(for: package, includeGreedy: model.includeGreedy) },
-                    set: { model.policyStore.set($0, forPackageID: package.id) }
-                )) {
-                    ForEach(UpgradePolicy.allCases) { policy in
-                        Text(policy.title).tag(policy)
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 116)
-
                 if let progress {
                     PackageProgressBadge(progress: progress)
                 } else {
@@ -256,15 +257,8 @@ struct UpdateRow: View {
                 actionButton
             }
 
-            // 次行：来源 + 版本变化
+            // 次行：版本变化
             HStack(spacing: 8) {
-                Text(package.source)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.08), in: Capsule())
-
                 VersionChangeLabel(
                     current: package.installedVersion,
                     available: availableVersionText(for: package)
@@ -666,7 +660,7 @@ struct PackageProgressDetail: View {
     @ViewBuilder
     private func actionButton(for action: FailureActionType) -> some View {
         switch action {
-        case .retry, .quitAndRetry, .reimport, .cleanup, .repairPerms, .promptAdminPassword:
+        case .retry, .quitAndRetry, .reimport, .cleanup, .repairPerms, .promptAdminPassword, .openLog:
             Button {
                 Task { await model.retryPackage(progress.packageID, inboxStore: inboxStore) }
             } label: {
@@ -691,16 +685,6 @@ struct PackageProgressDetail: View {
             .buttonStyle(.borderless)
             .font(.caption)
             .disabled(model.isScanning || model.isConfirmingUpgradePlan)
-
-        case .openLog:
-            Button {
-                model.selectedTab = .jobs
-            } label: {
-                Label("查看日志", systemImage: "terminal")
-            }
-            .buttonStyle(.borderless)
-            .font(.caption)
-            .disabled(packageActionDisabled)
 
         case .checkNetwork:
             Button {

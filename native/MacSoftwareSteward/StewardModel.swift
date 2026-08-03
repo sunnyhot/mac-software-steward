@@ -338,7 +338,26 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
         showingUpgradePlan = false
     }
 
-    private func upgradeSelectedPlanRows(
+    /// 一键升级所有可执行的升级项。
+    ///
+    /// 把当前扫描结果里所有 `canExecute` 的包（自动升级 + 无高风险阻断的确认后升级）
+    /// 作为单次批量任务入队，复用 `upgradeSelectedPlanRows` 的批量化路径：
+    /// 所有包进入同一个 job，sudos cask 由执行器在 job 结束时收集后只弹一次系统密码框。
+    /// 不经过升级计划确认页（`showingUpgradePlan` 保持 false）。
+    func upgradeAllExecutable(inboxStore: InboxStore? = nil, autoRepairProfile: AutomationProfile? = nil) async {
+        guard let scan, !isScanning, !hasRunningJob, !isConfirmingUpgradePlan else { return }
+        let rows = UpgradePlanner.makePlan(scan: scan, policyStore: policyStore, includeGreedy: includeGreedy)
+        let executable = rows.filter(\.canExecute)
+        guard !executable.isEmpty else {
+            errorMessage = "没有可执行的升级项。"
+            return
+        }
+        isConfirmingUpgradePlan = true
+        defer { isConfirmingUpgradePlan = false }
+        await upgradeSelectedPlanRows(executable, inboxStore: inboxStore, autoRepairProfile: autoRepairProfile)
+    }
+
+    func upgradeSelectedPlanRows(
         _ rows: [UpgradePlanRow],
         inboxStore: InboxStore? = nil,
         autoRepairProfile: AutomationProfile? = nil
@@ -398,7 +417,7 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
                 display: "brew install mas"
             )
             executor.startJob(label: "安装 mas CLI", commands: [command], rescanAfterSuccess: true)
-            selectedTab = .jobs
+            selectedTab = .updates
         } catch {
             errorMessage = "安装 mas CLI 需要可用的 Homebrew：\(error.localizedDescription)"
         }

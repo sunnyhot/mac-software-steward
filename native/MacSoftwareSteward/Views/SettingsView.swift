@@ -3,6 +3,9 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var updater: AppUpdateModel
     @EnvironmentObject private var launchAtLogin: LaunchAtLoginModel
+    @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
+    @State private var showsAdvancedUpgradeOptions = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -31,6 +34,34 @@ struct SettingsView: View {
                     }
                     SettingsDivider()
                     ManualCheckUpdateRow()
+                }
+
+                SettingsGroupBox {
+                    SettingsGroupHeader(title: "自动化策略", symbol: "switch.2")
+                    DailyInspectionToggleRow()
+                    if model.dailyInspectionEnabled {
+                        SettingsDivider()
+                        DailyInspectionTimeRow()
+                    }
+                    SettingsDivider()
+                    LowRiskHandlingRow()
+                    SettingsDivider()
+                    NotificationPolicyRow()
+                }
+
+                SettingsGroupBox {
+                    DisclosureGroup(isExpanded: $showsAdvancedUpgradeOptions) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            GreedyCaskRow()
+                            SettingsDivider()
+                            BrewUpdateRow()
+                            SettingsDivider()
+                            MaxConcurrentUpgradesRow()
+                        }
+                        .padding(.top, 8)
+                    } label: {
+                        SettingsGroupHeader(title: "高级升级选项", symbol: "gearshape.2")
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -453,10 +484,15 @@ struct NotificationPolicyRow: View {
                 .font(.body)
             Spacer()
             Picker("", selection: Binding(
-                get: { automationProfile.profile.notificationPolicy },
+                get: {
+                    // 历史遗留的 everyInspection/everyAction 已从 UI 移除；显示时归一为最接近的可见项。
+                    NotificationPolicy.visibleCases.contains(automationProfile.profile.notificationPolicy)
+                        ? automationProfile.profile.notificationPolicy
+                        : .decisionsAndFailures
+                },
                 set: { automationProfile.setNotificationPolicy($0) }
             )) {
-                ForEach(NotificationPolicy.allCases) { policy in
+                ForEach(NotificationPolicy.visibleCases) { policy in
                     Text(policy.title).tag(policy)
                 }
             }
@@ -480,10 +516,15 @@ struct RegularAppNetworkPolicyRow: View {
             }
             Spacer()
             Picker("", selection: Binding(
-                get: { automationProfile.profile.regularAppNetworkPolicy },
+                get: {
+                    // aggressive 是历史遗留值，UI 不再展示；显示时归一为等效的默认项。
+                    automationProfile.profile.regularAppNetworkPolicy == .aggressive
+                        ? .declaredSourcesOnly
+                        : automationProfile.profile.regularAppNetworkPolicy
+                },
                 set: { automationProfile.setRegularAppNetworkPolicy($0) }
             )) {
-                ForEach(RegularAppNetworkPolicy.allCases) { policy in
+                ForEach(RegularAppNetworkPolicy.visibleCases) { policy in
                     Text(policy.title).tag(policy)
                 }
             }
