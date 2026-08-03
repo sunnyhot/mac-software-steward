@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.18.4 (2026-08-03)
+
+### Homebrew Cask 下载优化
+
+- Cask 升级前自动尝试通过国内 GitHub 镜像预下载 Release 资产到 Homebrew 缓存，改善 GitHub 直连较慢时的升级体验。
+- 预下载仅作用于 GitHub Releases，并校验 Cask 声明的 SHA-256；镜像不可用或校验失败时自动回退到 Homebrew 原有下载流程。
+
 ## v0.18.3 (2026-08-03)
 
 ### 菜单栏优化

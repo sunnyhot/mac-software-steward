@@ -510,6 +510,11 @@ final class MaintenanceExecutor: ObservableObject {
                 }
                 let executor = self
                 group.addTask {
+                    // cask 升级前尝试通过国内镜像预下载到 brew 缓存，绕过 GitHub 直连慢的问题。
+                    // 失败静默跳过，不影响原有 brew 下载流程。
+                    if executor.isCaskStep(step) {
+                        await executor.prefetchCask(jobID: id, step: step, token: token)
+                    }
                     let result = await executor.runCommand(jobID: id, step: step, command: command, token: token)
                     return StepExecutionOutcome(step: step, command: command, result: result)
                 }
@@ -849,6 +854,51 @@ final class MaintenanceExecutor: ObservableObject {
         step.packageID ?? step.command.display
     }
 
+    /// 判断 step 是否为 cask 升级（packageID 含 ":cask:"）。
+    /// nonisolated：只读值类型 step，不访问可变状态，可在任意 actor 上下文同步调用。
+    nonisolated private func isCaskStep(_ step: UpgradeStep) -> Bool {
+        step.packageID?.contains(":cask:") == true
+    }
+
+    /// 通过国内镜像预下载 cask 文件到 brew 缓存。
+    /// brew 发现缓存文件后会跳过下载。失败静默跳过，不影响原有流程。
+    private func prefetchCask(jobID id: UUID, step: UpgradeStep, token: CommandCancellationToken) async {
+        guard let caskName = step.packageName, !caskName.isEmpty else { return }
+        guard step.packageID != nil else { return }
+        guard token.isCancelled == false else { return }
+
+        let brewPath: String
+        do {
+            brewPath = try await requireCommand("brew")
+        } catch {
+            return
+        }
+
+        let info = await CommandRunner.run(
+            brewPath,
+            arguments: ["info", "--cask", "--json=v2", caskName],
+            timeout: 30
+        )
+        guard info.ok, let downloadInfo = CaskMirrorPrefetcher.resolveDownloadInfo(from: info.stdout, caskName: caskName) else {
+            return
+        }
+
+        appendLog(id: id, stream: "system", text: "正在通过国内镜像预下载 \(caskName)…")
+        updatePackageDetail(for: step, phaseText: "镜像预下载", downloadFraction: 0)
+
+        let prefetched = await CaskMirrorPrefetcher.prefetch(info: downloadInfo) { fraction in
+            Task { @MainActor in
+                self.updatePackageDetail(for: step, phaseText: "镜像预下载 \(Int(fraction * 100))%", downloadFraction: fraction)
+            }
+        }
+
+        if prefetched {
+            appendLog(id: id, stream: "system", text: "镜像预下载完成，brew 将使用缓存安装。")
+        } else {
+            appendLog(id: id, stream: "system", text: "镜像预下载未成功，使用默认下载方式。")
+        }
+    }
+
     private func strategiesForStep(_ step: UpgradeStep) async -> [DownloadAccelerationStrategy] {
         let key = accelerationKey(for: step)
         if let existing = downloadAccelerationStrategies[key] {
@@ -1018,6 +1068,15 @@ final class MaintenanceExecutor: ObservableObject {
         if let sizeText = parsed.downloadSizeText { progress.downloadSizeText = sizeText }
         if let speedText = parsed.downloadSpeedText { progress.downloadSpeedText = speedText }
 
+        packageProgress[packageID] = progress
+    }
+
+    /// 直接设置进度项的阶段文本和下载百分比（用于镜像预下载阶段）。
+    private func updatePackageDetail(for step: UpgradeStep, phaseText: String, downloadFraction: Double?) {
+        guard let packageID = step.packageID, var progress = packageProgress[packageID] else { return }
+        progress.phaseText = phaseText
+        if let fraction = downloadFraction { progress.downloadFraction = fraction }
+        progress.updatedAt = Date()
         packageProgress[packageID] = progress
     }
 

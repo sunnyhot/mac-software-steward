@@ -401,6 +401,7 @@ run_test StewardModelScanGuardTest \
   "$SRC/MaintenanceCommandResolver.swift" \
   "$SRC/MaintenanceFailureAnalyzer.swift" \
   "$SRC/MaintenanceExecutor.swift" \
+  "$SRC/CaskMirrorPrefetcher.swift" \
   "$SRC/SudoScriptBuilder.swift" \
   "$SRC/SudoScriptParser.swift" \
   "$SRC/StewardModel.swift" \
@@ -458,5 +459,9 @@ run_test UpgradeVerifierTest \
   "$SRC/Models.swift" \
   "$SRC/UpgradeVerifier.swift" \
   "$TESTS/UpgradeVerifierTest.swift"
+
+run_test CaskMirrorPrefetcherTest \
+  "$SRC/CaskMirrorPrefetcher.swift" \
+  "$TESTS/CaskMirrorPrefetcherTest.swift"
 
 echo "All native tests passed."

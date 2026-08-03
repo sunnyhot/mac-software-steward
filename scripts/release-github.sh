@@ -31,6 +31,7 @@ bash "$ROOT_DIR/scripts/package-release.sh" >/dev/null
 git restore --worktree --staged native/Resources/AppIcon.iconset >/dev/null 2>&1 || true
 
 git add \
+  .zcode \
   .gitignore \
   README.md \
   CHANGELOG.md \
