@@ -506,7 +506,7 @@ enum SoftwareScanner {
                 pinned: pinned,
                 autoUpdates: autoUpdates,
                 outdated: pending != nil || advisory != nil,
-                upgradeable: pending != nil && !pinned && !(kind == "cask" && autoUpdates),
+                upgradeable: pending != nil && !pinned,
                 manualUpdateOnly: manualUpdateOnly
             )
         }

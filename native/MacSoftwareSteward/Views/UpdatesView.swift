@@ -11,6 +11,9 @@ struct UpdatesView: View {
             "\(package.name) \(package.source) \(package.installedVersion) \(package.currentVersion)"
         }
         return base.filter { package in
+            // 只保留真能升级的包；正在进行（有进度记录）的也保留以展示进度。
+            // “需手动”的包（upgradeable=false 且无进度）不属此页，归本机软件页。
+            guard package.upgradeable || model.packageProgress[package.id] != nil else { return false }
             switch selectedFilter {
             case .all:
                 return true
@@ -26,6 +29,13 @@ struct UpdatesView: View {
             case .skipped:
                 return model.policyStore.effectivePolicy(for: package, includeGreedy: model.includeGreedy) == .skip
             }
+        }
+        .sorted { lhs, rhs in
+            // 正在处理（下载中/升级中/排队）的排最前，其次是失败/需关注，其余按名字。
+            let lr = UpdateRowSort.priority(for: model.packageProgress[lhs.id]?.status)
+            let rr = UpdateRowSort.priority(for: model.packageProgress[rhs.id]?.status)
+            if lr != rr { return lr < rr }
+            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
         }
     }
 
@@ -301,7 +311,8 @@ struct UpdateRow: View {
             } label: {
                 Label("重试", systemImage: "arrow.clockwise")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.bordered)
+            .controlSize(.small)
             .disabled(packageActionDisabled)
         } else {
             Button {
@@ -313,10 +324,11 @@ struct UpdateRow: View {
                     )
                 }
             } label: {
-                Label(package.upgradeable ? "升级" : "需手动", systemImage: package.upgradeable ? "play" : "hand.raised")
+                Label("升级", systemImage: "play")
             }
-            .buttonStyle(.borderless)
-            .disabled(!package.upgradeable || packageActionDisabled)
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(packageActionDisabled)
         }
     }
 
@@ -402,6 +414,20 @@ private enum UpdateFilter: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// 可升级列表排序优先级：正在处理的排最前，其次是失败/需关注，其余最后。
+private enum UpdateRowSort {
+    static func priority(for status: PackageUpgradeStatus?) -> Int {
+        switch status {
+        case .running, .queued, .needsSudo:
+            return 0
+        case .failed, .timedOut, .cancelled, .warning:
+            return 1
+        case .succeeded, nil:
+            return 2
+        }
+    }
+}
+
 // MARK: - Status Badges
 
 struct PackageStatusBadge: View {
@@ -412,15 +438,11 @@ struct PackageStatusBadge: View {
     }
 
     private var text: String {
-        if package.upgradeable { return "可升级" }
-        if package.outdated { return "需手动" }
-        return "已最新"
+        package.upgradeable ? "可升级" : "已最新"
     }
 
     private var color: Color {
-        if package.upgradeable { return .orange }
-        if package.outdated { return .secondary }
-        return .green
+        package.upgradeable ? .orange : .green
     }
 }
 
