@@ -43,6 +43,10 @@ run_test AppUpdateSecurityTest \
   "$SRC/AppUpdateSecurity.swift" \
   "$TESTS/AppUpdateSecurityTest.swift"
 
+run_test AppUpdateFailureMemoryTest \
+  "$SRC/AppUpdateFailureMemory.swift" \
+  "$TESTS/AppUpdateFailureMemoryTest.swift"
+
 run_test AppUpdateDownloadPresenterTest \
   "$SRC/CommandRunner.swift" \
   "$SRC/DownloadAcceleration.swift" \
@@ -56,6 +60,7 @@ run_test AppUpdateModelAccelerationTest \
   "$SRC/CommandRunner.swift" \
   "$SRC/SelfUpdateInstallScript.swift" \
   "$SRC/AppUpdateSecurity.swift" \
+  "$SRC/AppUpdateFailureMemory.swift" \
   "$SRC/DownloadAcceleration.swift" \
   "$SRC/AcceleratedDownloader.swift" \
   "$SRC/AppUpdateDownloadPresenter.swift" \
@@ -337,6 +342,20 @@ run_test ScannerBrewListFallbackTest \
   "$SRC/BrewCaskCleanupDetector.swift" \
   "$SRC/Scanner.swift" \
   "$TESTS/ScannerBrewListFallbackTest.swift"
+
+run_test BrewScanErrorFormattingTest \
+  "$SRC/CommandRunner.swift" \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/AutomationProfileStore.swift" \
+  "$SRC/RegularAppUpdateDiscovery.swift" \
+  "$SRC/RegularAppUpdateDiscoveryCache.swift" \
+  "$SRC/SparkleAppcastChecker.swift" \
+  "$SRC/HomebrewCaskUpdateAdvisor.swift" \
+  "$SRC/BrewCaskCleanupDetector.swift" \
+  "$SRC/Scanner.swift" \
+  "$SRC/SourceDiagnostics.swift" \
+  "$TESTS/BrewScanErrorFormattingTest.swift"
 
 run_test ScannerAppUpdateCapabilityTest \
   "$SRC/CommandRunner.swift" \

@@ -209,6 +209,9 @@ enum SoftwareScanner {
         }
 
         let timeout: TimeInterval = 30
+        // outdated --greedy 会联网逐个检查每个 cask 的最新版，耗时远超本地命令，
+        // 单独给足时间，避免 30s 超时把 brew 进程中途 SIGTERM（这正是"Homebrew 扫描遇到错误"的根因）。
+        let outdatedTimeout: TimeInterval = 120
 
         let results = await withTaskGroup(of: BrewTaskOutput.self) { group in
             group.addTask {
@@ -227,7 +230,7 @@ enum SoftwareScanner {
                 BrewTaskOutput(tag: "outdated", result: await CommandRunner.run(
                     brewPath,
                     arguments: ["outdated", "--json=v2"] + (includeGreedy ? ["--greedy"] : []),
-                    timeout: timeout
+                    timeout: outdatedTimeout
                 ))
             }
 
@@ -276,7 +279,7 @@ enum SoftwareScanner {
         let errors = [
             formulaListResult.error,
             caskListResult.error,
-            commandError(outdated)
+            brewCommandError(tagged: "brew outdated", outdated)
         ]
             .filter { !$0.isEmpty }
 
@@ -464,6 +467,17 @@ enum SoftwareScanner {
 
     static func commandError(_ result: CommandResult) -> String {
         guard !result.ok else { return "" }
+        return result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// brew 扫描命令的错误格式化：被信号终止（通常是超时被 SIGTERM）时返回友好文案，
+    /// 不再把 Homebrew 的 Ruby SIGTERM 栈原样抛给用户。其它失败保留 stderr 原文便于排查。
+    static func brewCommandError(tagged commandLabel: String, _ result: CommandResult) -> String {
+        guard !result.ok else { return "" }
+        if result.wasSignaled {
+            let signalDesc = result.signalDescription ?? "进程异常退出 (exit code \(result.code))"
+            return "\(commandLabel) \(signalDesc)，可能是命令耗时过长被中断，请稍后重试。"
+        }
         return result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 

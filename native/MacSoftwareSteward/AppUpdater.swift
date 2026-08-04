@@ -42,6 +42,19 @@ final class AppUpdateModel: ObservableObject {
     @Published var downloadSpeedText: String? = nil
     /// 最近一次下载/安装失败的用户可读错误信息；nil 表示无失败
     @Published var updateErrorMessage: String? = nil
+    /// 失败版本记忆：当某个 (version, sha256) 校验/安装失败后记下，命中则跳过自动下载以打破循环。
+    /// 手动触发更新不受此限制。出现新版本时自动失效。
+    @Published var failedUpdateMemory: AppUpdateFailureMemory? {
+        didSet {
+            if let memory = failedUpdateMemory {
+                if let data = try? JSONEncoder().encode(memory) {
+                    UserDefaults.standard.set(data, forKey: Self.failedUpdateMemoryKey)
+                }
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.failedUpdateMemoryKey)
+            }
+        }
+    }
 
     private var latestRelease: GitHubRelease?
     private let session: URLSession
@@ -52,6 +65,8 @@ final class AppUpdateModel: ObservableObject {
 
     private static let automaticChecksKey = "AppUpdateAutomaticChecksEnabled"
     private static let automaticDownloadsKey = "AppUpdateAutomaticDownloadsEnabled"
+    /// 失败版本记忆持久化 key（存储 JSON 编码的 AppUpdateFailureMemory）
+    private static let failedUpdateMemoryKey = "AppUpdateFailedMemory"
     private static let checkInterval: TimeInterval = 4 * 3600
 
     /// 静态 manifest 下载地址（latest.json）
@@ -69,6 +84,10 @@ final class AppUpdateModel: ObservableObject {
         self.acceleratedDownloadRunner = acceleratedDownloadRunner
         self.automaticChecksEnabled = UserDefaults.standard.object(forKey: Self.automaticChecksKey) as? Bool ?? true
         self.automaticDownloadsEnabled = UserDefaults.standard.object(forKey: Self.automaticDownloadsKey) as? Bool ?? true
+        if let data = UserDefaults.standard.data(forKey: Self.failedUpdateMemoryKey),
+           let memory = try? JSONDecoder().decode(AppUpdateFailureMemory.self, from: data) {
+            self.failedUpdateMemory = memory
+        }
     }
 
     var currentVersion: String {
@@ -126,6 +145,12 @@ final class AppUpdateModel: ObservableObject {
             releasePublishedAtText = Self.displayDateTime(from: release.publishedAt)
             updateAvailable = compareVersions(release.versionString, currentVersion) == .orderedDescending
             lastCheckTime = Date()
+            // 失败记忆失效：当前 release 与记忆中的 (version, sha256) 不一致（新版本或同版本已重新打包），
+            // 说明那是一个新的、尚未失败过的产物，清除记忆以恢复自动下载。
+            if let memory = failedUpdateMemory,
+               !memory.shouldSkipAutoDownload(version: release.versionString, sha256: displayAsset?.expectedSHA256 ?? "") {
+                failedUpdateMemory = nil
+            }
             status = updateAvailable
                 ? "发现新版本 \(release.versionString)。"
                 : "当前已是最新版本 \(currentVersion)。"
@@ -141,6 +166,14 @@ final class AppUpdateModel: ObservableObject {
         isChecking = false
 
         if automatic, updateAvailable, automaticDownloadsEnabled {
+            // 命中失败版本记忆则跳过自动下载，打破坏 release 导致的无限重下循环。
+            // 手动点击"检查更新/下载并重启"不受此限制（manual 路径不会进入这里）。
+            if let memory = failedUpdateMemory,
+               let asset = latestRelease?.asset(named: assetName) ?? latestRelease?.firstZipAsset,
+               memory.shouldSkipAutoDownload(version: latestVersion, sha256: asset.expectedSHA256) {
+                status = "版本 \(latestVersion) 自动更新已暂停：上次安装失败，可手动重试。"
+                return
+            }
             showUpdateDialog = false
             await downloadInstallAndRestart()
         }
@@ -203,6 +236,13 @@ final class AppUpdateModel: ObservableObject {
             downloadedSizeText = nil
             totalDownloadSizeText = nil
             downloadSpeedText = nil
+            // 记录失败版本记忆：命中同一 (version, sha256) 的后续自动检查将跳过下载，
+            // 避免坏 release（如校验和与实际资产不符）触发无限重下。手动更新不受影响。
+            failedUpdateMemory = AppUpdateFailureMemory(
+                version: release.versionString,
+                sha256: asset.expectedSHA256,
+                failedAt: Date()
+            )
             // 自动下载失败时打开更新弹窗让用户看到失败原因
             showUpdateDialog = true
         }

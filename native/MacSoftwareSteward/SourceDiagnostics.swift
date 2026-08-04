@@ -81,6 +81,20 @@ enum SourceDiagnosticEngine {
             )
         }
 
+        // brew 扫描命令被信号终止（通常是 outdated --greedy 联网耗时过长被超时中断）。
+        // 这不是 Homebrew 损坏，brew doctor 无助于事，不要误导用户去终端。
+        if lowercased.contains("sigterm") || lowercased.contains("被终止") || lowercased.contains("被中断") || lowercased.contains("耗时过长") {
+            return SourceDiagnosis(
+                reason: "Homebrew 更新检查超时",
+                suggestion: "检查可升级列表耗时较长被中断，通常是一次性网络拉取较慢。请稍后重新扫描；如频繁超时，可在设置中关闭 greedy（含自动更新应用）扫描以加快速度。",
+                technicalDetails: error,
+                action: .rescan,
+                actionLabel: "重新扫描",
+                terminalCommand: nil,
+                terminalHint: nil
+            )
+        }
+
         return SourceDiagnosis(
             reason: "Homebrew 扫描遇到错误",
             suggestion: "部分操作未成功完成。可以尝试重新扫描，如持续失败请在终端运行 brew doctor 检查。",
