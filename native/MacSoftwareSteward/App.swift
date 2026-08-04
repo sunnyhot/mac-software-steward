@@ -98,6 +98,7 @@ struct MacSoftwareStewardApp: App {
                 .task {
                     applyDockIconPolicy()
                     model.refreshDailyInspectionStatus()
+                    await model.repairDailyInspectionIfNeeded()
                     publishAutomationIssues()
                     if model.scan == nil {
                         await model.scanSoftware(
@@ -193,13 +194,16 @@ struct MacSoftwareStewardApp: App {
         inboxStore.reload()
         model.inspectionReportStore.reload()
         model.refreshDailyInspectionStatus()
-        publishAutomationIssues()
+        Task {
+            await model.repairDailyInspectionIfNeeded()
+            publishAutomationIssues()
+        }
     }
 
     private func publishAutomationIssues() {
         AutomationIssueInboxPublisher.publishDailyInspectionIssue(
             profile: automationProfile.profile,
-            dailyInspectionEnabled: model.dailyInspectionEnabled,
+            dailyInspectionEnabled: model.dailyInspectionOperational,
             to: inboxStore
         )
     }

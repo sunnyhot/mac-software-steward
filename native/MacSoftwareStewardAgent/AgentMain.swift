@@ -28,8 +28,13 @@ struct MacSoftwareStewardAgent {
         let rows = UpgradePlanner.makePlan(scan: scan, policyStore: policyStore, includeGreedy: includeGreedy)
         let inboxStore = InboxStore()
         let inboxItemIDs = DailyInspectionInboxPublisher.publish(scan: scan, rows: rows, to: inboxStore)
+        let publishedInboxItems = inboxStore.items.filter { inboxItemIDs.contains($0.id) }
 
-        func writeReportAndExit(_ exitCode: Int32, failure: InspectionFailureRecord? = nil) -> Never {
+        func finish(
+            _ exitCode: Int32,
+            failures: [InspectionFailureRecord] = [],
+            succeededUpgradeCount: Int = 0
+        ) async -> Never {
             InspectionReportStore().append(
                 InspectionReportBuilder.makeReport(
                     trigger: .dailyAgent,
@@ -39,9 +44,26 @@ struct MacSoftwareStewardAgent {
                     rows: rows,
                     automaticPackages: automaticPackages,
                     inboxItemIDs: inboxItemIDs,
-                    failure: failure
+                    failures: failures
                 )
             )
+
+            let notificationDecision: AutomationNotificationDecision?
+            if failures.isEmpty {
+                notificationDecision = AutomationNotificationDecider.decision(
+                    policy: profile.notificationPolicy,
+                    newInboxItems: publishedInboxItems,
+                    automaticUpgradeCount: succeededUpgradeCount
+                )
+            } else {
+                notificationDecision = AutomationNotificationDecider.failureDecision(
+                    policy: profile.notificationPolicy,
+                    failures: failures
+                )
+            }
+            if let notificationDecision {
+                await UserNotificationDispatcher().deliver(notificationDecision)
+            }
             Foundation.exit(exitCode)
         }
 
@@ -65,7 +87,7 @@ struct MacSoftwareStewardAgent {
 
         guard !formulaUpdates.isEmpty || !caskUpdates.isEmpty || !masUpdates.isEmpty else {
             print("[system] 未发现可自动升级的软件")
-            writeReportAndExit(0)
+            await finish(0)
         }
 
         print("[updates] formula: \(formulaUpdates.map(\.name).joined(separator: ", "))")
@@ -74,33 +96,47 @@ struct MacSoftwareStewardAgent {
 
         guard autoUpgrade else {
             print("[system] 已禁用自动升级，仅完成巡检")
-            writeReportAndExit(0)
+            await finish(0)
         }
 
         var commands: [(String, [String], String)] = []
+        var failures: [InspectionFailureRecord] = []
 
         if !formulaUpdates.isEmpty || !caskUpdates.isEmpty {
-            guard let brew = await CommandRunner.commandPath("brew") else {
+            if let brew = await CommandRunner.commandPath("brew") {
+                if runBrewUpdate {
+                    print("[command] $ brew update")
+                    let code = await CommandRunner.runStreaming(brew, arguments: ["update"]) { stream, text in
+                        print("[\(stream)] \(text)")
+                    }
+                    if code != 0 {
+                        print("[warn] brew update 失败，退出码 \(code)；继续使用当前元数据处理其余项目")
+                        failures.append(
+                            InspectionFailureRecord(
+                                message: "brew update 失败，已继续处理其他项目",
+                                commandDisplay: "brew update",
+                                exitCode: code
+                            )
+                        )
+                    }
+                }
+                for formula in formulaUpdates {
+                    let args = ["upgrade", formula.name]
+                    commands.append((brew, args, (["brew"] + args).joined(separator: " ")))
+                }
+                for cask in caskUpdates {
+                    let args = ["upgrade", "--cask"] + (includeGreedy ? ["--greedy"] : []) + [cask.name]
+                    commands.append((brew, args, (["brew"] + args).joined(separator: " ")))
+                }
+            } else {
                 print("[error] 发现 Homebrew 更新，但找不到 brew")
-                writeReportAndExit(
-                    1,
-                    failure: InspectionFailureRecord(
+                failures.append(
+                    InspectionFailureRecord(
                         message: "发现 Homebrew 更新，但找不到 brew",
                         commandDisplay: "brew",
                         exitCode: 1
                     )
                 )
-            }
-            if runBrewUpdate {
-                commands.append((brew, ["update"], "brew update"))
-            }
-            for formula in formulaUpdates {
-                let args = ["upgrade", formula.name]
-                commands.append((brew, args, (["brew"] + args).joined(separator: " ")))
-            }
-            for cask in caskUpdates {
-                let args = ["upgrade", "--cask"] + (includeGreedy ? ["--greedy"] : []) + [cask.name]
-                commands.append((brew, args, (["brew"] + args).joined(separator: " ")))
             }
         }
 
@@ -112,9 +148,17 @@ struct MacSoftwareStewardAgent {
                 }
             } else {
                 print("[warn] 发现 Mac App Store 更新，但 mas CLI 不可用，已跳过")
+                failures.append(
+                    InspectionFailureRecord(
+                        message: "mas CLI 不可用，已跳过 Mac App Store 更新",
+                        commandDisplay: "mas",
+                        exitCode: nil
+                    )
+                )
             }
         }
 
+        var succeededUpgradeCount = 0
         for command in commands {
             print("[command] $ \(command.2)")
             let code = await CommandRunner.runStreaming(command.0, arguments: command.1) { stream, text in
@@ -122,18 +166,24 @@ struct MacSoftwareStewardAgent {
             }
             if code != 0 {
                 print("[error] 命令失败：\(command.2)，退出码 \(code)")
-                writeReportAndExit(
-                    code,
-                    failure: InspectionFailureRecord(
+                failures.append(
+                    InspectionFailureRecord(
                         message: "命令失败",
                         commandDisplay: command.2,
                         exitCode: code
                     )
                 )
+            } else {
+                succeededUpgradeCount += 1
             }
         }
 
-        print("[system] 每日巡检自动升级完成")
-        writeReportAndExit(0)
+        if failures.isEmpty {
+            print("[system] 每日巡检自动升级完成")
+            await finish(0, succeededUpgradeCount: succeededUpgradeCount)
+        } else {
+            print("[system] 每日巡检处理完成：成功 \(succeededUpgradeCount) 项，失败 \(failures.count) 项")
+            await finish(1, failures: failures, succeededUpgradeCount: succeededUpgradeCount)
+        }
     }
 }

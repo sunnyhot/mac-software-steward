@@ -334,6 +334,12 @@ struct UpgradeStep: Hashable {
     var command: UpgradeCommand
     var packageID: String?
     var packageName: String?
+    var purpose: UpgradeStepPurpose = .maintenance
+}
+
+enum UpgradeStepPurpose: Hashable {
+    case maintenance
+    case staleCaskCleanup
 }
 
 /// 用户可执行的恢复操作类型

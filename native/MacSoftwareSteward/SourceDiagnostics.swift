@@ -7,6 +7,8 @@ import AppKit
 struct SourceDiagnosis {
     var reason: String
     var suggestion: String
+    /// 扫描器返回的原始错误，仅在用户展开诊断详情时展示。
+    var technicalDetails: String? = nil
     var action: SourceRecoveryAction?
     var actionLabel: String?
     /// 可复制到终端的手动命令（可选）
@@ -27,11 +29,12 @@ enum SourceRecoveryAction: Hashable {
 enum SourceDiagnosticEngine {
 
     /// 诊断 Homebrew 状态
-    static func diagnoseBrew(available: Bool, error: String, hasScan: Bool) -> SourceDiagnosis? {
+    static func diagnoseBrew(available: Bool, error: String) -> SourceDiagnosis? {
         if !available {
             return SourceDiagnosis(
                 reason: "未检测到 Homebrew",
                 suggestion: "Homebrew 是 macOS 的软件包管理器，升级功能依赖它。请先安装 Homebrew。",
+                technicalDetails: error.isEmpty ? nil : error,
                 action: .openURL(URL(string: "https://brew.sh")!),
                 actionLabel: "访问 Homebrew 官网",
                 terminalCommand: "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"",
@@ -46,6 +49,7 @@ enum SourceDiagnosticEngine {
             return SourceDiagnosis(
                 reason: "Homebrew 连接网络失败",
                 suggestion: "请检查网络连接是否正常。如果使用代理，确保代理配置正确。",
+                technicalDetails: error,
                 action: .rescan,
                 actionLabel: "重新扫描",
                 terminalCommand: "brew update",
@@ -57,6 +61,7 @@ enum SourceDiagnosticEngine {
             return SourceDiagnosis(
                 reason: "Homebrew 权限不足",
                 suggestion: "Homebrew 无法访问所需的目录。请在终端中运行修复命令。",
+                technicalDetails: error,
                 action: .rescan,
                 actionLabel: "重新扫描",
                 terminalCommand: "brew doctor",
@@ -68,6 +73,7 @@ enum SourceDiagnosticEngine {
             return SourceDiagnosis(
                 reason: "Homebrew 组件缺失或路径损坏",
                 suggestion: "部分 Homebrew 文件丢失。请尝试重新扫描，如持续失败可在终端运行 brew doctor 检查。",
+                technicalDetails: error,
                 action: .rescan,
                 actionLabel: "重新扫描",
                 terminalCommand: nil,
@@ -78,6 +84,7 @@ enum SourceDiagnosticEngine {
         return SourceDiagnosis(
             reason: "Homebrew 扫描遇到错误",
             suggestion: "部分操作未成功完成。可以尝试重新扫描，如持续失败请在终端运行 brew doctor 检查。",
+            technicalDetails: error,
             action: .rescan,
             actionLabel: "重新扫描",
             terminalCommand: "brew doctor",
@@ -92,6 +99,7 @@ enum SourceDiagnosticEngine {
                 return SourceDiagnosis(
                     reason: "mas CLI 运行异常",
                     suggestion: "mas CLI 已安装但运行时崩溃。通常是因为未在 App Store 中登录，或当前系统版本不兼容。",
+                    technicalDetails: error,
                     action: canInstallMas ? .installMas : nil,
                     actionLabel: canInstallMas ? "重新安装 mas CLI" : nil,
                     terminalCommand: "mas list",
@@ -103,6 +111,7 @@ enum SourceDiagnosticEngine {
                 suggestion: canInstallMas
                     ? "mas CLI 用于管理 App Store 应用。点击下方按钮可通过 Homebrew 自动安装。"
                     : "mas CLI 用于管理 App Store 应用，但需要先安装 Homebrew 才能自动安装。",
+                technicalDetails: error.isEmpty ? nil : error,
                 action: canInstallMas ? .installMas : nil,
                 actionLabel: canInstallMas ? "安装 mas CLI" : nil,
                 terminalCommand: canInstallMas ? nil : "brew install mas",
@@ -117,6 +126,7 @@ enum SourceDiagnosticEngine {
             return SourceDiagnosis(
                 reason: "mas CLI 部分命令运行异常",
                 suggestion: "mas CLI 在扫描过程中出现崩溃，可能需要重新登录 App Store 或更新 mas。",
+                technicalDetails: error,
                 action: .rescan,
                 actionLabel: "重新扫描",
                 terminalCommand: "mas account",
@@ -128,6 +138,7 @@ enum SourceDiagnosticEngine {
             return SourceDiagnosis(
                 reason: "App Store 网络连接失败",
                 suggestion: "无法连接 App Store 服务器。请检查网络连接。",
+                technicalDetails: error,
                 action: .rescan,
                 actionLabel: "重新扫描",
                 terminalCommand: nil,
@@ -138,6 +149,7 @@ enum SourceDiagnosticEngine {
         return SourceDiagnosis(
             reason: "App Store 扫描遇到错误",
             suggestion: "部分 mas 命令执行失败。可以尝试重新扫描。",
+            technicalDetails: error,
             action: .rescan,
             actionLabel: "重新扫描",
             terminalCommand: "mas list",

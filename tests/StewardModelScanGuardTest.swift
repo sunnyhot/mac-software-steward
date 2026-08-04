@@ -63,6 +63,52 @@ struct StewardModelScanGuardTest {
     @MainActor
     static func main() async throws {
         UserDefaults.standard.removeObject(forKey: "maxConcurrentUpgrades")
+        let currentHelper = "/Applications/MacSoftwareSteward.app/Contents/MacOS/MacSoftwareStewardAgent"
+        let oldHelper = "/tmp/old/MacSoftwareStewardAgent"
+        let plistData = try PropertyListSerialization.data(
+            fromPropertyList: [
+                "ProgramArguments": [oldHelper, "daily-check", "--auto-upgrade", "--brew-update"],
+                "StartCalendarInterval": ["Hour": 7, "Minute": 30]
+            ],
+            format: .xml,
+            options: 0
+        )
+        let staleConfig = DailyInspectionScheduler.config(
+            plistData: plistData,
+            plistExists: true,
+            expectedHelperPath: currentHelper,
+            isExecutable: { $0 == oldHelper }
+        )
+        precondition(staleConfig.enabled)
+        precondition(!staleConfig.isOperational)
+        precondition(staleConfig.health == .needsRepair("后台程序仍指向旧版应用，需要更新为当前版本。"))
+        precondition(staleConfig.hour == 7 && staleConfig.minute == 30)
+        precondition(staleConfig.runBrewUpdate && !staleConfig.includeGreedy)
+
+        let healthyPlistData = try PropertyListSerialization.data(
+            fromPropertyList: [
+                "ProgramArguments": [currentHelper, "daily-check", "--auto-upgrade", "--greedy"],
+                "StartCalendarInterval": ["Hour": 9, "Minute": 0]
+            ],
+            format: .xml,
+            options: 0
+        )
+        let healthyConfig = DailyInspectionScheduler.config(
+            plistData: healthyPlistData,
+            plistExists: true,
+            expectedHelperPath: currentHelper,
+            isExecutable: { $0 == currentHelper }
+        )
+        precondition(healthyConfig.isOperational)
+        precondition(healthyConfig.includeGreedy && !healthyConfig.runBrewUpdate)
+        let failedRuntime = DailyInspectionScheduler.parseRuntimeStatus(
+            output: "state = not running\nlast exit code = 7\n",
+            isLoaded: true
+        )
+        precondition(failedRuntime == DailyInspectionRuntimeStatus(isLoaded: true, lastExitCode: 7))
+        let unloadedRuntime = DailyInspectionScheduler.parseRuntimeStatus(output: "", isLoaded: false)
+        precondition(unloadedRuntime == DailyInspectionRuntimeStatus(isLoaded: false, lastExitCode: nil))
+
         precondition(JobRescanPolicy.shouldRescanAfterJobCompletion(rescanAfterSuccess: true, status: .succeeded))
         precondition(JobRescanPolicy.shouldRescanAfterJobCompletion(rescanAfterSuccess: true, status: .failed))
         precondition(!JobRescanPolicy.shouldRescanAfterJobCompletion(rescanAfterSuccess: true, status: .cancelled), "Cancelled upgrade jobs must not trigger an automatic rescan")
@@ -219,6 +265,10 @@ struct StewardModelScanGuardTest {
             Set(manualCaskModel.availableUpdates.map(\.id)) == [executableFormula.id],
             "一键升级集合应与可执行集合一致，实际：\(manualCaskModel.availableUpdates.map(\.id))"
         )
+        manualCaskModel.executorDidRemoveStaleCaskRecord(packageID: staleCask.id)
+        precondition(manualCaskModel.staleCaskRecords.isEmpty)
+        precondition(!manualCaskModel.updateAttentionPackages.map(\.id).contains(staleCask.id))
+        precondition(manualCaskModel.scan?.brew.casks.map(\.id) == [manualCask.id])
         await manualCaskModel.checkAndPrepareMaintenance()
         precondition(manualCaskModel.showingUpgradePlan)
         precondition(Set(manualCaskModel.upgradePlanRows.map(\.packageID)) == [executableFormula.id, manualCask.id])

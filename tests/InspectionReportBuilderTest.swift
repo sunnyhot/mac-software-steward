@@ -27,7 +27,10 @@ struct InspectionReportBuilderTest {
             rows: rows,
             automaticPackages: [.brew(formula)],
             inboxItemIDs: [inboxID],
-            failure: InspectionFailureRecord(message: "command failed", commandDisplay: "brew upgrade jq", exitCode: 1)
+            failures: [
+                InspectionFailureRecord(message: "command failed", commandDisplay: "brew upgrade jq", exitCode: 1),
+                InspectionFailureRecord(message: "second failure", commandDisplay: "brew update", exitCode: 2)
+            ]
         )
 
         precondition(report.status == .failed)
@@ -36,6 +39,7 @@ struct InspectionReportBuilderTest {
         precondition(report.skippedItems.map(\.packageID) == [risky.id])
         precondition(report.skippedItems[0].reason == "需确认：检测到 major 版本变化")
         precondition(report.failures.first?.exitCode == 1)
+        precondition(report.failures.count == 2)
         precondition(report.inboxItemIDs == [inboxID])
     }
 }

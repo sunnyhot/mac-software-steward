@@ -555,37 +555,38 @@ func statusColor(_ status: JobStatus) -> Color {
 
 struct ErrorRecoveryCard: View {
     var diagnosis: SourceDiagnosis
+    var lastCheckedAt: Date? = nil
     var onAction: (SourceRecoveryAction) -> Void
     var isProcessing: Bool = false
 
-    @State private var showCopied = false
+    @State private var showsDetails = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // 原因
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.callout)
                     .foregroundStyle(.orange)
-                Text(diagnosis.reason)
-                    .font(.system(.subheadline, weight: .semibold))
-                    .foregroundStyle(.primary)
-            }
 
-            // 建议
-            Text(diagnosis.suggestion)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(diagnosis.reason)
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Text(diagnosis.suggestion)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let lastCheckedAt {
+                        Text("最近检查：\(lastCheckedAt.formatted(date: .omitted, time: .standard))")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
 
-            // 终端命令提示（如果有）
-            if let cmd = diagnosis.terminalCommand {
-                TerminalCommandHint(command: cmd, hint: diagnosis.terminalHint)
-            }
+                Spacer(minLength: 12)
 
-            // 操作按钮
-            if let action = diagnosis.action, let label = diagnosis.actionLabel {
-                HStack(spacing: 10) {
+                if let action = diagnosis.action, let label = diagnosis.actionLabel {
                     Button {
                         onAction(action)
                     } label: {
@@ -602,6 +603,30 @@ struct ErrorRecoveryCard: View {
                     .disabled(isProcessing)
                 }
             }
+
+            if hasDetails {
+                DisclosureGroup(isExpanded: $showsDetails) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if let details = diagnosis.technicalDetails,
+                           !details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text(details)
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .lineLimit(6)
+                        }
+                        if let command = diagnosis.terminalCommand {
+                            TerminalCommandHint(command: command, hint: diagnosis.terminalHint)
+                        }
+                    }
+                    .padding(.top, 6)
+                    .padding(.leading, 24)
+                } label: {
+                    Text("查看诊断详情")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -610,6 +635,11 @@ struct ErrorRecoveryCard: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(.orange.opacity(0.25), lineWidth: 1)
         )
+    }
+
+    private var hasDetails: Bool {
+        diagnosis.terminalCommand != nil
+            || diagnosis.technicalDetails?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 }
 

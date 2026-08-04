@@ -17,6 +17,7 @@ protocol MaintenanceExecutorHost: AnyObject {
     func executorRequestsDerivedDataRecompute()
     func executorCurrentScanApplications() -> ApplicationsScan?
     func executorPrunePackageProgress(keeping result: ScanResult)
+    func executorDidRemoveStaleCaskRecord(packageID: String)
 }
 
 @MainActor
@@ -977,6 +978,9 @@ final class MaintenanceExecutor: ObservableObject {
             status: .succeeded,
             detail: "升级完成"
         )
+        if step.purpose == .staleCaskCleanup {
+            host?.executorDidRemoveStaleCaskRecord(packageID: packageID)
+        }
     }
 
     private func markCleanedUp(_ step: UpgradeStep) {

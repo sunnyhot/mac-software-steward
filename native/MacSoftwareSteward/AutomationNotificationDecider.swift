@@ -7,6 +7,26 @@ struct AutomationNotificationDecision: Equatable {
 }
 
 enum AutomationNotificationDecider {
+    static func failureDecision(
+        policy: NotificationPolicy,
+        failures: [InspectionFailureRecord]
+    ) -> AutomationNotificationDecision? {
+        guard policy != .silent, !failures.isEmpty else { return nil }
+
+        let firstCommand = failures[0].commandDisplay
+        let body: String
+        if failures.count == 1 {
+            body = "\(firstCommand) 执行失败，其他项目已继续处理。"
+        } else {
+            body = "共有 \(failures.count) 项执行失败，其他项目已继续处理。"
+        }
+        return AutomationNotificationDecision(
+            title: "每日巡检有失败项目",
+            body: body,
+            isUrgent: true
+        )
+    }
+
     static func decision(
         policy: NotificationPolicy,
         newInboxItems: [InboxItem],

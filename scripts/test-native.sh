@@ -113,6 +113,7 @@ run_test HistoryPresenterTest \
 run_test AutomationNotificationDeciderTest \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/InboxStore.swift" \
+  "$SRC/InspectionReportStore.swift" \
   "$SRC/AutomationNotificationDecider.swift" \
   "$TESTS/AutomationNotificationDeciderTest.swift"
 

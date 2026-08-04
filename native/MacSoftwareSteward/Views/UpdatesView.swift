@@ -50,14 +50,17 @@ struct UpdatesView: View {
 
     @ViewBuilder
     private var sourceDiagnostics: some View {
-        if let brew = model.scan?.brew,
+        // 刷新期间保留上一轮列表，但不要继续展示已经过期的来源错误。
+        // 新诊断只在本轮扫描完成后出现，避免“正在扫描”与“扫描失败”同时成立。
+        if !model.isScanning,
+           let brew = model.scan?.brew,
            let diagnosis = SourceDiagnosticEngine.diagnoseBrew(
                available: brew.available,
-               error: brew.error,
-               hasScan: model.scan != nil
+               error: brew.error
            ) {
             ErrorRecoveryCard(
                 diagnosis: diagnosis,
+                lastCheckedAt: model.scan?.scannedAt,
                 onAction: { action in
                     Task { await model.performSourceRecovery(action: action) }
                 },
@@ -65,7 +68,8 @@ struct UpdatesView: View {
             )
         }
 
-        if let mas = model.scan?.mas,
+        if !model.isScanning,
+           let mas = model.scan?.mas,
            let diagnosis = SourceDiagnosticEngine.diagnoseMas(
                available: mas.available,
                error: mas.error,
@@ -73,6 +77,7 @@ struct UpdatesView: View {
            ) {
             ErrorRecoveryCard(
                 diagnosis: diagnosis,
+                lastCheckedAt: model.scan?.scannedAt,
                 onAction: { action in
                     Task { await model.performSourceRecovery(action: action) }
                 },
@@ -86,10 +91,21 @@ struct UpdatesView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("升级与解决建议")
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
-                Text("可直接执行的升级，以及需要切换渠道或使用官方更新器的项目会出现在这里。")
+                if model.isScanning, model.scan != nil {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(model.scanPhase?.rawValue ?? "正在后台刷新")
+                    }
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .accessibilityElement(children: .combine)
+                } else {
+                    Text("可直接执行的升级，以及需要切换渠道或使用官方更新器的项目会出现在这里。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
             }
 
             Spacer(minLength: 12)
@@ -134,7 +150,9 @@ struct UpdatesView: View {
 
     @ViewBuilder
     private var updateContent: some View {
-        if model.isScanning {
+        // 首次扫描没有可保留的结果，使用完整占位页；后续刷新继续展示旧列表，
+        // 仅在标题栏给出轻量进度，避免局部操作后整个页面被替换。
+        if model.isScanning, model.scan == nil {
             scanningView
         } else {
             // 只计算一次 filter+sort，避免 body 内多次读取 updates 导致重复全量计算。
@@ -245,7 +263,11 @@ struct UpdateRow: View {
     }
 
     private var packageActionDisabled: Bool {
-        model.isConfirmingUpgradePlan || model.isPackageActive(package.id)
+        model.isScanning || model.isConfirmingUpgradePlan || model.isPackageActive(package.id)
+    }
+
+    private var staleCleanupCompleted: Bool {
+        package.hasStaleInstallRecord && progress?.status == .succeeded
     }
 
     var body: some View {
@@ -262,7 +284,9 @@ struct UpdateRow: View {
 
                 Spacer()
 
-                if package.hasStaleInstallRecord {
+                if package.hasStaleInstallRecord, let progress {
+                    PackageProgressBadge(progress: progress)
+                } else if package.hasStaleInstallRecord {
                     Badge(text: "安装记录残留", color: .red)
                 } else if manualResolution != nil {
                     Badge(text: "渠道待同步", color: .yellow)
@@ -349,15 +373,27 @@ struct UpdateRow: View {
     @ViewBuilder
     private var actionButton: some View {
         if package.hasStaleInstallRecord {
-            Button(role: .destructive) {
-                showingStaleCleanupConfirmation = true
-            } label: {
-                Label("移除残留记录", systemImage: "trash")
+            if staleCleanupCompleted {
+                Button {} label: {
+                    Label("已移除，正在刷新", systemImage: "checkmark")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(true)
+            } else {
+                Button(role: .destructive) {
+                    showingStaleCleanupConfirmation = true
+                } label: {
+                    Label(
+                        model.isPackageActive(package.id) ? "正在移除" : "移除残留记录",
+                        systemImage: model.isPackageActive(package.id) ? "hourglass" : "trash"
+                    )
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(packageActionDisabled)
+                .help("应用文件已不存在，清除对应的 Homebrew cask 安装记录")
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(packageActionDisabled)
-            .help("应用文件已不存在，清除对应的 Homebrew cask 安装记录")
         } else if let resolution = manualResolution {
             Button {
                 if resolution.kind == .switchChannel {
@@ -429,13 +465,15 @@ struct UpdateRow: View {
 
     private var staleInstallRecordDetail: some View {
         HStack(alignment: .top, spacing: 7) {
-            Image(systemName: "externaldrive.badge.xmark")
-                .foregroundStyle(.red)
+            Image(systemName: staleCleanupCompleted ? "checkmark.circle.fill" : "externaldrive.badge.xmark")
+                .foregroundStyle(staleCleanupCompleted ? .green : .red)
             VStack(alignment: .leading, spacing: 2) {
-                Text("应用已删除，但 Homebrew 仍保留安装记录")
+                Text(staleCleanupCompleted ? "残留记录已移除" : "应用已删除，但 Homebrew 仍保留安装记录")
                     .font(.caption)
                     .fontWeight(.semibold)
-                Text("缺少：\(package.expectedAppPaths.joined(separator: "、"))")
+                Text(staleCleanupCompleted
+                    ? "正在后台刷新软件列表，这一项稍后会自动消失。"
+                    : "缺少：\(package.expectedAppPaths.joined(separator: "、"))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -454,6 +492,7 @@ struct UpdateRow: View {
     }
 
     private var rowAccent: Color {
+        if staleCleanupCompleted { return .green }
         if package.hasStaleInstallRecord { return .red }
         if manualResolution != nil { return .yellow }
         switch progress?.status {

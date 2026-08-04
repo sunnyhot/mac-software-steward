@@ -42,6 +42,8 @@ struct SettingsView: View {
                     if model.dailyInspectionEnabled {
                         SettingsDivider()
                         DailyInspectionTimeRow()
+                        SettingsDivider()
+                        DailyInspectionHealthRow()
                     }
                     SettingsDivider()
                     LowRiskHandlingRow()
@@ -314,6 +316,96 @@ struct DailyInspectionTimeRow: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
+            .keyboardShortcut(.defaultAction)
+        }
+    }
+}
+
+struct DailyInspectionHealthRow: View {
+    @EnvironmentObject private var model: StewardModel
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: statusSymbol)
+                .foregroundStyle(statusColor)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(statusTitle)
+                    .font(.body)
+                Text(statusDetail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if case .needsRepair = model.dailyInspectionHealth {
+                Button("一键修复") {
+                    Task { await model.repairDailyInspection() }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("重新安装并加载当前版本的每日巡检后台程序")
+            } else if let lastExitCode = model.dailyInspectionRuntime.lastExitCode,
+                      lastExitCode != 0 {
+                Button("查看日志") {
+                    model.openDailyInspectionLog()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("打开每日巡检日志查看失败原因")
+            }
+        }
+    }
+
+    private var statusTitle: String {
+        if case .needsRepair = model.dailyInspectionHealth {
+            return model.dailyInspectionHealth.title
+        }
+        if let code = model.dailyInspectionRuntime.lastExitCode, code != 0 {
+            return "最近巡检失败"
+        }
+        if model.dailyInspectionRuntime.lastExitCode == 0 {
+            return "运行正常"
+        }
+        return model.dailyInspectionHealth.title
+    }
+
+    private var statusDetail: String {
+        if case .needsRepair = model.dailyInspectionHealth {
+            return model.dailyInspectionHealth.detail
+        }
+        if let code = model.dailyInspectionRuntime.lastExitCode, code != 0 {
+            return "后台调度正常，最近一次巡检退出码为 \(code)。"
+        }
+        if model.dailyInspectionRuntime.lastExitCode == 0 {
+            return "后台程序与当前应用一致，最近一次巡检已完成。"
+        }
+        return "后台程序与当前应用一致，正在等待首次巡检。"
+    }
+
+    private var statusSymbol: String {
+        if let code = model.dailyInspectionRuntime.lastExitCode, code != 0,
+           model.dailyInspectionHealth == .healthy {
+            return "exclamationmark.circle.fill"
+        }
+        switch model.dailyInspectionHealth {
+        case .disabled: return "minus.circle"
+        case .healthy: return "checkmark.circle.fill"
+        case .needsRepair: return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var statusColor: Color {
+        if let code = model.dailyInspectionRuntime.lastExitCode, code != 0,
+           model.dailyInspectionHealth == .healthy {
+            return .orange
+        }
+        switch model.dailyInspectionHealth {
+        case .disabled: return .secondary
+        case .healthy: return .green
+        case .needsRepair: return .orange
         }
     }
 }

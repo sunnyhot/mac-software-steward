@@ -9,7 +9,7 @@ enum InspectionReportBuilder {
         rows: [UpgradePlanRow],
         automaticPackages: [UpdatablePackage],
         inboxItemIDs: [UUID] = [],
-        failure: InspectionFailureRecord? = nil
+        failures: [InspectionFailureRecord] = []
     ) -> InspectionReportRecord {
         let automaticIDs = Set(automaticPackages.map(\.id))
         let skippedItems = rows
@@ -30,7 +30,7 @@ enum InspectionReportBuilder {
             trigger: trigger,
             startedAt: startedAt,
             finishedAt: finishedAt,
-            status: failure == nil ? .succeeded : .failed,
+            status: failures.isEmpty ? .succeeded : .failed,
             scanSummary: InspectionScanSummary(
                 applications: scan.summary.applications,
                 brewFormulae: scan.summary.brewFormulae,
@@ -41,7 +41,7 @@ enum InspectionReportBuilder {
             ),
             automaticUpgrades: automaticPackages.map(packageRecord),
             skippedItems: skippedItems,
-            failures: failure.map { [$0] } ?? [],
+            failures: failures,
             inboxItemIDs: inboxItemIDs
         )
     }

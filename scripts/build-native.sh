@@ -63,6 +63,7 @@ run_or_explain "Building $APP_NAME" xcrun swiftc \
   -O \
   -target arm64-apple-macosx14.0 \
   -sdk "$SDK_PATH" \
+  -framework UserNotifications \
   -framework SwiftUI \
   -framework AppKit \
   "$ROOT_DIR"/native/MacSoftwareSteward/*.swift \
@@ -73,10 +74,13 @@ run_or_explain "Building ${APP_NAME}Agent" xcrun swiftc \
   -O \
   -target arm64-apple-macosx14.0 \
   -sdk "$SDK_PATH" \
+  -framework UserNotifications \
   "$ROOT_DIR"/native/MacSoftwareSteward/CommandRunner.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/ScanPerformance.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/Models.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/AutomationProfileStore.swift \
+  "$ROOT_DIR"/native/MacSoftwareSteward/AutomationNotificationDecider.swift \
+  "$ROOT_DIR"/native/MacSoftwareSteward/AutomationNotificationDispatcher.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/UpgradePolicyStore.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/RiskAssessor.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/UpgradePlanner.swift \

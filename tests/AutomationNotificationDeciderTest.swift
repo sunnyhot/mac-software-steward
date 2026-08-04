@@ -3,6 +3,18 @@ import Foundation
 @main
 struct AutomationNotificationDeciderTest {
     static func main() {
+        let failures = [
+            InspectionFailureRecord(message: "failed", commandDisplay: "brew upgrade jq", exitCode: 1),
+            InspectionFailureRecord(message: "failed", commandDisplay: "mas upgrade 1", exitCode: 2)
+        ]
+        precondition(AutomationNotificationDecider.failureDecision(policy: .silent, failures: failures) == nil)
+        let failureDecision = AutomationNotificationDecider.failureDecision(
+            policy: .decisionsAndFailures,
+            failures: failures
+        )
+        precondition(failureDecision?.title == "每日巡检有失败项目")
+        precondition(failureDecision?.body.contains("2") == true)
+
         let warning = InboxItem(
             kind: .upgradeDecision,
             severity: .warning,
