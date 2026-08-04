@@ -2,15 +2,9 @@ import SwiftUI
 
 struct ApplicationsView: View {
     @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var searchQuery: SearchQueryStore
     @State private var selectedFilter: LocalSoftwareFilter = .all
-
-    var rows: [LocalSoftwareRow] {
-        guard let scan = model.scan else { return [] }
-        let queried = filter(LocalSoftwarePresenter.rows(from: scan), query: model.query) { row in
-            row.searchText
-        }
-        return LocalSoftwarePresenter.filteredRows(queried, filter: selectedFilter)
-    }
+    @State private var displayedRows: [LocalSoftwareRow] = []
 
     var body: some View {
         ScrollView(.vertical) {
@@ -21,24 +15,41 @@ struct ApplicationsView: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(.bottom, 4)
         }
+        .onAppear(perform: refreshDisplayedRows)
+        .onChange(of: model.localSoftwareRows) { refreshDisplayedRows() }
+        .onChange(of: searchQuery.query) { refreshDisplayedRows() }
+        .onChange(of: selectedFilter) { refreshDisplayedRows() }
     }
 
     private var filterHeader: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Text("汇总电脑里可人工维护的软件，包括普通 App、Homebrew Formula、Homebrew Cask 和 App Store 应用。")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("软件清单")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    Text("统一查看普通 App、Homebrew 和 App Store 软件。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text("共 \(model.localSoftwareRows.count) 项")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
-            Spacer()
+            Divider().opacity(0.45)
 
-            Picker("筛选", selection: $selectedFilter) {
+            Picker("筛选软件", selection: $selectedFilter) {
                 ForEach(LocalSoftwareFilter.allCases) { filter in
                     Text(filter.rawValue).tag(filter)
                 }
             }
+            .labelsHidden()
             .pickerStyle(.segmented)
-            .frame(width: 520)
+            .frame(maxWidth: 620)
         }
+        .padding(12)
+        .polishedTaskSurface(tint: .accentColor, isActive: false)
     }
 
     @ViewBuilder
@@ -46,7 +57,7 @@ struct ApplicationsView: View {
         if let scan = model.scan?.applications, !scan.error.isEmpty {
             WarningLine(text: scan.error)
         }
-        if rows.isEmpty {
+        if displayedRows.isEmpty {
             EmptyStateView(
                 symbol: "checkmark.seal",
                 title: "暂无可维护软件",
@@ -54,7 +65,7 @@ struct ApplicationsView: View {
             )
         } else {
             LazyVStack(spacing: 8) {
-                ForEach(rows) { row in
+                ForEach(displayedRows) { row in
                     LocalSoftwareRowView(row: row)
                         .transition(.asymmetric(
                             insertion: .opacity.combined(with: .move(edge: .top)),
@@ -63,6 +74,19 @@ struct ApplicationsView: View {
                 }
             }
         }
+    }
+
+    private func refreshDisplayedRows() {
+        guard model.scan != nil else {
+            displayedRows = []
+            return
+        }
+        let queried = filter(model.localSoftwareRows, query: searchQuery.query) { row in
+            row.searchText
+        }
+        let nextRows = LocalSoftwarePresenter.filteredRows(queried, filter: selectedFilter)
+        guard nextRows != displayedRows else { return }
+        displayedRows = nextRows
     }
 }
 
@@ -154,14 +178,12 @@ private struct LocalSoftwareRowView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .stewardSurface(cornerRadius: 12)
         .background(rowTint, in: RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(isHovered ? kindColor.opacity(0.20) : Color.primary.opacity(0.06), lineWidth: 1)
         )
-        .scaleEffect(isHovered && progress == nil ? 1.005 : 1.0)
-        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isHovered)
         .onHover { hovering in
             isHovered = hovering
         }
@@ -316,14 +338,12 @@ struct ApplicationRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .stewardSurface(cornerRadius: 12)
         .background(rowTint, in: RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(isHovered ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.06), lineWidth: 1)
         )
-        .scaleEffect(isHovered ? 1.005 : 1.0)
-        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isHovered)
         .onHover { hovering in
             isHovered = hovering
         }

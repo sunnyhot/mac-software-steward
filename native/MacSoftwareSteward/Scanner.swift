@@ -1,11 +1,11 @@
 import Foundation
 
 enum ScanPhase: String, CaseIterable {
-    case systemProfiler = "正在扫描本机应用..."
+    case systemProfiler = "正在并行扫描应用、Homebrew 与 App Store..."
     case brewInfo = "正在获取 Homebrew 信息..."
-    case appStore = "正在扫描 App Store..."
     case classifying = "正在关联应用来源..."
-    case finished = "扫描完成"
+    case appStore = "正在检查应用更新源..."
+    case finished = "正在整理扫描结果..."
 
     var progress: Double {
         let total = ScanPhase.allCases.count
@@ -66,14 +66,12 @@ enum SoftwareScanner {
         async let applicationsTask = timed(.applications) {
             await scanApplications()
         }
-        onPhaseChange?(.brewInfo)
         async let brewTask = timed(.brew) {
             await scanBrew(
                 includeGreedy: includeGreedy,
                 regularAppNetworkPolicy: regularAppNetworkPolicy
             )
         }
-        onPhaseChange?(.appStore)
         async let masTask = timed(.mas) {
             await scanMas()
         }
@@ -100,6 +98,7 @@ enum SoftwareScanner {
         )
         applications.items = classify(applications.items, brew: brew, mas: mas)
 
+        onPhaseChange?(.appStore)
         let discoveryTimed = timedSync(.regularAppDiscovery) {
             attachUpdateCapabilities(to: applications.items, cache: regularAppUpdateDiscoveryCache)
         }
@@ -113,6 +112,7 @@ enum SoftwareScanner {
         }
         applications.items = sparkleTimed.value
 
+        onPhaseChange?(.finished)
         let totalMs = elapsedMs(since: totalStarted)
         let scannedAt = Date()
         let summary = ScanSummary(
@@ -710,10 +710,13 @@ enum SoftwareScanner {
         cache: RegularAppUpdateDiscoveryCache? = nil,
         capabilityLoader: (String) -> AppUpdateCapability = RegularAppUpdateDiscovery.discover
     ) -> [AppItem] {
-        apps.map { app in
+        let cachedCapabilities = cache?.capabilities(
+            for: apps.map(\.path),
+            loader: capabilityLoader
+        )
+        return apps.map { app in
             var next = app
-            let capability = cache?.capability(for: app.path, loader: capabilityLoader)
-                ?? capabilityLoader(app.path)
+            let capability = cachedCapabilities?[app.path] ?? capabilityLoader(app.path)
             next.updateCapability = capability
             if next.managedBy == "manual", capability.hasManualAction, next.updateState == "unknown" {
                 next.updateState = "checkable"

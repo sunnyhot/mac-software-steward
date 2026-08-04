@@ -62,6 +62,13 @@ struct RegularAppUpdateDiscoveryCacheTest {
         precondition(reloaded.records.count == 2)
         precondition(!reloaded.records.contains { $0.appPath == firstTrimApp.path })
 
+        let batch = reloaded.capabilities(for: [secondTrimApp.path, thirdTrimApp.path]) { _ in
+            preconditionFailure("批量读取未变化应用时应命中缓存")
+        }
+        precondition(batch.count == 2)
+        let batchReloaded = RegularAppUpdateDiscoveryCache(fileURL: cacheURL, limit: 2)
+        precondition(batchReloaded.records.count == 2, "批量缓存结果应在单次写盘后完整保存")
+
         try "not-json".write(to: cacheURL, atomically: true, encoding: .utf8)
         let corrupt = RegularAppUpdateDiscoveryCache(fileURL: cacheURL, limit: 2)
         precondition(corrupt.records.isEmpty)

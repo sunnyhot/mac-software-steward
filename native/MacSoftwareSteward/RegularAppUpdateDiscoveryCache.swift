@@ -38,17 +38,44 @@ final class RegularAppUpdateDiscoveryCache: ObservableObject {
         for appPath: String,
         loader: (String) -> AppUpdateCapability = RegularAppUpdateDiscovery.discover
     ) -> AppUpdateCapability {
+        let capability = resolveCapability(for: appPath, loader: loader, trimAfterResolution: true)
+        save()
+        return capability
+    }
+
+    /// 批量解析一轮扫描中的应用，只在全部缓存变更完成后写盘一次。
+    func capabilities(
+        for appPaths: [String],
+        loader: (String) -> AppUpdateCapability = RegularAppUpdateDiscovery.discover
+    ) -> [String: AppUpdateCapability] {
+        var resolved: [String: AppUpdateCapability] = [:]
+        resolved.reserveCapacity(appPaths.count)
+        for appPath in appPaths {
+            resolved[appPath] = resolveCapability(
+                for: appPath,
+                loader: loader,
+                trimAfterResolution: false
+            )
+        }
+        trimToLimit()
+        save()
+        return resolved
+    }
+
+    private func resolveCapability(
+        for appPath: String,
+        loader: (String) -> AppUpdateCapability,
+        trimAfterResolution: Bool
+    ) -> AppUpdateCapability {
         guard let metadata = Self.metadata(for: appPath) else {
             remove(appPath)
-            save()
             return .none
         }
 
         if let index = records.firstIndex(where: { $0.appPath == appPath }),
            records[index].metadata == metadata {
             records[index].lastSeenAt = Date()
-            trimToLimit()
-            save()
+            if trimAfterResolution { trimToLimit() }
             return records[index].capability
         }
 
@@ -60,7 +87,7 @@ final class RegularAppUpdateDiscoveryCache: ObservableObject {
             lastSeenAt: Date()
         )
         upsert(record)
-        save()
+        if trimAfterResolution { trimToLimit() }
         return capability
     }
 
@@ -77,7 +104,6 @@ final class RegularAppUpdateDiscoveryCache: ObservableObject {
     private func upsert(_ record: RegularAppUpdateDiscoveryCacheRecord) {
         remove(record.appPath)
         records.insert(record, at: 0)
-        trimToLimit()
     }
 
     private func remove(_ appPath: String) {

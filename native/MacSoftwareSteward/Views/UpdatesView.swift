@@ -4,10 +4,11 @@ struct UpdatesView: View {
     @EnvironmentObject private var model: StewardModel
     @EnvironmentObject private var automationProfile: AutomationProfileStore
     @EnvironmentObject private var inboxStore: InboxStore
+    @EnvironmentObject private var searchQuery: SearchQueryStore
     @State private var selectedFilter: UpdateFilter = .all
 
     var updates: [UpdatablePackage] {
-        let base = filter(model.updateAttentionPackages, query: model.query) { package in
+        let base = filter(model.updateAttentionPackages, query: searchQuery.query) { package in
             "\(package.name) \(package.source) \(package.installedVersion) \(package.currentVersion)"
         }
         return base.filter { package in
@@ -87,57 +88,66 @@ struct UpdatesView: View {
     }
 
     private var filterHeader: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("升级与解决建议")
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                if model.isScanning, model.scan != nil {
-                    HStack(spacing: 6) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text(model.scanPhase?.rawValue ?? "正在后台刷新")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityElement(children: .combine)
-                } else {
-                    Text("可直接执行的升级，以及需要切换渠道或使用官方更新器的项目会出现在这里。")
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("升级与解决建议")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    if model.isScanning, model.scan != nil {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text(model.scanPhase?.rawValue ?? "正在后台刷新")
+                        }
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .accessibilityElement(children: .combine)
+                    } else {
+                        Text("集中处理可执行升级、渠道调整和安装记录残留。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
                 }
+
+                Spacer(minLength: 12)
+
+                Button {
+                    Task {
+                        await model.upgradeAllExecutable(
+                            inboxStore: inboxStore,
+                            autoRepairProfile: automationProfile.profile
+                        )
+                    }
+                } label: {
+                    Label("一键升级 \(upgradableCount) 项", systemImage: "arrow.up.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(upgradableCount == 0 || model.isScanning || model.hasRunningJob || model.isConfirmingUpgradePlan)
             }
 
-            Spacer(minLength: 12)
+            Divider().opacity(0.45)
 
-            Button {
-                Task {
-                    await model.upgradeAllExecutable(
-                        inboxStore: inboxStore,
-                        autoRepairProfile: automationProfile.profile
-                    )
+            HStack(spacing: 12) {
+                Picker("筛选升级项目", selection: $selectedFilter) {
+                    ForEach(UpdateFilter.allCases) { filter in
+                        Text(filter.rawValue).tag(filter)
+                    }
                 }
-            } label: {
-                Label("一键升级 \(upgradableCount) 项", systemImage: "arrow.up.circle.fill")
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(upgradableCount == 0 || model.isScanning || model.hasRunningJob || model.isConfirmingUpgradePlan)
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 560)
 
-            Picker("", selection: $selectedFilter) {
-                ForEach(UpdateFilter.allCases) { filter in
-                    Text(filter.rawValue).tag(filter)
+                Spacer(minLength: 0)
+
+                Button {
+                    model.selectedTab = .settings
+                } label: {
+                    Label("升级设置", systemImage: "gearshape")
+                        .font(.caption)
                 }
+                .buttonStyle(.borderless)
             }
-            .labelsHidden()
-            .pickerStyle(.segmented)
-            .frame(width: 420)
-            Button {
-                model.selectedTab = .settings
-            } label: {
-                Label("设置", systemImage: "gearshape")
-                    .font(.caption)
-            }
-            .buttonStyle(.borderless)
         }
         .padding(12)
         .polishedTaskSurface(tint: .accentColor, isActive: false)

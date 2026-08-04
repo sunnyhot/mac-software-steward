@@ -19,14 +19,23 @@ func tintColor(for role: MaintenanceStatusTintRole) -> Color {
     }
 }
 
-extension View {
+private struct StewardSymbolPulseModifier: ViewModifier {
+    var active: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @ViewBuilder
-    func stewardSymbolPulse(active: Bool) -> some View {
+    func body(content: Content) -> some View {
         if #available(macOS 15.0, *) {
-            self.symbolEffect(.pulse, options: .repeating, isActive: active)
+            content.symbolEffect(.pulse, options: .repeating, isActive: active && !reduceMotion)
         } else {
-            self
+            content
         }
+    }
+}
+
+extension View {
+    func stewardSymbolPulse(active: Bool) -> some View {
+        modifier(StewardSymbolPulseModifier(active: active))
     }
 }
 
@@ -282,6 +291,7 @@ struct CopyableText: View {
     var text: String
     var font: Font = .system(.headline, design: .rounded)
     @State private var didCopy = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Text(text)
@@ -311,7 +321,7 @@ struct CopyableText: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 }
             }
-            .animation(.spring(response: 0.3), value: didCopy)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: didCopy)
     }
 }
 
@@ -559,8 +569,6 @@ struct ErrorRecoveryCard: View {
     var onAction: (SourceRecoveryAction) -> Void
     var isProcessing: Bool = false
 
-    @State private var showsDetails = false
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 10) {
@@ -604,28 +612,34 @@ struct ErrorRecoveryCard: View {
                 }
             }
 
-            if hasDetails {
-                DisclosureGroup(isExpanded: $showsDetails) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if let details = diagnosis.technicalDetails,
-                           !details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Text(details)
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                                .lineLimit(6)
+            if let details = normalizedTechnicalDetails {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Label("错误详情", systemImage: "terminal")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button {
+                            copyToPasteboard(details)
+                        } label: {
+                            Label("复制错误", systemImage: "doc.on.doc")
+                                .font(.caption2)
                         }
-                        if let command = diagnosis.terminalCommand {
-                            TerminalCommandHint(command: command, hint: diagnosis.terminalHint)
-                        }
+                        .buttonStyle(.borderless)
                     }
-                    .padding(.top, 6)
-                    .padding(.leading, 24)
-                } label: {
-                    Text("查看诊断详情")
-                        .font(.caption)
+                    Text(details)
+                        .font(.system(.caption, design: .monospaced))
                         .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .lineLimit(6)
                 }
+                .padding(10)
+                .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+            }
+
+            if let command = diagnosis.terminalCommand {
+                TerminalCommandHint(command: command, hint: diagnosis.terminalHint)
             }
         }
         .padding(14)
@@ -637,9 +651,10 @@ struct ErrorRecoveryCard: View {
         )
     }
 
-    private var hasDetails: Bool {
-        diagnosis.terminalCommand != nil
-            || diagnosis.technicalDetails?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    private var normalizedTechnicalDetails: String? {
+        guard let details = diagnosis.technicalDetails?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !details.isEmpty else { return nil }
+        return details
     }
 }
 
@@ -649,6 +664,7 @@ struct TerminalCommandHint: View {
     var hint: String?
 
     @State private var showCopied = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -665,11 +681,11 @@ struct TerminalCommandHint: View {
                 Spacer()
                 Button {
                     copyToPasteboard(command)
-                    withAnimation(.spring(response: 0.3)) {
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
                         showCopied = true
                     }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        withAnimation(.spring(response: 0.3)) {
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
                             showCopied = false
                         }
                     }

@@ -19,17 +19,6 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
             UserDefaults.standard.set(runBrewUpdate, forKey: "runBrewUpdate")
         }
     }
-    @Published var debouncedQuery = ""
-    @Published var query = "" {
-        didSet {
-            debounceTask?.cancel()
-            debounceTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 300_000_000)
-                guard !Task.isCancelled else { return }
-                self.debouncedQuery = self.query
-            }
-        }
-    }
     @Published var errorMessage = ""
 
     @Published var dailyInspectionEnabled = false
@@ -55,7 +44,6 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
 
     private let scanner: SoftwareScanning
     private let notificationDispatcher: AutomationNotificationDelivering
-    private var debounceTask: Task<Void, Never>?
     private var executorObserver: AnyCancellable?
     private var lastNotifiedUpgradeIDs: Set<String> = []
     @Published private var dismissedUpgradeReminderIDs: Set<String> = []
@@ -120,14 +108,10 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     @Published var staleCaskRecords: [UpdatablePackage] = []
 
     /// 升级页需要展示的全部项目：可执行升级、厂商手动更新、Homebrew 残留记录。
-    var updateAttentionPackages: [UpdatablePackage] {
-        var seen: Set<String> = []
-        return (
-            executableUpdates
-                + allUpgradeablePackages.filter(\.manualUpdateOnly)
-                + staleCaskRecords
-        ).filter { seen.insert($0.id).inserted }
-    }
+    @Published private(set) var updateAttentionPackages: [UpdatablePackage] = []
+
+    /// 扫描完成时一次性构建，避免升级进度刷新时重复把完整扫描结果转换成列表行。
+    @Published private(set) var localSoftwareRows: [LocalSoftwareRow] = []
 
     var shouldShowUpgradeReminder: Bool {
         let currentIDs = Set(availableUpdates.map(\.id))
@@ -145,28 +129,53 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     /// 数据变化时一次性更新发现项、可执行项和当前可一键升级项。
     private func recomputeDerivedData() {
         guard let scan else {
-            allUpgradeablePackages = []
-            availableUpdates = []
-            executableUpdates = []
-            staleCaskRecords = []
-            dismissedUpgradeReminderIDs = []
+            assignIfChanged(\.allUpgradeablePackages, [])
+            assignIfChanged(\.availableUpdates, [])
+            assignIfChanged(\.executableUpdates, [])
+            assignIfChanged(\.staleCaskRecords, [])
+            assignIfChanged(\.updateAttentionPackages, [])
+            assignIfChanged(\.localSoftwareRows, [])
+            assignIfChanged(\.dismissedUpgradeReminderIDs, [])
             return
         }
-        allUpgradeablePackages = scan.brew.formulae.filter { $0.outdated || $0.upgradeable }.map(UpdatablePackage.brew)
+        let nextAllUpgradeablePackages = scan.brew.formulae.filter { $0.outdated || $0.upgradeable }.map(UpdatablePackage.brew)
             + scan.brew.casks.filter { $0.outdated || $0.upgradeable }.map(UpdatablePackage.brew)
             + scan.mas.apps.filter { $0.outdated || $0.upgradeable }.map(UpdatablePackage.mas)
-        staleCaskRecords = scan.brew.casks.filter(\.hasStaleInstallRecord).map(UpdatablePackage.brew)
-        executableUpdates = UpgradePlanner.executablePackages(
+        let nextStaleCaskRecords = scan.brew.casks.filter(\.hasStaleInstallRecord).map(UpdatablePackage.brew)
+        let nextExecutableUpdates = UpgradePlanner.executablePackages(
             scan: scan,
             policyStore: policyStore,
             includeGreedy: includeGreedy
         )
-        availableUpdates = executableUpdates.filter { package in
+        let nextAvailableUpdates = nextExecutableUpdates.filter { package in
             let status = packageProgress[package.id]?.status
             return status != .succeeded && status != .running && status != .queued
         }
-        let currentIDs = Set(availableUpdates.map(\.id))
-        dismissedUpgradeReminderIDs.formIntersection(currentIDs)
+        var seen: Set<String> = []
+        let nextAttentionPackages = (
+            nextExecutableUpdates
+                + nextAllUpgradeablePackages.filter(\.manualUpdateOnly)
+                + nextStaleCaskRecords
+        ).filter { seen.insert($0.id).inserted }
+        let currentIDs = Set(nextAvailableUpdates.map(\.id))
+        let nextDismissedIDs = dismissedUpgradeReminderIDs.intersection(currentIDs)
+
+        assignIfChanged(\.allUpgradeablePackages, nextAllUpgradeablePackages)
+        assignIfChanged(\.availableUpdates, nextAvailableUpdates)
+        assignIfChanged(\.executableUpdates, nextExecutableUpdates)
+        assignIfChanged(\.staleCaskRecords, nextStaleCaskRecords)
+        assignIfChanged(\.updateAttentionPackages, nextAttentionPackages)
+        assignIfChanged(\.localSoftwareRows, LocalSoftwarePresenter.rows(from: scan))
+        assignIfChanged(\.dismissedUpgradeReminderIDs, nextDismissedIDs)
+    }
+
+    /// 避免给 `@Published` 写回完全相同的值，减少无意义的视图刷新。
+    private func assignIfChanged<Value: Equatable>(
+        _ keyPath: ReferenceWritableKeyPath<StewardModel, Value>,
+        _ value: Value
+    ) {
+        guard self[keyPath: keyPath] != value else { return }
+        self[keyPath: keyPath] = value
     }
 
     var hasRunningJob: Bool {

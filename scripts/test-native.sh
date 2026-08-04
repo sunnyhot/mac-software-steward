@@ -77,6 +77,16 @@ run_test AppTabVisibilityTest \
 run_test TabScrollStructureTest \
   "$TESTS/TabScrollStructureTest.swift"
 
+run_test DisclosureInteractionTest \
+  "$TESTS/DisclosureInteractionTest.swift"
+
+run_test SearchQueryStoreTest \
+  "$SRC/SearchQueryStore.swift" \
+  "$TESTS/SearchQueryStoreTest.swift"
+
+run_test UIResponsivenessStructureTest \
+  "$TESTS/UIResponsivenessStructureTest.swift"
+
 run_test MaintenanceStatusPresenterTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
@@ -371,6 +381,8 @@ run_test StewardModelScanGuardTest \
   "$SRC/CommandRunner.swift" \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
+  "$SRC/ApplicationVisibilityPresenter.swift" \
+  "$SRC/LocalSoftwarePresenter.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RegularAppUpdateDiscovery.swift" \
   "$SRC/RegularAppUpdateDiscoveryCache.swift" \

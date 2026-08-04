@@ -80,6 +80,7 @@ struct MacSoftwareStewardApp: App {
     @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
     @AppStorage("dockIconVisible") private var dockIconVisible = true
     @StateObject private var model = StewardModel()
+    @StateObject private var searchQuery = SearchQueryStore()
     @StateObject private var updater = AppUpdateModel()
     @StateObject private var launchAtLogin = LaunchAtLoginModel()
     @StateObject private var automationProfile = AutomationProfileStore()
@@ -89,6 +90,7 @@ struct MacSoftwareStewardApp: App {
         WindowGroup(id: "main") {
             ContentView()
                 .environmentObject(model)
+                .environmentObject(searchQuery)
                 .environmentObject(updater)
                 .environmentObject(launchAtLogin)
                 .environmentObject(automationProfile)
@@ -128,6 +130,32 @@ struct MacSoftwareStewardApp: App {
         }
         .menuBarExtraStyle(.menu)
         .commands {
+            CommandMenu("导航") {
+                Button("可升级") {
+                    model.selectedTab = .updates
+                }
+                .keyboardShortcut("1", modifiers: [.command])
+
+                Button("本机软件") {
+                    model.selectedTab = .applications
+                }
+                .keyboardShortcut("2", modifiers: [.command])
+
+                Button("搜索") {
+                    guard model.selectedTab.usesSearch else { return }
+                    NotificationCenter.default.post(name: .focusStewardSearch, object: nil)
+                }
+                .keyboardShortcut("f", modifiers: [.command])
+                .disabled(!model.selectedTab.usesSearch)
+            }
+
+            CommandGroup(replacing: .appSettings) {
+                Button("设置…") {
+                    model.selectedTab = .settings
+                }
+                .keyboardShortcut(",", modifiers: [.command])
+            }
+
             CommandGroup(after: .newItem) {
                 Button("扫描软件") {
                     Task {

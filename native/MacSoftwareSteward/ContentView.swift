@@ -5,6 +5,7 @@ struct ContentView: View {
     @EnvironmentObject private var updater: AppUpdateModel
     @EnvironmentObject private var automationProfile: AutomationProfileStore
     @EnvironmentObject private var inboxStore: InboxStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationSplitView {
@@ -15,7 +16,7 @@ struct ContentView: View {
             MainPanel()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .background(StewardCanvasBackground().ignoresSafeArea())
-                .animation(.easeInOut(duration: 0.2), value: model.selectedTab)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: model.selectedTab)
         }
         .toolbarBackground(Color(nsColor: .windowBackgroundColor), for: .windowToolbar)
         .toolbarBackground(.visible, for: .windowToolbar)
@@ -139,9 +140,7 @@ private struct TaskFirstSidebar: View {
     }
 
     private func select(_ tab: AppTab) {
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-            model.selectedTab = tab
-        }
+        model.selectedTab = tab
     }
 }
 
@@ -163,6 +162,7 @@ private struct SidebarSection<Content: View>: View {
 
 private struct SidebarStatusChip: View {
     @EnvironmentObject private var model: StewardModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var presentation: MaintenanceStatusPresentation {
         MaintenanceStatusPresenter.presentation(
@@ -208,7 +208,7 @@ private struct SidebarStatusChip: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
         .polishedTaskSurface(tint: tint, isActive: presentation.isActive)
-        .animation(.easeOut(duration: 0.18), value: presentation)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: presentation)
     }
 }
 
@@ -219,6 +219,7 @@ private struct SidebarRow: View {
     var isUtility = false
     var action: () -> Void
     @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var rowState: SidebarRowInteractionState {
         isSelected ? .selected : (isHovered ? .hovered : .normal)
@@ -257,8 +258,7 @@ private struct SidebarRow: View {
             }
         }
         .buttonStyle(.plain)
-        .scaleEffect(rowState == .hovered ? 1.012 : 1.0)
-        .animation(.spring(response: 0.24, dampingFraction: 0.78), value: rowState)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: rowState)
         .onHover { hovering in
             isHovered = hovering
         }
@@ -313,6 +313,7 @@ private struct MainPanel: View {
     @EnvironmentObject private var model: StewardModel
     @EnvironmentObject private var automationProfile: AutomationProfileStore
     @EnvironmentObject private var inboxStore: InboxStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 14) {
@@ -324,7 +325,7 @@ private struct MainPanel: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 Spacer()
                 if model.selectedTab.usesSearch {
-                    searchField
+                    StewardSearchField()
                 }
             }
 
@@ -358,18 +359,41 @@ private struct MainPanel: View {
             }
             .id(model.selectedTab)
             .transition(.opacity.combined(with: .move(edge: .bottom)))
-            .animation(.easeOut(duration: 0.18), value: model.selectedTab)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: model.selectedTab)
         }
         .padding(18)
+        .frame(maxWidth: 1360, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 
-    private var searchField: some View {
+}
+
+private struct StewardSearchField: View {
+    @EnvironmentObject private var searchQuery: SearchQueryStore
+    @FocusState private var isFocused: Bool
+    @State private var text = ""
+
+    var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            TextField("搜索名称、版本、路径", text: $model.query)
+            TextField("搜索名称、版本、路径", text: $text)
                 .textFieldStyle(.plain)
+                .focused($isFocused)
+                .onSubmit { searchQuery.flush() }
+
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                    searchQuery.clear()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("清除搜索")
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
@@ -379,7 +403,16 @@ private struct MainPanel: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.primary.opacity(0.06), lineWidth: 1)
         )
+        .onAppear { text = searchQuery.draft }
+        .onChange(of: text) { searchQuery.updateDraft(text) }
+        .onReceive(NotificationCenter.default.publisher(for: .focusStewardSearch)) { _ in
+            isFocused = true
+        }
     }
+}
+
+extension Notification.Name {
+    static let focusStewardSearch = Notification.Name("MacSoftwareSteward.focusSearch")
 }
 
 private struct UpgradeReminderBanner: View {
@@ -521,13 +554,8 @@ private struct JobNoticeIcon: View {
     var isActive: Bool
 
     var body: some View {
-        if #available(macOS 15.0, *) {
-            Image(systemName: symbol)
-                .font(.title3)
-                .symbolEffect(.pulse, options: .repeating, isActive: isActive)
-        } else {
-            Image(systemName: symbol)
-                .font(.title3)
-        }
+        Image(systemName: symbol)
+            .font(.title3)
+            .stewardSymbolPulse(active: isActive)
     }
 }

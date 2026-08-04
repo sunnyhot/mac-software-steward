@@ -5,7 +5,7 @@ struct SettingsView: View {
     @EnvironmentObject private var launchAtLogin: LaunchAtLoginModel
     @EnvironmentObject private var model: StewardModel
     @EnvironmentObject private var automationProfile: AutomationProfileStore
-    @State private var showsAdvancedUpgradeOptions = false
+    @AppStorage("advancedUpgradeOptionsExpanded") private var showsAdvancedUpgradeOptions = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -49,10 +49,33 @@ struct SettingsView: View {
                     LowRiskHandlingRow()
                     SettingsDivider()
                     NotificationPolicyRow()
+                    SettingsDivider()
+                    RegularAppNetworkPolicyRow()
+                    SettingsDivider()
+                    AutoRepairPolicyRow()
                 }
 
                 SettingsGroupBox {
-                    DisclosureGroup(isExpanded: $showsAdvancedUpgradeOptions) {
+                    Button {
+                        showsAdvancedUpgradeOptions.toggle()
+                    } label: {
+                        HStack(spacing: 10) {
+                            SettingsGroupHeader(title: "高级升级选项", symbol: "gearshape.2")
+                            Spacer()
+                            Text(showsAdvancedUpgradeOptions ? "收起" : "展开")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Image(systemName: showsAdvancedUpgradeOptions ? "chevron.up" : "chevron.down")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel(showsAdvancedUpgradeOptions ? "收起高级升级选项" : "展开高级升级选项")
+
+                    if showsAdvancedUpgradeOptions {
+                        SettingsDivider()
                         VStack(alignment: .leading, spacing: 12) {
                             GreedyCaskRow()
                             SettingsDivider()
@@ -60,16 +83,14 @@ struct SettingsView: View {
                             SettingsDivider()
                             MaxConcurrentUpgradesRow()
                         }
-                        .padding(.top, 8)
-                    } label: {
-                        SettingsGroupHeader(title: "高级升级选项", symbol: "gearshape.2")
                     }
                 }
 
                 Spacer(minLength: 0)
             }
             .padding(24)
-            .frame(maxWidth: 640, alignment: .leading)
+            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .top)
         }
         .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
     }
