@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.18.11 (2026-08-06)
+
+### 修复：定时巡检漏报 Homebrew 更新
+
+- 在 `brew outdated` 扫描前先执行 `brew update` 刷新 Homebrew 元数据缓存，修复 `auto_updates` cask（如 Microsoft Office）因本地 API 缓存陈旧而漏报的问题；定时巡检此前会因此扫到 0 项并提前退出，导致升级阶段的 `brew update` 永不触发，缓存长期不刷新。
+- 刷新失败不阻断扫描，沿用既有容错策略（用旧缓存继续，宁可漏检也不让整个 Homebrew 扫描失败）。此改动在共享的 `Scanner.scanBrew` 中生效，GUI 手动检测与定时巡检同时受益。
+
 ## v0.18.10 (2026-08-04)
 
 ### 修复：自更新无限下载循环

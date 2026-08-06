@@ -208,6 +208,12 @@ enum SoftwareScanner {
             )
         }
 
+        // 扫描前刷新 Homebrew 元数据缓存，避免 brew outdated 用到陈旧的 API 缓存，
+        // 导致 auto_updates cask（如 Microsoft Office）漏报。必须在下方任务组前串行执行，
+        // 否则 outdated 会与刷新竞争、读到旧数据。
+        // 失败不阻断：用旧缓存继续扫描，宁可漏检也不要让整个 Homebrew 扫描失败（与升级阶段的容错一致）。
+        _ = await CommandRunner.run(brewPath, arguments: ["update"], timeout: 60)
+
         let timeout: TimeInterval = 30
         // outdated --greedy 会联网逐个检查每个 cask 的最新版，耗时远超本地命令，
         // 单独给足时间，避免 30s 超时把 brew 进程中途 SIGTERM（这正是"Homebrew 扫描遇到错误"的根因）。
