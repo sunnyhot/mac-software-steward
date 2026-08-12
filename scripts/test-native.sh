@@ -357,6 +357,10 @@ run_test BrewScanErrorFormattingTest \
   "$SRC/SourceDiagnostics.swift" \
   "$TESTS/BrewScanErrorFormattingTest.swift"
 
+run_test ScannerBatchedGreedyTest \
+  "$SRC/BrewBatchedGreedy.swift" \
+  "$TESTS/ScannerBatchedGreedyTest.swift"
+
 run_test ScannerAppUpdateCapabilityTest \
   "$SRC/CommandRunner.swift" \
   "$SRC/ScanPerformance.swift" \
