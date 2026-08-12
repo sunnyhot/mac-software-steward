@@ -198,6 +198,9 @@ struct BrewScan {
     var includeGreedy: Bool
     var formulae: [BrewPackage]
     var casks: [BrewPackage]
+    /// greedy 分批检查中未完成（超时/失败/预算耗尽未跑）的 cask 名。
+    /// 不能被当作"最新"——否则等于漏报。供 UI 诊断"部分完成，建议重试"。
+    var uncheckedCasks: [String] = []
 
     var outdatedCount: Int {
         formulae.filter(\.outdated).count + casks.filter(\.outdated).count

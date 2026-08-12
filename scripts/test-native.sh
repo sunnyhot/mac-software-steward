@@ -203,6 +203,7 @@ run_test HomebrewCaskUpdateAdvisorTest \
   "$SRC/RegularAppUpdateDiscovery.swift" \
   "$SRC/RegularAppUpdateDiscoveryCache.swift" \
   "$SRC/Scanner.swift" \
+  "$SRC/BrewBatchedGreedy.swift" \
   "$TESTS/HomebrewCaskUpdateAdvisorTest.swift"
 
 run_test InboxStoreTest \
@@ -341,6 +342,7 @@ run_test ScannerBrewListFallbackTest \
   "$SRC/HomebrewCaskUpdateAdvisor.swift" \
   "$SRC/BrewCaskCleanupDetector.swift" \
   "$SRC/Scanner.swift" \
+  "$SRC/BrewBatchedGreedy.swift" \
   "$TESTS/ScannerBrewListFallbackTest.swift"
 
 run_test BrewScanErrorFormattingTest \
@@ -354,6 +356,7 @@ run_test BrewScanErrorFormattingTest \
   "$SRC/HomebrewCaskUpdateAdvisor.swift" \
   "$SRC/BrewCaskCleanupDetector.swift" \
   "$SRC/Scanner.swift" \
+  "$SRC/BrewBatchedGreedy.swift" \
   "$SRC/SourceDiagnostics.swift" \
   "$TESTS/BrewScanErrorFormattingTest.swift"
 
@@ -372,6 +375,7 @@ run_test ScannerAppUpdateCapabilityTest \
   "$SRC/HomebrewCaskUpdateAdvisor.swift" \
   "$SRC/BrewCaskCleanupDetector.swift" \
   "$SRC/Scanner.swift" \
+  "$SRC/BrewBatchedGreedy.swift" \
   "$TESTS/ScannerAppUpdateCapabilityTest.swift"
 
 run_test ScannerSparkleAppcastPolicyTest \
@@ -385,6 +389,7 @@ run_test ScannerSparkleAppcastPolicyTest \
   "$SRC/HomebrewCaskUpdateAdvisor.swift" \
   "$SRC/BrewCaskCleanupDetector.swift" \
   "$SRC/Scanner.swift" \
+  "$SRC/BrewBatchedGreedy.swift" \
   "$TESTS/ScannerSparkleAppcastPolicyTest.swift"
 
 run_test ScannerNormalizeTokenTest \
@@ -398,6 +403,7 @@ run_test ScannerNormalizeTokenTest \
   "$SRC/HomebrewCaskUpdateAdvisor.swift" \
   "$SRC/BrewCaskCleanupDetector.swift" \
   "$SRC/Scanner.swift" \
+  "$SRC/BrewBatchedGreedy.swift" \
   "$TESTS/ScannerNormalizeTokenTest.swift"
 
 run_test StewardModelScanGuardTest \
@@ -420,6 +426,7 @@ run_test StewardModelScanGuardTest \
   "$SRC/BrewCaskCleanupDetector.swift" \
   "$SRC/ManualCaskUpdateResolver.swift" \
   "$SRC/Scanner.swift" \
+  "$SRC/BrewBatchedGreedy.swift" \
   "$SRC/SoftwareScanning.swift" \
   "$SRC/InboxStore.swift" \
   "$SRC/AppUpdateInboxFactory.swift" \

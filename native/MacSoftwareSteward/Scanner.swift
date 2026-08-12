@@ -191,6 +191,46 @@ enum SoftwareScanner {
         let result: CommandResult
     }
 
+    // MARK: - greedy cask 分批常量
+    private static let greedyBatchSize = 5
+    private static let greedyTotalBudget: TimeInterval = 180
+    private static let greedyPerBatchCap: TimeInterval = 60
+    private static let greedyBudgetFloor: TimeInterval = 5
+
+    /// greedy cask 检查：按已装 cask 分批、串行、在总预算内跑。
+    /// 返回 (outdated 条目, 未完成 cask 名单, 是否至少有一批成功)。
+    /// 至少一批成功 → 上层 error 留空、由 unchecked 驱动软诊断；
+    /// 零批成功 → 上层 error 写友好超时串。
+    private static func scanCasksGreedyBatched(
+        brewPath: String,
+        installedCasks: [String]
+    ) async -> (outdated: [[String: Any]], unchecked: [String], anySucceeded: Bool) {
+        let batches = BrewBatchedGreedy.splitIntoBatches(installedCasks, size: greedyBatchSize)
+        var batchResults: [(batch: [String], outcome: BrewBatchedGreedy.BatchOutcome)] = []
+        let start = Date()
+        var anySucceeded = false
+        for batch in batches {
+            let remaining = greedyTotalBudget - Date().timeIntervalSince(start)
+            if remaining < greedyBudgetFloor {
+                break  // 预算耗尽：剩余批次不跑，其 cask 由 accumulate 计入 unchecked
+            }
+            let batchTimeout = min(greedyPerBatchCap, remaining)
+            let r = await CommandRunner.run(
+                brewPath,
+                arguments: ["outdated", "--greedy", "--json=v2", "--cask"] + batch,
+                timeout: batchTimeout
+            )
+            if r.ok {
+                anySucceeded = true
+                batchResults.append((batch, .succeeded(parseBrewOutdated(r.stdout).casks)))
+            } else {
+                batchResults.append((batch, .failed))
+            }
+        }
+        let acc = BrewBatchedGreedy.accumulate(installedCasks: installedCasks, batchResults: batchResults)
+        return (acc.outdated, acc.unchecked, anySucceeded)
+    }
+
     static func scanBrew(
         includeGreedy: Bool,
         regularAppNetworkPolicy: RegularAppNetworkPolicy = .declaredSourcesOnly
@@ -215,9 +255,6 @@ enum SoftwareScanner {
         _ = await CommandRunner.run(brewPath, arguments: ["update"], timeout: 60)
 
         let timeout: TimeInterval = 30
-        // outdated --greedy 会联网逐个检查每个 cask 的最新版，耗时远超本地命令，
-        // 单独给足时间，避免 30s 超时把 brew 进程中途 SIGTERM（这正是"Homebrew 扫描遇到错误"的根因）。
-        let outdatedTimeout: TimeInterval = 120
 
         let results = await withTaskGroup(of: BrewTaskOutput.self) { group in
             group.addTask {
@@ -232,12 +269,24 @@ enum SoftwareScanner {
             group.addTask {
                 BrewTaskOutput(tag: "caskList", result: await CommandRunner.run(brewPath, arguments: ["list", "--cask", "--versions"], timeout: timeout))
             }
-            group.addTask {
-                BrewTaskOutput(tag: "outdated", result: await CommandRunner.run(
-                    brewPath,
-                    arguments: ["outdated", "--json=v2"] + (includeGreedy ? ["--greedy"] : []),
-                    timeout: outdatedTimeout
-                ))
+            if includeGreedy {
+                // casks 走阶段二分批（scanCasksGreedyBatched）；这里只查 formulae（本地比对，快）。
+                group.addTask {
+                    BrewTaskOutput(tag: "formulaOutdated", result: await CommandRunner.run(
+                        brewPath,
+                        arguments: ["outdated", "--json=v2", "--formula"],
+                        timeout: timeout
+                    ))
+                }
+            } else {
+                // 非 greedy：formulae + casks 一次本地比对即可，不分批。
+                group.addTask {
+                    BrewTaskOutput(tag: "outdated", result: await CommandRunner.run(
+                        brewPath,
+                        arguments: ["outdated", "--json=v2"],
+                        timeout: timeout
+                    ))
+                }
             }
 
             var collected: [String: CommandResult] = [:]
@@ -250,7 +299,6 @@ enum SoftwareScanner {
         let missingResult = CommandResult(ok: false, code: -1, stdout: "", stderr: "Homebrew scan task did not return a result.")
         let formulaList = results["formulaList"] ?? missingResult
         let caskList = results["caskList"] ?? missingResult
-        let outdated = results["outdated"] ?? missingResult
         let caskNameList: CommandResult?
         if caskList.ok {
             caskNameList = nil
@@ -262,21 +310,50 @@ enum SoftwareScanner {
         let caskListResult = installedBrewPackages(primary: caskList, fallback: caskNameList)
         let installedFormulae = formulaListResult.packages
         let installedCasks = caskListResult.packages
-        let outdatedPayload = parseBrewOutdated(outdated.stdout)
-        let formulae = mergeBrew(installed: installedFormulae, outdated: outdatedPayload.formulae, kind: "formula")
+
+        // formulae/casks 的 outdated 来源按 includeGreedy 分叉：
+        //  - greedy：formulae 来自 --formula 调用；casks 来自阶段二分批（部分结果 + unchecked）
+        //  - 非 greedy：一次 --json=v2 同时给 formulae 和 casks
+        let formulaeOutdatedEntries: [[String: Any]]
+        let casksOutdatedEntries: [[String: Any]]
+        var uncheckedCasks: [String] = []
+        var outdatedError: String
+
+        if includeGreedy {
+            let fo = results["formulaOutdated"] ?? missingResult
+            formulaeOutdatedEntries = parseBrewOutdated(fo.stdout).formulae
+            let greedy = await scanCasksGreedyBatched(
+                brewPath: brewPath,
+                installedCasks: installedCasks.map(\.name)
+            )
+            casksOutdatedEntries = greedy.outdated
+            uncheckedCasks = greedy.unchecked
+            // 契约：零批成功才警报（走"更新检查超时"诊断）；至少一批成功 → 留空，由 unchecked 驱动软诊断。
+            outdatedError = greedy.anySucceeded
+                ? ""
+                : "brew outdated --greedy 进程被终止 (SIGTERM)，可能是命令耗时过长被中断，请稍后重试。"
+        } else {
+            let o = results["outdated"] ?? missingResult
+            let p = parseBrewOutdated(o.stdout)
+            formulaeOutdatedEntries = p.formulae
+            casksOutdatedEntries = p.casks
+            outdatedError = brewCommandError(tagged: "brew outdated", o)
+        }
+
+        let formulae = mergeBrew(installed: installedFormulae, outdated: formulaeOutdatedEntries, kind: "formula")
         let caskMetadataByName = await scanCaskMetadata(
             brewPath: brewPath,
             installedCasks: installedCasks
         )
         let caskAdvisoriesByName = await caskUpdateAdvisories(
             installedCasks: installedCasks,
-            outdated: outdatedPayload.casks,
+            outdated: casksOutdatedEntries,
             metadataByName: caskMetadataByName,
             networkPolicy: regularAppNetworkPolicy
         )
         let casks = mergeBrew(
             installed: installedCasks,
-            outdated: outdatedPayload.casks,
+            outdated: casksOutdatedEntries,
             kind: "cask",
             caskMetadataByName: caskMetadataByName,
             caskAdvisoriesByName: caskAdvisoriesByName
@@ -285,7 +362,7 @@ enum SoftwareScanner {
         let errors = [
             formulaListResult.error,
             caskListResult.error,
-            brewCommandError(tagged: "brew outdated", outdated)
+            outdatedError
         ]
             .filter { !$0.isEmpty }
 
@@ -297,7 +374,8 @@ enum SoftwareScanner {
             error: errors.joined(separator: "\n"),
             includeGreedy: includeGreedy,
             formulae: formulae,
-            casks: casks
+            casks: casks,
+            uncheckedCasks: uncheckedCasks
         )
     }
 
@@ -325,8 +403,9 @@ enum SoftwareScanner {
                 masErrors.append("mas list 命令异常退出 (exit code \(list.code))")
             }
             // If mas crashed, it's not usable - report as unavailable
-            if list.code == 139 || list.code == 134 {
-                // SIGSEGV or SIGABRT - mas needs App Store sign-in or is incompatible
+            // macOS 上被信号杀死时 code 是原始信号号（SIGSEGV=11、SIGABRT=6），不是 shell 的 128+信号号。
+            if list.code == SIGSEGV || list.code == SIGABRT {
+                // mas needs App Store sign-in or is incompatible
                 return MasScan(
                     available: false,
                     path: masPath,
@@ -480,11 +559,24 @@ enum SoftwareScanner {
     /// 不再把 Homebrew 的 Ruby SIGTERM 栈原样抛给用户。其它失败保留 stderr 原文便于排查。
     static func brewCommandError(tagged commandLabel: String, _ result: CommandResult) -> String {
         guard !result.ok else { return "" }
-        if result.wasSignaled {
-            let signalDesc = result.signalDescription ?? "进程异常退出 (exit code \(result.code))"
+        if result.wasSignaled || stderrIndicatesSignalDeath(result.stderr) {
+            // 场景 A（OS 级 SIGTERM，Foundation 报 .uncaughtSignal）由 wasSignaled 命中；
+            // 场景 B（Homebrew 的 Ruby 自己捕获 SIGTERM、把栈打到 stderr 后以普通失败码退出，
+            // Foundation 报 .exit）由 stderr 内容兜底命中。两者给出同样的友好文案。
+            let signalDesc = result.signalDescription
+                ?? (stderrIndicatesSignalDeath(result.stderr) ? "进程被终止 (SIGTERM)" : nil)
+                ?? "进程异常退出 (exit code \(result.code))"
             return "\(commandLabel) \(signalDesc)，可能是命令耗时过长被中断，请稍后重试。"
         }
         return result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Homebrew 被 SIGTERM 时，其 Ruby 运行时可能自己捕获信号、把 `Error: SIGTERM` 加
+    /// system_command 栈打到 stderr 后以普通失败码退出（Foundation 报 `.exit`）。此时
+    /// `wasSignaled` 抓不到，只能靠 stderr 内容识别（与 SourceDiagnostics 的标题分类一致）。
+    private static func stderrIndicatesSignalDeath(_ stderr: String) -> Bool {
+        let lower = stderr.lowercased()
+        return lower.contains("sigterm") || lower.contains("signal exception")
     }
 
     static func parseBrewOutdated(_ stdout: String) -> (formulae: [[String: Any]], casks: [[String: Any]]) {

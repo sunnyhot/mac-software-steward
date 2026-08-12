@@ -57,7 +57,8 @@ struct UpdatesView: View {
            let brew = model.scan?.brew,
            let diagnosis = SourceDiagnosticEngine.diagnoseBrew(
                available: brew.available,
-               error: brew.error
+               error: brew.error,
+               uncheckedCasks: brew.uncheckedCasks
            ) {
             ErrorRecoveryCard(
                 diagnosis: diagnosis,
