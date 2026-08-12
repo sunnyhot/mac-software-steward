@@ -29,7 +29,7 @@ enum SourceRecoveryAction: Hashable {
 enum SourceDiagnosticEngine {
 
     /// 诊断 Homebrew 状态
-    static func diagnoseBrew(available: Bool, error: String) -> SourceDiagnosis? {
+    static func diagnoseBrew(available: Bool, error: String, uncheckedCasks: [String] = []) -> SourceDiagnosis? {
         if !available {
             return SourceDiagnosis(
                 reason: "未检测到 Homebrew",
@@ -41,7 +41,20 @@ enum SourceDiagnosticEngine {
                 terminalHint: "或在终端中运行官方安装脚本"
             )
         }
-        if error.isEmpty { return nil }
+        if error.isEmpty {
+            // 全成功：无诊断；部分完成（有未检 cask）：软诊断，不建议 brew doctor。
+            guard !uncheckedCasks.isEmpty else { return nil }
+            let preview = uncheckedCasks.prefix(3).joined(separator: "、")
+            return SourceDiagnosis(
+                reason: "Homebrew 部分检查未完成",
+                suggestion: "另有 \(uncheckedCasks.count) 个 cask（如 \(preview)）未完成更新检查，通常是一次性网络拉取较慢。已扫到的结果仍可用；建议稍后重新扫描补齐。",
+                technicalDetails: "未完成检查的 cask：\(uncheckedCasks.sorted().joined(separator: ", "))",
+                action: .rescan,
+                actionLabel: "重新扫描",
+                terminalCommand: nil,
+                terminalHint: nil
+            )
+        }
 
         let lowercased = error.lowercased()
 
