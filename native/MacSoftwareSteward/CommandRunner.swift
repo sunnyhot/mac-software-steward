@@ -5,31 +5,33 @@ struct CommandResult {
     var code: Int32
     var stdout: String
     var stderr: String
+    /// Foundation 报告的进程终止原因。macOS 上被信号杀死时 `code` 是原始信号号（如 SIGTERM=15），
+    /// 而非 shell 的 128+信号号；因此判定信号死亡必须看 `terminationReason`，单看 `code` 不可靠。
+    var terminationReason: Process.TerminationReason = .exit
 
-    /// Whether the process was terminated by a signal (crash)
+    /// Whether the process was terminated by a signal (crash or timeout-kill)
     var wasSignaled: Bool {
-        code < 0 || code > 128
+        // `code < 0` 是本工具在进程启动失败时自造的哨兵值（见 `run()` 的 catch 分支）。
+        terminationReason == .uncaughtSignal || code < 0
     }
 
     /// Human-readable signal description if the process was killed by a signal
     var signalDescription: String? {
         if code < 0 {
-            return "进程超时被终止"
+            return "进程启动失败"
         }
-        let signalNum = code - 128
-        if signalNum > 0 && signalNum < 32 {
-            switch signalNum {
-            case 1: return "进程被挂起 (SIGHUP)"
-            case 2: return "进程被中断 (SIGINT)"
-            case 6: return "进程异常中止 (SIGABRT)"
-            case 9: return "进程被强杀 (SIGKILL)"
-            case 11: return "进程段错误崩溃 (SIGSEGV)"
-            case 13: return "管道破裂 (SIGPIPE)"
-            case 15: return "进程被终止 (SIGTERM)"
-            default: return "进程被信号终止 (信号 \(signalNum))"
-            }
+        guard terminationReason == .uncaughtSignal else { return nil }
+        // 被信号杀死时 `code` 即原始信号号（1–31）。
+        switch code {
+        case 1: return "进程被挂起 (SIGHUP)"
+        case 2: return "进程被中断 (SIGINT)"
+        case 6: return "进程异常中止 (SIGABRT)"
+        case 9: return "进程被强杀 (SIGKILL)"
+        case 11: return "进程段错误崩溃 (SIGSEGV)"
+        case 13: return "管道破裂 (SIGPIPE)"
+        case 15: return "进程被终止 (SIGTERM)"
+        default: return "进程被信号终止 (信号 \(code))"
         }
-        return nil
     }
 }
 
@@ -142,7 +144,7 @@ enum CommandRunner {
                 output.appendStderr(data)
             }
 
-            let finish: (Int32) -> Void = { code in
+            let finish: (Int32, Process.TerminationReason) -> Void = { code, reason in
                 guard output.markFinished() else { return }
 
                 stdout.fileHandleForReading.readabilityHandler = nil
@@ -158,18 +160,19 @@ enum CommandRunner {
                     ok: code == 0,
                     code: code,
                     stdout: finalOut,
-                    stderr: finalErr
+                    stderr: finalErr,
+                    terminationReason: reason
                 ))
             }
 
             process.terminationHandler = { finishedProcess in
-                finish(finishedProcess.terminationStatus)
+                finish(finishedProcess.terminationStatus, finishedProcess.terminationReason)
             }
 
             do {
                 try process.run()
             } catch {
-                finish(-1)
+                finish(-1, .exit)
                 return
             }
 
