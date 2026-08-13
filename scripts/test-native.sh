@@ -361,6 +361,7 @@ run_test BrewScanErrorFormattingTest \
   "$TESTS/BrewScanErrorFormattingTest.swift"
 
 run_test ScannerBatchedGreedyTest \
+  "$SRC/CommandRunner.swift" \
   "$SRC/BrewBatchedGreedy.swift" \
   "$TESTS/ScannerBatchedGreedyTest.swift"
 

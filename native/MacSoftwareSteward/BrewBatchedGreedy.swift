@@ -9,6 +9,24 @@ enum BrewBatchedGreedy {
         case failed
     }
 
+    /// 判定一批 `brew outdated --greedy --json=v2 --cask` 是否成功。
+    ///
+    /// 关键约定：`brew outdated` 在发现可升级项时会以 **exit code 1** 退出（正常结果，非错误），
+    /// JSON 仍完整输出到 stdout。因此判定标准是"进程未被信号杀死 且 stdout 可解析为
+    /// brew outdated 的 JSON 对象"，而**不是** `code == 0`（`CommandResult.ok`）。若按非零
+    /// 退出码判失败，会把含可升级 cask 的整批误判为失败，导致系统性漏报——真正可升级的反而被丢弃。
+    static func greedyBatchSucceeded(_ result: CommandResult) -> Bool {
+        // 超时/被信号杀死：半截 stdout 不可信。
+        if result.wasSignaled { return false }
+        // brew 真正失败（如 cask 名错误）时 stdout 为空、错误在 stderr；
+        // 成功时 stdout 是 {"formulae":[...],"casks":[...]}。
+        guard let data = result.stdout.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return false
+        }
+        return object["casks"] != nil
+    }
+
     /// 把列表切成固定大小的批。`size <= 0` 视为整批（不切）。
     static func splitIntoBatches(_ items: [String], size: Int) -> [[String]] {
         guard size > 0 else { return items.isEmpty ? [] : [items] }

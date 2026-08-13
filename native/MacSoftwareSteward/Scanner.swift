@@ -220,7 +220,9 @@ enum SoftwareScanner {
                 arguments: ["outdated", "--greedy", "--json=v2", "--cask"] + batch,
                 timeout: batchTimeout
             )
-            if r.ok {
+            // brew outdated 发现可升级项时会以 exit code 1 退出（正常结果，非错误），
+            // 故不能按 r.ok(code==0) 判定；改为「未被信号杀死 且 stdout 是合法 JSON」即成功。
+            if BrewBatchedGreedy.greedyBatchSucceeded(r) {
                 anySucceeded = true
                 batchResults.append((batch, .succeeded(parseBrewOutdated(r.stdout).casks)))
             } else {

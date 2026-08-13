@@ -46,6 +46,7 @@ greedy cask 检查慢时**返回已扫到的部分结果**，未扫到的 cask �
 - `perBatchCap = 60s`。
 - 每批跑前：`remaining = totalBudget - elapsed`。若 `remaining < 5s`（floor），停止，剩余 cask 全部进 `unchecked`。否则 `batchTimeout = min(perBatchCap, remaining)`。
 - 批次成功 → 合并其 cask outdated 条目；超时/失败 → 该批 cask 进 `unchecked`，继续下一批。
+  - **"成功"的判定（关键，曾出 bug）**：`brew outdated` 发现可升级项时以 **exit code 1** 退出（Homebrew 既定约定，非错误），JSON 仍完整在 stdout。故判定标准是「进程未被信号杀死 且 stdout 可解析为 brew outdated JSON」（`BrewBatchedGreedy.greedyBatchSucceeded`），**不是** `code == 0`。若按非零退出码判失败，会把含可升级 cask 的整批误判失败——恰好在能发现更新时丢弃更新。
 - 串行而非并发：避免多个 brew 进程争用 API 缓存，deadline 账目简单；快批次本就几乎不耗时（主要是 ~0.8s brew 启动）。
 
 最坏情况：`batchSize=5`、15 cask → 3 批 × 60s = 180s 恰等总预算（第 3 批后预算耗尽）。正常情况多数批次秒级完成。

@@ -1,5 +1,13 @@
 # Changelog
 
+## 未发布
+
+### 修复：greedy 扫描把"含可升级项的批次"误判为失败（系统性漏报）
+
+- `brew outdated` 在发现可升级项时以 **exit code 1** 退出（Homebrew 既定约定，非错误），JSON 仍完整输出到 stdout。v0.18.12 的分批 greedy 扫描用 `code == 0`（`CommandResult.ok`）判定每批成功与否，导致**凡含有可升级 cask 的批次都被整批判失败**，该批全部 cask（含真正可升级的）被丢进"未完成检查"名单——恰好在能发现更新时把更新丢弃，唯一"成功"的是没有可升级项的批次。
+- 改为按「进程未被信号杀死 且 stdout 可解析为 brew outdated JSON」判定成功（与单命令非 greedy 路径一致）。新增纯函数 `BrewBatchedGreedy.greedyBatchSucceeded`（exit-1+合法 JSON / 超时 / 空 stdout / 非 JSON 四类用例覆盖）。
+- 表现：之前 1password、qqmusic 等出现在"未完成检查的 cask"里实为可升级项被误藏；修复后它们会正常出现在可升级列表，"部分检查未完成"卡片仅在真正超时/失败时出现。
+
 ## v0.18.12 (2026-08-13)
 
 ### 改进：Homebrew greedy 扫描改为分批增量，慢网络不再整盘失败
