@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.18.12 (2026-08-13)
+
+### 改进：Homebrew greedy 扫描改为分批增量，慢网络不再整盘失败
+
+- `brew outdated --greedy` 原先一次性检查所有 cask（全有或全无）。现按 cask 分批（每批 5、单批上限 60s、总预算 180s）串行执行：某批超时只丢该批，已扫到的结果照常返回，未扫到的 cask 在界面给出“部分检查未完成，建议稍后重试”的软提示（不建议 brew doctor）。Microsoft Office 这类最慢的 auto_updates cask 不再拖垮整次扫描。
+- formulae 与 casks 的 outdated 拆分获取（formulae 用 `--formula`，本地比对、快）；casks 走分批 greedy。
+
+### 修复：Homebrew 超时不再显示 Ruby 原始栈
+
+- macOS Foundation 对被信号杀死的进程返回原始信号号（如 SIGTERM=15），不是 shell 的 128+信号号；旧 `code > 128` 判定永不成立，导致超时被 SIGTERM 时把 Homebrew 的 Ruby 栈原样抛给用户。改为依据 `terminationReason` 判定信号死亡，并对 Homebrew 自行捕获信号（以普通失败码退出、stderr 留栈）的情况加 stderr 内容兜底，统一翻译为“进程被终止 (SIGTERM)，可能是命令耗时过长被中断，请稍后重试。”。附带修正 mas 崩溃（SIGSEGV/SIGABRT）检测同理失效的问题。
+
 ## v0.18.11 (2026-08-06)
 
 ### 修复：定时巡检漏报 Homebrew 更新

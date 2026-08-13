@@ -27,6 +27,8 @@ if ! git remote get-url origin >/dev/null 2>&1; then
   fi
 fi
 
+# Local pre-flight build only. The resulting release/ artifacts are NOT
+# published — CI (.github/workflows/release.yml) is the sole publisher.
 bash "$ROOT_DIR/scripts/package-release.sh" >/dev/null
 git restore --worktree --staged native/Resources/AppIcon.iconset >/dev/null 2>&1 || true
 
@@ -48,26 +50,12 @@ fi
 
 git push -u origin HEAD:main
 
-if gh release view "$TAG" --repo "$OWNER/$REPO" >/dev/null 2>&1; then
-  gh release upload "$TAG" \
-    "$ROOT_DIR/release/MacSoftwareSteward.zip" \
-    "$ROOT_DIR/release/MacSoftwareSteward.zip.sha256" \
-    "$ROOT_DIR/release/MacSoftwareSteward-v$VERSION.zip" \
-    "$ROOT_DIR/release/MacSoftwareSteward-v$VERSION.zip.sha256" \
-    "$ROOT_DIR/release/latest.json" \
-    --repo "$OWNER/$REPO" \
-    --clobber
-else
-  gh release create "$TAG" \
-    "$ROOT_DIR/release/MacSoftwareSteward.zip" \
-    "$ROOT_DIR/release/MacSoftwareSteward.zip.sha256" \
-    "$ROOT_DIR/release/MacSoftwareSteward-v$VERSION.zip" \
-    "$ROOT_DIR/release/MacSoftwareSteward-v$VERSION.zip.sha256" \
-    "$ROOT_DIR/release/latest.json" \
-    --repo "$OWNER/$REPO" \
-    --title "Mac 软件管家 $TAG" \
-    --notes-file "$ROOT_DIR/release/RELEASE_NOTES.md" \
-    --latest
-fi
+# Publish by pushing the tag only. CI (release.yml) is the single publisher
+# of the zip + latest.json + sidecars, which guarantees the published sha256
+# always matches the published zip (no local/CI upload race). Pushing the
+# tag also triggers that CI run.
+git tag -a "$TAG" -m "release: $TAG" 2>/dev/null || true
+git push origin "$TAG"
 
-echo "https://github.com/$OWNER/$REPO/releases/tag/$TAG"
+echo "Tag $TAG pushed. CI will build and publish:"
+echo "  https://github.com/$OWNER/$REPO/actions?query=branch=$TAG"
