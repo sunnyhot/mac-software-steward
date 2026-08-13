@@ -25,14 +25,16 @@ NOTES_FILE="$RELEASE_DIR/RELEASE_NOTES.md"
 if [ -f "$ROOT_DIR/release/RELEASE_NOTES-v$VERSION.md" ]; then
   cp "$ROOT_DIR/release/RELEASE_NOTES-v$VERSION.md" "$NOTES_FILE"
 else
-  {
-    echo "## Mac 软件管家 v$VERSION"
-    echo ""
-    echo "### 菜单栏优化"
-    echo "- 精简菜单栏下拉菜单，移除与图标标题重复的状态文字，只保留操作项"
-    echo ""
-    echo "安装包资产：\`MacSoftwareSteward.zip\`"
-  } > "$NOTES_FILE"
+  # 与 CI(release.yml) 一致：从 CHANGELOG.md 抽本版本段落（## v$VERSION 到下一个 ## 之间）。
+  awk -v tag="v$VERSION" '
+    $0 ~ "^## "tag"([ (]|$)" {capture=1; next}
+    capture && /^## / {exit}
+    capture {print}
+  ' "$ROOT_DIR/CHANGELOG.md" > "$NOTES_FILE"
+fi
+# 兜底：CHANGELOG 没匹配到（如格式变动/版本写错）时给最小占位，不发空说明。
+if [ ! -s "$NOTES_FILE" ]; then
+  { echo "## Mac 软件管家 v$VERSION"; echo ""; echo "详见 CHANGELOG.md。"; } > "$NOTES_FILE"
 fi
 
 SHA256="$(awk '{print $1}' "$ZIP_PATH.sha256")"

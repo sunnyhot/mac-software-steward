@@ -75,43 +75,22 @@ jobs:
           SHA256="${{ steps.package.outputs.sha256 }}"
           SIZE="${{ steps.package.outputs.size }}"
           PUBLISHED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-          cat > release/RELEASE_NOTES.md <<NOTES_EOF
-          ## Mac 软件管家 ${TAG}
-
-          ### 安全与发布可靠性
-          - 自更新下载完成后校验 release manifest 中的 SHA-256，缺失或不匹配会中止安装
-          - 自更新安装脚本改为临时 app + 旧版本备份的替换流程，失败时自动回滚
-          - 扫描流程增加防重入保护，避免重复触发扫描导致状态互相覆盖
-          - 新增 native Swift 测试 runner，并在 release workflow 构建前执行
-          - 构建脚本输出 Xcode、SDK 和 Swift 工具链诊断，便于定位本机环境问题
-
-          ### 应用自更新体验
-          - 移除未启用的 MoleApp 清理、卸载和优化模块，减少构建噪音并收敛应用代码边界
-          - 升级任务总览显示执行中、排队、需处理和长时间无输出数量，便于判断卡在哪一步
-          - 包级升级详情显示阶段持续时间、最近输出时间，并在长时间无输出时给出等待下载、安装或系统授权提示
-          - 修复窗口放大后主内容区域垂直居中导致顶部留白过大的问题
-          - 支持双击窗口标题栏在放大和还原之间切换
-          - 修复自更新安装完成后旧进程未退出导致弹框一直显示安装中的问题，安装脚本会在等待后兜底终止旧进程
-          - 修复 Homebrew 下载缓存被锁时误报为文件不完整的问题，改为提示等待原任务结束后重试
-          - 启动时自动避免 Mac 软件管家多实例并存，降低重复触发 brew upgrade 导致锁冲突的概率
-          - 更新弹框改为更紧凑的确认面板，降低遮挡感；更新说明保留滚动查看
-          - Homebrew Cask 下载时通过 cask URL 探测文件总大小，显示百分比、已下载/总大小、速度和剩余时间
-          - 修复 Homebrew Cask 续传下载时被 Upgrading 日志提前显示成安装中的问题，下载缓存仍存在时会继续显示下载大小和速度
-          - Homebrew Cask 下载日志没有持续进度时，自动从 Homebrew 缓存 .incomplete 文件推断已下载大小和速度
-          - 修复从深色切换到跟随系统后，窗口侧栏与设置卡片出现深浅混搭的问题
-          - 升级列表显示当前阶段：准备下载、下载中、安装中、替换应用、清理中等
-          - Homebrew/curl 下载时展示百分比、已下载/总大小和下载速度
-          - Homebrew Caskroom 旧版本 App 残留导致覆盖冲突时，自动执行 brew uninstall --cask --force 清理
-          - Homebrew Cask 下载失败但本机 App 已不存在时，自动执行 brew uninstall --cask --force 清理残留
-          - 遇到 Homebrew Cask 记录仍在但 App 已被删除时，自动执行 brew uninstall --cask --force 清理残留
-          - 修复一键升级并行数量只作用于 job、包升级仍串行执行的问题
-          - 一键升级现在会在 brew update 后按设置的并行数量同时执行多个包升级
-          - 修复应用更新下载进度可能一直停在 0% 的问题
-          - 修复自更新下载完成后临时文件可能无法保存导致安装失败的问题
-          - 升级弹框展示包名、大小、发布时间和完整更新说明
-          - latest.json 包含 release notes、包大小和发布时间，便于客户端展示
-          - 下载中展示百分比和已下载/总大小
-          NOTES_EOF
+          # release notes 取自 CHANGELOG.md 中本版本段落（## v$VERSION 到下一个 ## 之间），
+          # 而非写死文案——避免每个版本都发同一份过长且失真的说明。
+          # 若提供了 release/RELEASE_NOTES-v$VERSION.md 则优先用它（便于人工精修特定版本）。
+          if [ -f "release/RELEASE_NOTES-v${VERSION}.md" ]; then
+            cp "release/RELEASE_NOTES-v${VERSION}.md" release/RELEASE_NOTES.md
+          else
+            awk -v tag="v${VERSION}" '
+              $0 ~ "^## "tag"([ (]|$)" {capture=1; next}
+              capture && /^## / {exit}
+              capture {print}
+            ' CHANGELOG.md > release/RELEASE_NOTES.md
+          fi
+          # 兜底：CHANGELOG 没匹配到（如格式变动/版本写错）时给最小占位，绝不发空说明。
+          if [ ! -s release/RELEASE_NOTES.md ]; then
+            { echo "## Mac 软件管家 ${TAG}"; echo ""; echo "详见 CHANGELOG.md。"; } > release/RELEASE_NOTES.md
+          fi
           VERSION="${VERSION}" \
           TAG="${TAG}" \
           SHA256="${SHA256}" \
