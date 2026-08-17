@@ -181,6 +181,22 @@ final class InboxStore: ObservableObject {
         save()
     }
 
+    /// 移除指定包的「需要确认升级」类条目。
+    ///
+    /// 自动升级成功后调用：包已升级，不应再挂着需要确认的待办。
+    /// 升级失败时保留条目，用户仍可在收件箱看到并重试。
+    func removeUpgradeDecisions(packageIDs: Set<String>) {
+        let before = items.count
+        items.removeAll { item in
+            guard item.kind == .upgradeDecision, let sourceID = item.sourceID else { return false }
+            let prefix = "upgrade:"
+            let packageID = sourceID.hasPrefix(prefix) ? String(sourceID.dropFirst(prefix.count)) : sourceID
+            return packageIDs.contains(packageID)
+        }
+        guard items.count != before else { return }
+        save()
+    }
+
     func reload() {
         items = Self.load(from: fileURL)
     }

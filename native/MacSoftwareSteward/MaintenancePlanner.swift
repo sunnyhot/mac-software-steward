@@ -9,7 +9,8 @@ import Foundation
 
 /// 单个包在一次维护运行中的处置分类。
 enum MaintenancePlanDisposition: String, Codable, Hashable {
-    /// 可执行 ∧ 低风险 ∧ 允许自动 ∧ 策略为自动 ∧ profile 开启低风险自动升级。
+    /// 可执行 ∧ 未被风险阻断 ∧ 策略为自动 ∧ profile 总门控开启。
+    /// 风险理由（greedy cask、major 版本变化等）仅作展示信息，不再阻止自动升级。
     case automatic
     /// 可执行，但风险或策略要求用户确认后才能执行。
     case confirmationRequired
@@ -82,7 +83,7 @@ enum MaintenancePlanner {
     ///   - scan: 最新扫描结果。
     ///   - policyStore: 升级策略存储（读取用户覆盖与默认策略）。
     ///   - includeGreedy: 是否包含 greedy cask。
-    ///   - profile: 自动化配置。`lowRiskAutoUpgradeEnabled` 控制 automatic 组是否为空。
+    ///   - profile: 自动化配置。`lowRiskAutoUpgradeEnabled` 是自动升级总门控，关闭时所有项降级为需确认。
     static func makePlan(
         scan: ScanResult,
         policyStore: UpgradePolicyStore,
@@ -145,12 +146,12 @@ enum MaintenancePlanner {
             return reminderItem(package: package, risk: risk, policy: policy, reason: "策略设置为仅提醒", commandDisplay: commandDisplay)
         }
 
-        // 3. automatic：低风险 ∧ 允许自动 ∧ 策略自动 ∧ profile 开启。
-        //    profile.lowRiskAutoUpgradeEnabled 是总门控：关闭时所有项降级为需确认。
-        if policy == .automatic
-            && risk.level == .low
-            && risk.automationDecision == .allowAutomatic
-            && profile.lowRiskAutoUpgradeEnabled {
+        // 3. automatic：策略为自动 ∧ profile 总门控开启。
+        //    默认策略已统一为 automatic（见 UpgradePolicyStore），风险理由仅作展示信息，
+        //    不再要求低风险才自动升级；只有 blockExecution（固定、源不可用、不可升级等）
+        //    会拦住自动升级（已在上方提前返回）。profile.lowRiskAutoUpgradeEnabled 是总门控：
+        //    关闭时所有项降级为需确认。
+        if policy == .automatic && profile.lowRiskAutoUpgradeEnabled {
             return MaintenancePlanItem(
                 packageID: package.id,
                 packageName: package.name,
@@ -164,13 +165,17 @@ enum MaintenancePlanner {
             )
         }
 
-        // 4. confirmationRequired：可执行，但风险或策略要求确认。
-        //    覆盖：askFirst、requireConfirmation、majorVersion、profile 关闭低风险自动。
+        // 4. confirmationRequired：策略要求确认，或 profile 总门控关闭。
         var reasons: [String] = []
-        if policy == .askFirst { reasons.append("策略要求确认") }
-        if risk.automationDecision == .requireConfirmation { reasons.append(risk.summary.isEmpty ? "风险需确认" : risk.summary) }
-        if policy == .automatic && !profile.lowRiskAutoUpgradeEnabled { reasons.append("低风险自动升级未开启") }
-        if risk.level == .high && risk.automationDecision != .blockExecution { reasons.append("高风险，需确认") }
+        if policy == .askFirst {
+            reasons.append("策略要求确认")
+            if risk.automationDecision == .requireConfirmation {
+                reasons.append(risk.summary.isEmpty ? "风险需确认" : risk.summary)
+            }
+        }
+        if policy == .automatic && !profile.lowRiskAutoUpgradeEnabled {
+            reasons.append("自动升级总开关未开启")
+        }
         if reasons.isEmpty { reasons.append("需要确认") }
 
         return MaintenancePlanItem(

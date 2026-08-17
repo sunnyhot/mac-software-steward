@@ -567,9 +567,9 @@ struct LowRiskHandlingRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("低风险项目")
+                Text("自动升级")
                     .font(.body)
-                Text("选择每日巡检发现低风险更新后的处理方式")
+                Text("选择每日巡检发现更新后的处理方式")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

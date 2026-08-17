@@ -81,6 +81,7 @@ run_or_explain "Building ${APP_NAME}Agent" xcrun swiftc \
   "$ROOT_DIR"/native/MacSoftwareSteward/AutomationProfileStore.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/AutomationNotificationDecider.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/AutomationNotificationDispatcher.swift \
+  "$ROOT_DIR"/native/MacSoftwareSteward/AutomationNotificationPayloadStore.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/UpgradePolicyStore.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/RiskAssessor.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/UpgradePlanner.swift \

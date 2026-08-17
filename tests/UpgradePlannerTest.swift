@@ -70,9 +70,10 @@ struct UpgradePlannerTest {
         precondition(pinnedRow?.automationDecision == .blockExecution)
         precondition(caskRow?.riskLabels.contains("greedy cask") == true)
         precondition(caskRow?.riskLabels.contains("auto_updates") == true)
-        precondition(caskRow?.selection == .notSelected)
+        // 默认策略 automatic：即使风险判 requireConfirmation，行仍预选（风险信息保留在 riskLabels）。
+        precondition(caskRow?.selection == .selected)
         precondition(caskRow?.automationDecision == .requireConfirmation)
-        precondition(caskRow?.skipReason.hasPrefix("需确认") == true)
+        precondition(caskRow?.skipReason.isEmpty == true)
         precondition(masRow?.riskLabels.contains("mas unavailable") == true)
         precondition(masRow?.selection == .notSelectable)
         precondition(masRow?.automationDecision == .blockExecution)
@@ -135,7 +136,7 @@ struct UpgradePlannerTest {
         let upgradeAllRows = UpgradePlanner.makePlan(scan: upgradeAllScan, policyStore: upgradeAllStore, includeGreedy: false)
         let executable = upgradeAllRows.filter(\.canExecute)
         // auto_updates cask 即使关闭全局 greedy 扫描，也可通过逐包 --greedy 执行；固定包仍排除。
-        precondition(executable.map(\.packageID) == [autoFormula.id, greedyCask.id], "一键升级应包含全部可执行包，实际：\(executable.map(\.packageID))")
+        precondition(Set(executable.map(\.packageID)) == Set([autoFormula.id, greedyCask.id]), "一键升级应包含全部可执行包，实际：\(executable.map(\.packageID))")
         precondition(executable.contains { $0.packageID == pinnedFormula.id } == false, "固定包不得进入一键升级")
         precondition(executable.first { $0.packageID == greedyCask.id }?.commandDisplay.contains("--greedy") == true, "auto_updates cask 必须使用 --greedy")
     }

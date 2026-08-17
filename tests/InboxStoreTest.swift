@@ -102,5 +102,37 @@ struct InboxStoreTest {
 
         let persistedAfterRetire = InboxStore(fileURL: url)
         precondition(!persistedAfterRetire.items.contains { $0.sourceID == "source:homebrew" })
+
+        // 自动升级成功后移除对应「需要确认升级」待办（带 upgrade: 前缀的标准条目）。
+        let decisionItem = InboxItem(
+            kind: .upgradeDecision,
+            severity: .info,
+            title: "warp 需要确认升级",
+            summary: "greedy cask 可能覆盖自动更新类应用",
+            sourceID: "upgrade:brew:cask:warp",
+            createdAt: Date(timeIntervalSince1970: 50),
+            actions: [InboxAction(title: "查看升级计划", systemImage: "arrow.down.circle", kind: .openUpdates)]
+        )
+        precondition(externalStore.add(decisionItem) == true)
+        // 不带前缀的旧格式条目同样按包 ID 匹配移除。
+        let legacyDecisionItem = InboxItem(
+            kind: .upgradeDecision,
+            severity: .info,
+            title: "node 需要确认升级",
+            summary: "major version",
+            sourceID: "brew:formula:node",
+            createdAt: Date(timeIntervalSince1970: 51),
+            actions: [InboxAction(title: "查看升级计划", systemImage: "arrow.down.circle", kind: .openUpdates)]
+        )
+        precondition(externalStore.add(legacyDecisionItem) == true)
+
+        externalStore.removeUpgradeDecisions(packageIDs: ["brew:cask:warp"])
+        precondition(!externalStore.items.contains { $0.sourceID == "upgrade:brew:cask:warp" })
+        precondition(externalStore.items.contains { $0.sourceID == "brew:formula:node" })
+        precondition(externalStore.items.contains { $0.sourceID == "job:failed" })
+
+        let persistedAfterDecisionRemoval = InboxStore(fileURL: url)
+        precondition(!persistedAfterDecisionRemoval.items.contains { $0.sourceID == "upgrade:brew:cask:warp" })
+        precondition(persistedAfterDecisionRemoval.items.contains { $0.sourceID == "brew:formula:node" })
     }
 }

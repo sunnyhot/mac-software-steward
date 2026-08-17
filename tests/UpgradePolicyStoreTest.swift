@@ -74,12 +74,13 @@ struct UpgradePolicyStoreTest {
             upgradeable: true
         )
 
+        // 默认策略统一为「自动升级」：formula、cask（含 greedy/auto_updates）、mas 一律 automatic。
         precondition(store.effectivePolicy(for: .brew(formula), includeGreedy: false) == .automatic)
         precondition(store.effectivePolicy(for: .brew(pinnedFormula), includeGreedy: false) == .automatic)
-        precondition(store.effectivePolicy(for: .brew(greedyCask), includeGreedy: true) == .askFirst)
-        precondition(store.effectivePolicy(for: .brew(autoUpdatingCask), includeGreedy: false) == .askFirst)
-        precondition(store.effectivePolicy(for: .brew(greedyOnlyCask), includeGreedy: true) == .askFirst)
-        precondition(store.effectivePolicy(for: .mas(mas), includeGreedy: false) == .askFirst)
+        precondition(store.effectivePolicy(for: .brew(greedyCask), includeGreedy: true) == .automatic)
+        precondition(store.effectivePolicy(for: .brew(autoUpdatingCask), includeGreedy: false) == .automatic)
+        precondition(store.effectivePolicy(for: .brew(greedyOnlyCask), includeGreedy: true) == .automatic)
+        precondition(store.effectivePolicy(for: .mas(mas), includeGreedy: false) == .automatic)
 
         store.set(.skip, forPackageID: formula.id)
         precondition(store.effectivePolicy(for: .brew(formula), includeGreedy: false) == .skip)

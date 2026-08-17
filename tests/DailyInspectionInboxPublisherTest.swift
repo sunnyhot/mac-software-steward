@@ -15,7 +15,7 @@ struct DailyInspectionInboxPublisherTest {
             installedVersion: "20.1.0",
             currentVersion: "21.0.0",
             commandDisplay: "brew upgrade node",
-            policy: .automatic,
+            policy: .askFirst,
             selection: .notSelected,
             riskLabels: ["major version"],
             skipReason: "需确认：major version",

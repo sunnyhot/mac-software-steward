@@ -81,7 +81,12 @@ enum UpgradePlanner {
             skipReason = nonSelectableReason(for: package, scan: scan, risk: risk)
         } else {
             switch policy {
-            case .automatic, .askFirst:
+            case .automatic:
+                // 默认策略统一为自动升级：风险理由保留在 riskLabels/riskSummary 中展示，
+                // 不再因此取消预选。
+                selection = .selected
+                skipReason = ""
+            case .askFirst:
                 if risk.automationDecision == .requireConfirmation {
                     selection = .notSelected
                     skipReason = "需确认：\(risk.summary)"

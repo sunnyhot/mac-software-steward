@@ -102,6 +102,7 @@ struct MacSoftwareStewardApp: App {
                     model.refreshDailyInspectionStatus()
                     await model.repairDailyInspectionIfNeeded()
                     publishAutomationIssues()
+                    await model.deliverPendingAutomationNotificationIfNeeded()
                     if model.scan == nil {
                         await model.scanSoftware(
                             regularAppNetworkPolicy: automationProfile.profile.regularAppNetworkPolicy,
@@ -225,6 +226,8 @@ struct MacSoftwareStewardApp: App {
         Task {
             await model.repairDailyInspectionIfNeeded()
             publishAutomationIssues()
+            // 应用常驻时不重启进程，前台激活时补投巡检留下的待发通知。
+            await model.deliverPendingAutomationNotificationIfNeeded()
         }
     }
 

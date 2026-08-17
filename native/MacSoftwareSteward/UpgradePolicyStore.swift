@@ -59,17 +59,9 @@ final class UpgradePolicyStore: ObservableObject {
             return override
         }
 
-        switch package {
-        case .brew(let brewPackage):
-            if brewPackage.kind == "cask", brewPackage.autoUpdates || includeGreedy {
-                return .askFirst
-            }
-
-            return .automatic
-
-        case .mas:
-            return .askFirst
-        }
+        // 默认策略统一为「自动升级」：formula、cask（含 greedy/auto_updates）、mas 一律自动。
+        // 需要个别处理的软件在升级策略里单独设置「确认后升级 / 仅提醒 / 跳过」覆盖。
+        return .automatic
     }
 
     private static func loadOverrides(from fileURL: URL) -> [String: UpgradePolicy] {

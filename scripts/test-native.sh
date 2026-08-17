@@ -132,6 +132,14 @@ run_test AutomationNotificationDeciderTest \
   "$SRC/AutomationNotificationDecider.swift" \
   "$TESTS/AutomationNotificationDeciderTest.swift"
 
+run_test AutomationNotificationPayloadStoreTest \
+  "$SRC/AutomationProfileStore.swift" \
+  "$SRC/InboxStore.swift" \
+  "$SRC/InspectionReportStore.swift" \
+  "$SRC/AutomationNotificationDecider.swift" \
+  "$SRC/AutomationNotificationPayloadStore.swift" \
+  "$TESTS/AutomationNotificationPayloadStoreTest.swift"
+
 run_test AutomationIssueInboxFactoryTest \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/InboxStore.swift" \
@@ -419,6 +427,7 @@ run_test StewardModelScanGuardTest \
   "$SRC/RegularAppUpdateActionResolver.swift" \
   "$SRC/AutomationNotificationDecider.swift" \
   "$SRC/AutomationNotificationDispatcher.swift" \
+  "$SRC/AutomationNotificationPayloadStore.swift" \
   "$SRC/RecoveryActionPlanner.swift" \
   "$SRC/RecoveryInboxFactory.swift" \
   "$SRC/AutoRepairDecider.swift" \

@@ -297,6 +297,17 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
         prepareUpgradePlan(inboxStore: inboxStore)
     }
 
+    /// 代投每日巡检 agent 留下的待发系统通知。
+    ///
+    /// agent 由 launchd 启动，没有 LaunchServices 应用身份，无法直接投递系统通知
+    /// （UNUserNotificationCenter 会抛 UNErrorDomain 错误 1），
+    /// 因此巡检结束时的通知决定被持久化，等本应用启动时代为投递。
+    func deliverPendingAutomationNotificationIfNeeded() async {
+        guard let payload = AutomationNotificationPayloadStore.load() else { return }
+        AutomationNotificationPayloadStore.clear()
+        await notificationDispatcher.deliver(payload.decision)
+    }
+
     // MARK: - Upgrade delegation
 
     func upgrade(

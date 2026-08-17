@@ -13,9 +13,9 @@ struct MaintenancePlannerTest {
         let lowRiskFormula = brewFormula(id: "brew:formula:jq", name: "jq", kind: "formula", outdated: true, upgradeable: true)
         // 一个 pinned cask：会被 blockExecution。
         let pinnedCask = brewPackage(id: "brew:cask:pinned", name: "pinned", kind: "cask", outdated: true, upgradeable: true, pinned: true)
-        // 一个 major 版本变化的 formula：RiskAssessor 判 requireConfirmation（高风险）→ confirmationRequired。
+        // 一个 major 版本变化的 formula：默认策略 automatic，风险仅作展示 → automatic。
         let majorFormula = BrewPackage(id: "brew:formula:bigjump", kind: "formula", name: "bigjump", installedVersion: "1.0", currentVersion: "2.0", pinned: false, autoUpdates: false, outdated: true, upgradeable: true)
-        // 一个 mas app：默认 askFirst → confirmationRequired。
+        // 一个 mas app：默认策略 automatic → automatic。
         let masAppItem = masApp(id: "mas:things", name: "Things", outdated: true, upgradeable: true)
 
         // MARK: profile.lowRiskAutoUpgradeEnabled = true 的完整分类
@@ -46,19 +46,33 @@ struct MaintenancePlannerTest {
         precondition(pinnedItem?.package == nil, "blocked 不应携带可执行包")
         precondition(pinnedItem?.isExecutable == false, "blocked 不可执行")
 
-        // major 版本 formula → confirmationRequired（高风险 requireConfirmation）
+        // major 版本 formula → automatic（默认策略 automatic，风险仅展示）
         let majorItem = planOn.items.first { $0.packageID == "brew:formula:bigjump" }
-        precondition(majorItem?.disposition == .confirmationRequired, "major 版本 formula 应为 confirmationRequired，得到 \(String(describing: majorItem?.disposition))")
+        precondition(majorItem?.disposition == .automatic, "major 版本 formula 应为 automatic，得到 \(String(describing: majorItem?.disposition))")
 
-        // mas app → confirmationRequired（策略 askFirst）
+        // mas app → automatic（默认策略 automatic）
         let masItem = planOn.items.first { $0.packageID == "mas:things" }
-        precondition(masItem?.disposition == .confirmationRequired, "mas 应为 confirmationRequired，得到 \(String(describing: masItem?.disposition))")
+        precondition(masItem?.disposition == .automatic, "mas 应为 automatic，得到 \(String(describing: masItem?.disposition))")
 
-        // 分组计数
+        // 分组计数：全部默认 automatic，仅 pinned 为 blocked
         precondition(planOn.hasAutomatic, "应有 automatic 项")
-        precondition(planOn.hasConfirmation, "应有 confirmation 项")
-        precondition(!planOn.reminderItems.isEmpty == false || planOn.reminderItems.isEmpty, "reminder 分组可访问")
+        precondition(planOn.hasConfirmation == false, "默认策略下不应有 confirmation 项")
+        precondition(planOn.reminderItems.isEmpty, "默认策略下不应有 reminder 项")
         precondition(planOn.blockedItems.count == 1, "应有 1 个 blocked，得到 \(planOn.blockedItems.count)")
+
+        // 用户显式覆盖为「确认后升级」→ confirmationRequired
+        let askFirstStore = UpgradePolicyStore(fileURL: FileManager.default.temporaryDirectory
+            .appendingPathComponent("maintenance-planner-askfirst-\(UUID().uuidString).json"))
+        askFirstStore.set(.askFirst, forPackageID: "mas:things")
+        let planAskFirst = MaintenancePlanner.makePlan(
+            scan: scanWith(formulae: [], casks: [], masApps: [masAppItem]),
+            policyStore: askFirstStore,
+            includeGreedy: false,
+            profile: profileOn
+        )
+        let masAskFirst = planAskFirst.items.first { $0.packageID == "mas:things" }
+        precondition(masAskFirst?.disposition == .confirmationRequired, "askFirst 覆盖应为 confirmationRequired，得到 \(String(describing: masAskFirst?.disposition))")
+        precondition(masAskFirst?.reasons.contains("策略要求确认") == true, "askFirst 覆盖应带「策略要求确认」理由")
 
         // 排序：automatic 在 confirmation 之前
         let automaticIndex = planOn.items.firstIndex { $0.disposition == .automatic }
