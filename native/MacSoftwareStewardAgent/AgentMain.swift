@@ -116,6 +116,24 @@ struct MacSoftwareStewardAgent {
             await finish(0)
         }
 
+        // 升级前预下载 cask 文件到 brew 缓存（镜像/直链改写，失败静默回退默认下载）。
+        if !caskUpdates.isEmpty, let brew = await CommandRunner.commandPath("brew") {
+            for cask in caskUpdates {
+                let info = await CommandRunner.run(
+                    brew,
+                    arguments: ["info", "--cask", "--json=v2", cask.name],
+                    timeout: 30
+                )
+                guard info.ok,
+                      let downloadInfo = CaskMirrorPrefetcher.resolveDownloadInfo(from: info.stdout, caskName: cask.name)
+                else { continue }
+                let prefetched = await CaskMirrorPrefetcher.prefetch(info: downloadInfo)
+                print(prefetched
+                    ? "[prefetch] \(cask.name) 已预下载到 brew 缓存"
+                    : "[prefetch] \(cask.name) 预下载未成功，回退默认下载")
+            }
+        }
+
         // (可执行文件, 参数, 展示文本, 包 ID)。包 ID 用于升级成功后移除对应收件箱待办。
         var commands: [(executable: String, arguments: [String], display: String, packageID: String?)] = []
         var failures: [InspectionFailureRecord] = []

@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.18.15 (2026-08-17)
+
+### 修复：warp 等 auto_updates cask 已自更新却仍反复提示升级并下载失败
+
+- warp 这类 auto_updates cask 会通过应用内更新器自行升级，Homebrew receipt 长期滞后。此前只有 manualUpdateOnly 的 cask 会按实际 .app 版本对齐，auto_updates 且 outdated 的 cask 仍被反复标记可升级；叠加 warp.dev 的 /download/brew?version= 下载端点已失效（404），每日巡检持续尝试下载并以「网络连接出现问题」失败。
+- 版本对齐扩展到 auto_updates + outdated 的 cask：应用内版本已达到目标版本时（含 stable_00 与 00 这类渠道后缀差异，新增版本串归一化），停止标记 outdated/upgradeable，不再重复提示或尝试下载；应用版本确实低于目标版本时保持原行为。
+- CaskMirrorPrefetcher 新增 warp.dev 直链改写：https://app.warp.dev/download/brew?version=vX → https://releases.warp.dev/stable/vX/Warp.dmg，配合既有 sha256 校验（不符不进入 brew 缓存），确有更新时 brew 走可用直链；缓存文件名仍按原始 URL 计算，brew 直接命中缓存。
+- 每日巡检 agent 升级 cask 前同样执行镜像/直链预下载（此前仅 GUI 路径有），失败静默回退默认下载。
+
 ## v0.18.14 (2026-08-17)
 
 ### 改进：所有软件默认「自动升级」

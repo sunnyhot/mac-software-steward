@@ -657,7 +657,12 @@ enum SoftwareScanner {
         )
 
         return casks.map { cask in
-            guard cask.manualUpdateOnly,
+            // 两类 cask 以实际 .app 版本为准：
+            // 1) manualUpdateOnly：brew 未收录目标版本，只能应用内/官方渠道更新；
+            // 2) autoUpdates + outdated：应用可能已通过自带更新器升到目标版本，
+            //    brew receipt 仍旧（如 warp 每天自更新，receipt 长期滞后）。
+            // 两者都避免「厂商更新完成后仍循环提醒/尝试下载」。
+            guard (cask.manualUpdateOnly || (cask.autoUpdates && cask.outdated)),
                   !cask.currentVersion.isEmpty,
                   let app = appsByPackageID[cask.id] ?? applications.first(where: {
                       normalizeToken($0.name) == normalizeToken(cask.name.split(separator: "@").first.map(String.init) ?? cask.name)
@@ -665,7 +670,10 @@ enum SoftwareScanner {
                   !app.version.isEmpty else {
                 return cask
             }
-            let targetIsNewer = SparkleAppcastChecker.isNewerVersion(cask.currentVersion, than: app.version)
+            let targetIsNewer = SparkleAppcastChecker.isNewerVersion(
+                normalizedVersionString(cask.currentVersion),
+                than: normalizedVersionString(app.version)
+            )
             guard !targetIsNewer else { return cask }
 
             var current = cask
@@ -678,6 +686,22 @@ enum SoftwareScanner {
             current.hasStaleInstallRecord = false
             return current
         }
+    }
+
+    /// 版本串归一化：去掉 brew 版本号里的渠道段（如 .stable_00、.beta_01），
+    /// 使其能与 .app 内版本串（如 .00）正确对齐比较。
+    static func normalizedVersionString(_ version: String) -> String {
+        version
+            .split(separator: ".", omittingEmptySubsequences: false)
+            .map { segment in
+                var value = String(segment)
+                if let underscore = value.firstIndex(of: "_"),
+                   value[value.startIndex..<underscore].allSatisfy({ $0.isLetter }) {
+                    value.removeSubrange(value.startIndex...underscore)
+                }
+                return value
+            }
+            .joined(separator: ".")
     }
 
     static func scanCaskMetadata(

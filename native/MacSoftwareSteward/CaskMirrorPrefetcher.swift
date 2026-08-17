@@ -44,11 +44,24 @@ enum CaskMirrorPrefetcher {
 
     /// 仅 GitHub Releases 下载 URL 走镜像（这是国内最慢的来源）。
     /// 非 GitHub URL（如厂商直连）不走镜像——镜像不一定支持，且不一定慢。
+    /// 例外：warp.dev 的 /download/brew?version= 端点已失效（404），改写为其直链稳定端点。
     static func mirrorURL(for url: URL) -> URL? {
+        if let warpMirror = warpDirectURL(for: url) { return warpMirror }
         guard let host = url.host?.lowercased(), host == "github.com" else { return nil }
         guard url.path.lowercased().contains("/releases/download/") else { return nil }
         // mirror.ghproxy.com/https://github.com/owner/repo/releases/download/...
         return URL(string: mirrorPrefix + url.absoluteString)
+    }
+
+    /// warp.dev 直链改写：https://app.warp.dev/download/brew?version=vX → https://releases.warp.dev/stable/vX/Warp.dmg
+    /// 仅当 URL 与预期格式完全匹配时改写；内容仍受 cask 声明的 sha256 校验兜底。
+    private static func warpDirectURL(for url: URL) -> URL? {
+        guard let host = url.host?.lowercased(), host == "app.warp.dev" else { return nil }
+        guard url.path.lowercased() == "/download/brew" else { return nil }
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let version = components.queryItems?.first(where: { $0.name == "version" })?.value,
+              !version.isEmpty else { return nil }
+        return URL(string: "https://releases.warp.dev/stable/\(version)/Warp.dmg")
     }
 
     /// 计算 brew 缓存文件名：`SHA256(url)` + `--` + URL basename。

@@ -75,6 +75,7 @@ run_or_explain "Building ${APP_NAME}Agent" xcrun swiftc \
   -target arm64-apple-macosx14.0 \
   -sdk "$SDK_PATH" \
   -framework UserNotifications \
+  -framework CryptoKit \
   "$ROOT_DIR"/native/MacSoftwareSteward/CommandRunner.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/ScanPerformance.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/Models.swift \
@@ -101,6 +102,7 @@ run_or_explain "Building ${APP_NAME}Agent" xcrun swiftc \
   "$ROOT_DIR"/native/MacSoftwareSteward/BrewCaskCleanupDetector.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/Scanner.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/BrewBatchedGreedy.swift \
+  "$ROOT_DIR"/native/MacSoftwareSteward/CaskMirrorPrefetcher.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/SoftwareScanning.swift \
   "$ROOT_DIR"/native/MacSoftwareStewardAgent/*.swift \
   -o "$MACOS_DIR/${APP_NAME}Agent"

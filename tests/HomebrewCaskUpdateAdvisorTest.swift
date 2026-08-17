@@ -119,6 +119,49 @@ struct HomebrewCaskUpdateAdvisorTest {
         )
         precondition(!reconciledChannel[0].outdated, "带 @channel 的 cask 应能匹配实际应用名")
 
+        // 版本串归一化：渠道后缀段对齐（warp 这类 auto_updates cask 的常见差异）。
+        precondition(SoftwareScanner.normalizedVersionString("0.2026.08.12.21.54.stable_00") == "0.2026.08.12.21.54.00")
+        precondition(SoftwareScanner.normalizedVersionString("1.2.3.stable_01") == "1.2.3.01")
+        precondition(SoftwareScanner.normalizedVersionString("1.2.3") == "1.2.3")
+        precondition(SoftwareScanner.normalizedVersionString("2.0.0-beta_01") == "2.0.0-beta_01")
+
+        // autoUpdates + outdated：应用已通过自带更新器升到目标版本（版本串渠道后缀不同），停止标记。
+        let warpCask = BrewPackage(
+            id: "brew:cask:warp",
+            kind: "cask",
+            name: "warp",
+            installedVersion: "0.2026.08.05.09.03.stable_01",
+            currentVersion: "0.2026.08.12.21.54.stable_00",
+            pinned: false,
+            autoUpdates: true,
+            outdated: true,
+            upgradeable: true
+        )
+        let warpApp = AppItem(
+            id: "/Applications/Warp.app",
+            name: "Warp",
+            version: "0.2026.08.12.21.54.00",
+            availableVersion: "",
+            path: "/Applications/Warp.app",
+            source: "Developer",
+            obtainedFrom: "identified developer",
+            architecture: "arm64",
+            managedBy: "brew-cask",
+            updateState: "outdated",
+            relatedPackageID: warpCask.id
+        )
+        let reconciledWarp = SoftwareScanner.reconcileManualCaskAdvisories([warpCask], applications: [warpApp])
+        precondition(!reconciledWarp[0].outdated, "应用已自更新到目标版本时，应停止标记 outdated")
+        precondition(!reconciledWarp[0].upgradeable)
+        precondition(reconciledWarp[0].installedVersion == "0.2026.08.12.21.54.00")
+
+        // autoUpdates + outdated：应用仍低于目标版本，保持 outdated 交由 brew 升级。
+        var olderWarpApp = warpApp
+        olderWarpApp.version = "0.2026.08.05.09.03.01"
+        let unreconciledWarp = SoftwareScanner.reconcileManualCaskAdvisories([warpCask], applications: [olderWarpApp])
+        precondition(unreconciledWarp[0].outdated, "应用版本低于目标时应保持 outdated")
+        precondition(unreconciledWarp[0].upgradeable)
+
         let hyper = UpdatablePackage.brew(BrewPackage(
             id: "brew:cask:hyper",
             kind: "cask",

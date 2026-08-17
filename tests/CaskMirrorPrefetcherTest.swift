@@ -16,6 +16,17 @@ struct CaskMirrorPrefetcherTest {
         let githubNonRelease = URL(string: "https://github.com/owner/repo/blob/main/file.zip")!
         precondition(CaskMirrorPrefetcher.mirrorURL(for: githubNonRelease) == nil, "非 releases/download 的 GitHub URL 不应走镜像")
 
+        // warp.dev 的 /download/brew?version= 端点已失效（404），改写为其直链稳定端点。
+        let warpVendorURL = URL(string: "https://app.warp.dev/download/brew?version=v0.2026.08.12.21.54.stable_00")!
+        let warpMirrored = CaskMirrorPrefetcher.mirrorURL(for: warpVendorURL)
+        precondition(warpMirrored?.absoluteString == "https://releases.warp.dev/stable/v0.2026.08.12.21.54.stable_00/Warp.dmg")
+
+        // 非 /download/brew 路径或缺少 version 参数的 warp URL 不改写。
+        let warpOtherPath = URL(string: "https://app.warp.dev/download/windows")!
+        precondition(CaskMirrorPrefetcher.mirrorURL(for: warpOtherPath) == nil, "非 brew 下载路径不应改写")
+        let warpNoVersion = URL(string: "https://app.warp.dev/download/brew")!
+        precondition(CaskMirrorPrefetcher.mirrorURL(for: warpNoVersion) == nil, "缺少 version 参数不应改写")
+
         // cacheFileName：SHA256(url) + -- + basename
         let url = URL(string: "https://github.com/aonez/Keka/releases/download/v1.6.7/Keka-1.6.7.dmg")!
         let cacheName = CaskMirrorPrefetcher.cacheFileName(for: url)
