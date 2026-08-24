@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### 修复：mas「No downloads initiated」被误分类为「尝试重新升级」
+
+- `mas upgrade` 报 `Error: No downloads initiated for ADAM ID …` 时（购买请求成功但商店返回零下载），此前落入通用错误兜底，建议「尝试重新升级」，用户立即重试必然再次失败。根因是 App Store 发布传播延迟：商店目录已列出新版本（mas outdated 默认按目录比对），但购买/重下后端尚未向本机 Apple ID 放行该版本，常见于发布数小时内的新版本。
+- 新增独立分类：失败原因明确为「App Store 已发布新版本，但尚未向本机账户开放下载」，建议改为稍后重试并在 App Store「更新」页确认，不再引导立即重试。
+
 ## v0.18.15 (2026-08-17)
 
 ### 修复：warp 等 auto_updates cask 已自更新却仍反复提示升级并下载失败

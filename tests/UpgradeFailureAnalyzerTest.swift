@@ -18,6 +18,16 @@ struct UpgradeFailureAnalyzerTest {
         let interruptedHint = UpgradeFailureAnalyzer.knownFailureHint(in: interruptedOutput)
         precondition(interruptedHint?.summary == "下载过程中被中断，文件不完整。", "Generic incomplete downloads should keep the retryable download hint")
 
+        // mas：商店目录已见新版本，但购买/重下后端尚未向本机账户放行
+        let noDownloadsOutput = """
+        [stderr] Error: No downloads initiated for ADAM ID 6471391855
+        """
+        let noDownloadsHint = UpgradeFailureAnalyzer.knownFailureHint(in: noDownloadsOutput)
+        precondition(noDownloadsHint != nil, "'No downloads initiated' must be classified instead of falling to the generic error-line hint")
+        precondition(noDownloadsHint?.summary.contains("尚未向本机") == true, "Expected store-side rollout-lag summary")
+        precondition(noDownloadsHint?.suggestion.contains("稍后") == true, "Expected wait-and-retry guidance, not immediate retry")
+        precondition(noDownloadsHint?.action == .retry, "Expected retry action for a later attempt")
+
         // --- requiresSudo ---
         let sudoRequired = "Error: sudo: a password is required"
         precondition(UpgradeFailureAnalyzer.requiresSudo(in: sudoRequired) == true, "sudo + 'a password is required' must be detected")

@@ -18,6 +18,16 @@ enum UpgradeFailureAnalyzer {
             )
         }
 
+        // mas：商店目录已列出新版本，但购买/重下后端未向本机账户放行（发布传播延迟），
+        // 购买请求成功返回却零下载。立即重试无效，需等待商店侧放行。
+        if lowercased.contains("no downloads initiated") {
+            return FailureHint(
+                summary: "App Store 已发布新版本，但尚未向本机账户开放下载。",
+                suggestion: "常见于刚发布不久的新版本（App Store 发布传播延迟，通常数小时内自动缓解），立即重试无法解决。请稍后点击「重试」，或打开 App Store 的「更新」页确认。",
+                action: .retry
+            )
+        }
+
         if lowercased.contains("is currently running") || lowercased.contains("app is running") || lowercased.contains("application is running") {
             return FailureHint(
                 summary: "该应用正在运行中，无法被替换。",
