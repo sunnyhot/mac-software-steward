@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.18.16 (2026-08-24)
 
 ### 修复：mas「No downloads initiated」被误分类为「尝试重新升级」
 
