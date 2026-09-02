@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.18.17 (2026-09-02)
+
+### 新增：Homebrew 安装的自更新让位
+
+- 通过 `sunnyhot/tap` cask 安装的本应用由 `brew upgrade` 管理：检测到 Homebrew 安装（Caskroom 回执，零开销、不调 brew 命令）时，自更新只提示不再覆盖安装——更新弹窗与「自动下载并重启」均停用，设置页显示「由 Homebrew 管理，请用 brew upgrade 更新」。杜绝应用内覆盖安装导致 brew 认定 cask 被改动、两套更新互相打架。
+- 新增 HomebrewSelfInstallDetector 与配套 native 测试；安装入口（含失败重试）兜底拒绝。
+
+
 ## v0.18.16 (2026-08-24)
 
 ### 修复：mas「No downloads initiated」被误分类为「尝试重新升级」
