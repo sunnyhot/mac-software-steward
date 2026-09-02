@@ -85,7 +85,7 @@ brew install --cask sunnyhot/tap/mac-software-steward
 
 或从 [GitHub Releases](https://github.com/sunnyhot/mac-software-steward/releases/latest) 下载 `MacSoftwareSteward-v*.zip` 解压到 /Applications。
 
-> 注意：brew 安装的请用 `brew upgrade` 更新、关闭应用内自更新；手动安装的使用应用内自更新。
+> 更新：应用会自动检测 Homebrew 安装——brew 装的提示用 `brew upgrade`、停用应用内覆盖安装与自动下载；手动安装的使用应用内自更新。
 
 ## 应用自更新
 
@@ -96,6 +96,7 @@ brew install --cask sunnyhot/tap/mac-software-steward
 - 下载 `MacSoftwareSteward.zip`
 - 解压后替换当前 `.app`
 - 自动重启应用
+- 检测到 Homebrew cask 安装时自动让位：仅提示运行 `brew upgrade`，不弹窗、不自动下载覆盖安装（v0.18.17 起）
 
 当前默认更新源：
 
