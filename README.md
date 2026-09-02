@@ -1,46 +1,36 @@
 # Mac 软件管家
 
-一个只在本机运行的 macOS 软件扫描与升级工具。当前主入口是 SwiftUI 原生 macOS 应用，负责扫描本机应用、Homebrew 包和 Mac App Store 应用，并提供升级、巡检与自更新能力。
+[![Release](https://img.shields.io/github/v/release/sunnyhot/mac-software-steward?label=Release)](https://github.com/sunnyhot/mac-software-steward/releases/latest)
+![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
+![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)
 
-## 原生 macOS 应用
+一个只在本机运行的 macOS 软件扫描与升级工具：扫描本机应用、Homebrew 包和 Mac App Store 应用，提供可确认的维护计划、每日巡检自动升级与自更新。SwiftUI 原生实现，不依赖本地 Web 服务，不需要管理员权限。
 
-构建 `.app`：
+## 为什么是 Mac 软件管家
+
+- **一站式盘点**：`/Applications` 的 `.app`、Homebrew formula/cask、Mac App Store 应用全部纳入同一份清单
+- **升级有安全边界**：「检查并维护」先展示将执行的命令、版本变化、风险标签与跳过原因，确认后才执行；每个软件可单独设置自动/确认/仅提醒/跳过策略
+- **每日巡检全自动**：用户级 LaunchAgent 定时扫描，可升级项按策略自动升级，失败会分类分析并给出可执行建议
+- **普通 `.app` 不瞎碰**：没有统一升级协议的应用只识别更新能力（Sparkle / Keystone / Toolbox 等）并给指引，不做危险的静默覆盖
+
+## 安装
+
+推荐 Homebrew（自动跟随最新 Release，且不受 Gatekeeper 未公证拦截）：
 
 ```bash
-npm run build
-# 等价别名
-npm run build:native
+brew tap sunnyhot/tap
+brew install --cask sunnyhot/tap/mac-software-steward
 ```
 
-构建并打开：
+或从 [GitHub Releases](https://github.com/sunnyhot/mac-software-steward/releases/latest) 下载 `MacSoftwareSteward-v*.zip` 解压到 /Applications。
 
-```bash
-npm run open
-# 等价别名
-npm run open:native
-```
+> 更新：应用会自动检测 Homebrew 安装——brew 装的提示用 `brew upgrade`、停用应用内覆盖安装与自动下载；手动安装的使用应用内自更新。
 
-产物位置：
+## 快速上手
 
-```text
-build/MacSoftwareSteward.app
-```
-
-原生应用使用 SwiftUI + AppKit，不依赖本地 Web 服务。应用会在 Finder 启动环境中主动查找 `/opt/homebrew/bin` 与 `/usr/local/bin` 下的 `brew` / `mas`。
-
-## 功能覆盖
-
-第一版覆盖：
-
-- `/Applications`、`~/Applications`、系统应用目录中的 `.app` 扫描
-- Homebrew formula 与 cask 扫描
-- `brew outdated --json=v2` 可升级项检测，支持 `--greedy`
-- 可选的 Mac App Store 扫描与升级，依赖 `mas` CLI
-- `mas` CLI 缺失时可从原生 App Store 页自动执行 `brew install mas`
-- “检查并维护”会重新扫描并生成可确认的维护计划
-- 每日巡检：通过用户级 LaunchAgent 定时扫描，发现可升级项后自动升级
-- 来源诊断与巡检/升级历史
-- 应用自更新：从 GitHub Releases 检查、下载、安装并重启应用
+1. 启动后等待首次扫描完成（应用、Homebrew、可选的 App Store）
+2. 「检查并维护」生成维护计划，确认后批量升级；或按软件设置升级策略
+3. 设置页开启「每日巡检」，此后可升级项每天自动处理，日志见 `~/Library/Application Support/MacSoftwareSteward/daily-inspection.log`
 
 ## 能自动升级什么
 
@@ -61,6 +51,17 @@ build/MacSoftwareSteward.app
 - 无法确认版本：例如只能识别厂商更新器，但没有可靠可用版本
 - 诊断详情：识别器、置信度、安装版本、可用版本、Feed URL、来源和建议处理动作
 
+## 功能覆盖
+
+- `/Applications`、`~/Applications`、系统应用目录中的 `.app` 扫描
+- Homebrew formula 与 cask 扫描；`brew outdated --json=v2` 可升级项检测，支持 `--greedy`
+- 可选的 Mac App Store 扫描与升级，依赖 `mas` CLI
+- `brew upgrade --cask` 前国内镜像预下载（CaskMirrorPrefetcher），失败静默回退默认下载
+- `auto_updates` cask（如 Warp）按应用实际版本对齐 receipt，避免反复提示无效升级
+- 升级失败分类分析（App Store 发布延迟、Caskroom 残留、下载端点失效等），给出针对性建议而非笼统的「重试」
+- 来源诊断与巡检/升级历史
+- 应用自更新：从 GitHub Releases 检查、下载、安装并重启应用
+
 ## 维护计划安全策略
 
 “检查并维护”会先重新扫描，再生成维护计划，展示将执行的命令、来源、版本变化、风险标签与跳过原因。用户确认后才会执行选中的项目。
@@ -74,18 +75,27 @@ build/MacSoftwareSteward.app
 
 “设置”页集中提供通用、应用更新、自动化、风险与恢复设置。
 
-## 安装
+## 每日巡检
 
-推荐 Homebrew（自动跟随最新 Release，且不受 Gatekeeper 未公证拦截）：
+原生应用的“设置”页可以启用后台自动升级。启用后会写入用户级 LaunchAgent：
 
-```bash
-brew tap sunnyhot/tap
-brew install --cask sunnyhot/tap/mac-software-steward
+```text
+~/Library/LaunchAgents/local.codex.MacSoftwareSteward.daily.plist
 ```
 
-或从 [GitHub Releases](https://github.com/sunnyhot/mac-software-steward/releases/latest) 下载 `MacSoftwareSteward-v*.zip` 解压到 /Applications。
+LaunchAgent 会每天唤起应用包内的 helper：
 
-> 更新：应用会自动检测 Homebrew 安装——brew 装的提示用 `brew upgrade`、停用应用内覆盖安装与自动下载；手动安装的使用应用内自更新。
+```text
+MacSoftwareSteward.app/Contents/MacOS/MacSoftwareStewardAgent
+```
+
+巡检日志保存在：
+
+```text
+~/Library/Application Support/MacSoftwareSteward/daily-inspection.log
+```
+
+每日巡检会自动处理 Homebrew formula/cask，以及已安装 `mas` CLI 时的 Mac App Store 应用。普通 `.app` 仍然只扫描和提示，不做静默升级。
 
 ## 应用自更新
 
@@ -112,36 +122,19 @@ MacSoftwareSteward.zip
 
 Release 清单中的 `sha256` 必须对应 `MacSoftwareSteward.zip`。客户端会在安装前校验下载文件，缺失或不匹配都会中止自更新。
 
-## 每日巡检
-
-原生应用的“设置”页可以启用后台自动升级。启用后会写入用户级 LaunchAgent：
-
-```text
-~/Library/LaunchAgents/local.codex.MacSoftwareSteward.daily.plist
-```
-
-LaunchAgent 会每天唤起应用包内的 helper：
-
-```text
-MacSoftwareSteward.app/Contents/MacOS/MacSoftwareStewardAgent
-```
-
-巡检日志保存在：
-
-```text
-~/Library/Application Support/MacSoftwareSteward/daily-inspection.log
-```
-
-每日巡检会自动处理 Homebrew formula/cask，以及已安装 `mas` CLI 时的 Mac App Store 应用。普通 `.app` 仍然只扫描和提示，不做静默升级。
-
 ## 测试与构建
 
 ```bash
 npm test
-npm run build
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer npm run build
 npm run package
 ```
 
-`scripts/build-native.sh` 会打印当前 Developer Dir、macOS SDK、Swift 和 Swift compiler 版本。如果看到 “SDK is not supported by the compiler”，说明本机 Swift 编译器与 macOS SDK 不匹配，需要通过 `xcode-select` 切换到匹配的 Xcode/Command Line Tools，或重新安装匹配版本的工具链。
+`scripts/build-native.sh` 会打印当前 Developer Dir、macOS SDK、Swift 和 Swift compiler 版本。如果看到 “SDK is not supported by the compiler”，说明本机 Swift 编译器与 macOS SDK 不匹配，需要通过 `xcode-select` 切换到匹配的 Xcode/Command Line Tools，或重新安装匹配版本的工具链。如果报 `SwiftUIMacros.StateMacro could not be found`，说明当前工具链是 CommandLineTools（缺 SwiftUI 宏插件），构建与打开应用请带 `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` 前缀。
 
 `npm run package` 会重新构建、生成 `release/MacSoftwareSteward.zip`、版本化 zip、SHA-256 文件和 `latest.json`。`release/` 是本地产物目录，不提交到仓库。
+
+## 文档
+
+- `CHANGELOG.md` — 版本历史
+- `PROJECT_MAP.md` — 架构地图
