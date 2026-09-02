@@ -31,6 +31,10 @@ run_test AppSurfacePaletteTest \
   "$SRC/AppSurfacePalette.swift" \
   "$TESTS/AppSurfacePaletteTest.swift"
 
+run_test HomebrewSelfInstallDetectorTest \
+  "$SRC/HomebrewSelfInstallDetector.swift" \
+  "$TESTS/HomebrewSelfInstallDetectorTest.swift"
+
 run_test AppSingleInstancePolicyTest \
   "$SRC/AppSingleInstancePolicy.swift" \
   "$TESTS/AppSingleInstancePolicyTest.swift"
@@ -65,6 +69,7 @@ run_test AppUpdateModelAccelerationTest \
   "$SRC/AcceleratedDownloader.swift" \
   "$SRC/AppUpdateDownloadPresenter.swift" \
   "$SRC/AppUpdater.swift" \
+  "$SRC/HomebrewSelfInstallDetector.swift" \
   "$TESTS/AppUpdateModelAccelerationTest.swift"
 
 run_test AppManualUpdatePresenterTest \

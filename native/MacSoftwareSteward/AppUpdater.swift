@@ -155,7 +155,12 @@ final class AppUpdateModel: ObservableObject {
                 ? "发现新版本 \(release.versionString)。"
                 : "当前已是最新版本 \(currentVersion)。"
             if updateAvailable {
-                showUpdateDialog = true
+                if HomebrewSelfInstallDetector.isManaged() {
+                    // 2026-09-02:brew 管理——只提示,不弹安装弹窗、不自动下载覆盖。
+                    status = "发现新版本 \(release.versionString)。本应用由 Homebrew 管理，请运行 brew upgrade 更新。"
+                } else {
+                    showUpdateDialog = true
+                }
             }
         } catch {
             if !automatic {
@@ -165,7 +170,7 @@ final class AppUpdateModel: ObservableObject {
 
         isChecking = false
 
-        if automatic, updateAvailable, automaticDownloadsEnabled {
+        if automatic, updateAvailable, automaticDownloadsEnabled, !HomebrewSelfInstallDetector.isManaged() {
             // 命中失败版本记忆则跳过自动下载，打破坏 release 导致的无限重下循环。
             // 手动点击"检查更新/下载并重启"不受此限制（manual 路径不会进入这里）。
             if let memory = failedUpdateMemory,
@@ -198,6 +203,12 @@ final class AppUpdateModel: ObservableObject {
 
     func downloadInstallAndRestart() async {
         guard !isInstalling else { return }
+        if HomebrewSelfInstallDetector.isManaged() {
+            // 2026-09-02:brew 管理兜底——任何入口触发的自更新都不覆盖安装。
+            status = "本应用由 Homebrew 管理，请运行 brew upgrade 更新；应用内覆盖安装已停用。"
+            updateErrorMessage = nil
+            return
+        }
         guard let release = latestRelease else {
             status = "请先检查更新。"
             return

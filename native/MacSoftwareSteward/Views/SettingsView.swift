@@ -519,7 +519,11 @@ struct ManualCheckUpdateRow: View {
             }
             .disabled(updater.isChecking || updater.isInstalling)
 
-            if (updater.updateAvailable || updater.updateErrorMessage != nil) && !updater.isInstalling {
+            if updater.updateAvailable && HomebrewSelfInstallDetector.isManaged() && !updater.isInstalling {
+                Label("由 Homebrew 管理，请用 brew upgrade 更新", systemImage: "terminal")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if (updater.updateAvailable || updater.updateErrorMessage != nil) && !updater.isInstalling {
                 Button {
                     Task { await updater.downloadInstallAndRestart() }
                 } label: {
