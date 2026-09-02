@@ -74,6 +74,19 @@ build/MacSoftwareSteward.app
 
 “设置”页集中提供通用、应用更新、自动化、风险与恢复设置。
 
+## 安装
+
+推荐 Homebrew（自动跟随最新 Release，且不受 Gatekeeper 未公证拦截）：
+
+```bash
+brew tap sunnyhot/tap
+brew install --cask sunnyhot/tap/mac-software-steward
+```
+
+或从 [GitHub Releases](https://github.com/sunnyhot/mac-software-steward/releases/latest) 下载 `MacSoftwareSteward-v*.zip` 解压到 /Applications。
+
+> 注意：brew 安装的请用 `brew upgrade` 更新、关闭应用内自更新；手动安装的使用应用内自更新。
+
 ## 应用自更新
 
 原生应用的“设置”页支持：
