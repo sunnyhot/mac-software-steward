@@ -36,7 +36,7 @@ struct CommandRunnerControlTest {
         let streamingCapture = OutputCapture()
         let streamingOverlay = await CommandRunner.runStreamingDetailed(
             "/bin/sh",
-            arguments: ["-c", "printf '%s' \"$MSS_STREAMING_OVERLAY\""],
+            arguments: ["-c", "printf '%s\\n' \"$MSS_STREAMING_OVERLAY\""],
             timeout: 5,
             environmentOverlay: ["MSS_STREAMING_OVERLAY": "streaming"]
         ) { stream, text in
