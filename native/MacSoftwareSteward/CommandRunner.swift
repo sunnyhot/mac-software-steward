@@ -226,9 +226,24 @@ enum CommandRunner {
                 emit(handle.availableData, stream: "stderr", recentOutput: recentOutput, onOutput: onOutput)
             }
 
-            process.terminationHandler = { finishedProcess in
+            do {
+                try process.run()
+            } catch {
                 guard gate.close() else { return }
-                // 先读完管道尾部，再停止回调；避免进程退出时丢掉最后的输出。
+                onOutput("stderr", error.localizedDescription)
+                recentOutput.append(stream: "stderr", text: error.localizedDescription)
+                continuation.resume(returning: StreamingCommandResult(
+                    code: -1,
+                    recentOutput: recentOutput.text(),
+                    terminationReason: .launchFailed
+                ))
+                return
+            }
+
+            // 进程已经启动后再等待退出，避免取消监听在启动前误判为已结束。
+            _ = Task.detached {
+                process.waitUntilExit()
+                guard gate.close() else { return }
                 let remainingStdout = stdout.fileHandleForReading.readDataToEndOfFile()
                 let remainingStderr = stderr.fileHandleForReading.readDataToEndOfFile()
                 stdout.fileHandleForReading.readabilityHandler = nil
@@ -236,7 +251,7 @@ enum CommandRunner {
                 emit(remainingStdout, stream: "stdout", recentOutput: recentOutput, onOutput: onOutput)
                 emit(remainingStderr, stream: "stderr", recentOutput: recentOutput, onOutput: onOutput)
                 continuation.resume(returning: StreamingCommandResult(
-                    code: finishedProcess.terminationStatus,
+                    code: process.terminationStatus,
                     recentOutput: recentOutput.text(),
                     terminationReason: terminationReason.value()
                 ))
@@ -251,20 +266,6 @@ enum CommandRunner {
                         process.interrupt()
                     }
                 }
-            }
-
-            do {
-                try process.run()
-            } catch {
-                guard gate.close() else { return }
-                onOutput("stderr", error.localizedDescription)
-                recentOutput.append(stream: "stderr", text: error.localizedDescription)
-                continuation.resume(returning: StreamingCommandResult(
-                    code: -1,
-                    recentOutput: recentOutput.text(),
-                    terminationReason: .launchFailed
-                ))
-                return
             }
 
             DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
