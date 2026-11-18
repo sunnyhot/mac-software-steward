@@ -337,6 +337,8 @@ struct UpgradeStep: Hashable {
     var command: UpgradeCommand
     var packageID: String?
     var packageName: String?
+    /// 仅用于残留清理执行边界，排队期间若 App 重新出现则跳过删除。
+    var expectedAppPaths: [String] = []
     var purpose: UpgradeStepPurpose = .maintenance
 }
 

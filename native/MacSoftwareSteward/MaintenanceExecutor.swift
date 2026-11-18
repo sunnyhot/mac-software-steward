@@ -124,9 +124,11 @@ final class MaintenanceExecutor: ObservableObject {
         inboxStore: InboxStore? = nil
     ) async {
         guard !isConfirmingUpgradePlan else { return }
-        packageProgress.removeValue(forKey: packageID)
-        host?.executorRequestsDerivedDataRecompute()
         guard let package = availablePackages.first(where: { $0.id == packageID }) else {
+            // 只有找不到包、准备重扫时才清掉旧失败状态；可重试包保持原位，
+            // 由 upgrade 的 markQueued 直接完成 failed → queued，避免列表先消失再重排。
+            packageProgress.removeValue(forKey: packageID)
+            host?.executorRequestsDerivedDataRecompute()
             host?.executorRequestsRescan(inboxStore: inboxStore)
             return
         }
@@ -440,6 +442,11 @@ final class MaintenanceExecutor: ObservableObject {
 
     private func runCommand(jobID id: UUID, step: UpgradeStep, command: UpgradeCommand, token: CommandCancellationToken) async -> StreamingCommandResult {
         if step.purpose == .staleCaskCleanup {
+            if !step.expectedAppPaths.isEmpty,
+               !BrewCaskCleanupDetector.hasStaleInstallRecord(expectedAppPaths: step.expectedAppPaths) {
+                appendLog(id: id, stream: "system", text: "App 已重新出现，跳过安装记录清理，避免误删新安装。")
+                return StreamingCommandResult(code: -1, recentOutput: "App 已重新出现，取消清理", terminationReason: .cancelled)
+            }
             if token.isCancelled {
                 return StreamingCommandResult(code: -1, recentOutput: "", terminationReason: .cancelled)
             }
@@ -597,8 +604,18 @@ final class MaintenanceExecutor: ObservableObject {
     ) async -> Bool {
         let code = result.code
 
+        if step.purpose == .staleCaskCleanup, code == CaskRecordCleanup.appReappearedExitCode {
+            markCancelled(step)
+            host?.executorRequestsDerivedDataRecompute()
+            if step.packageID != nil {
+                completedSteps += 1
+                updateUpgradeProgress(jobID: id, completed: completedSteps, failed: failedCount, currentPackage: nil)
+            }
+            return false
+        }
+
         if step.purpose == .staleCaskCleanup, result.terminationReason == .exited {
-            let receiptRemoved = await verifyCaskReceiptRemoved(command: command, caskName: step.packageName ?? "")
+            let receiptRemoved = await verifyCaskReceiptRemoved(brewPath: try? await requireCommand("brew"), caskName: step.packageName ?? "")
             if receiptRemoved {
                 if code == 0 {
                     if let packageID = step.packageID { succeededPackageIDs.insert(packageID) }
@@ -708,7 +725,9 @@ final class MaintenanceExecutor: ObservableObject {
             }
 
             if let cleanupCode = await cleanupStaleBrewCaskIfNeeded(jobID: id, step: step, command: command, output: result.recentOutput, token: activeCancellationTokens[id]) {
-                if cleanupCode == 0 {
+                if cleanupCode == CaskRecordCleanup.appReappearedExitCode {
+                    markCancelled(step)
+                } else if cleanupCode == 0 {
                     if let packageID = step.packageID { succeededPackageIDs.insert(packageID) }
                     markCleanedUp(step)
                 } else {
@@ -767,22 +786,39 @@ final class MaintenanceExecutor: ObservableObject {
         var failedInSudo = 0
         guard !steps.isEmpty else { return 0 }
 
+        // 提权等待期间 App 可能已重装；真正执行 rm 前再次过滤，避免删除新安装记录。
+        var stepsToExecute: [UpgradeStep] = []
+        for step in steps {
+            if step.purpose == .staleCaskCleanup,
+               !step.expectedAppPaths.isEmpty,
+               !BrewCaskCleanupDetector.hasStaleInstallRecord(expectedAppPaths: step.expectedAppPaths) {
+                appendLog(id: id, stream: "system", text: "App 已重新出现，跳过 \(step.packageName ?? "cask") 的提权安装记录清理。")
+                markCancelled(step)
+                continue
+            }
+            stepsToExecute.append(step)
+        }
+        guard !stepsToExecute.isEmpty else {
+            host?.executorRequestsDerivedDataRecompute()
+            return 0
+        }
+
         let pathEnv = CommandRunner.defaultPath
         let homeEnv = ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory()
         let script = SudoScriptBuilder.script(
-            commands: steps.map(\.command),
+            commands: stepsToExecute.map(\.command),
             pathEnv: pathEnv,
             homeEnv: homeEnv
         )
         let args = SudoScriptBuilder.osaArguments(script)
         let outputCollector = SudoScriptOutputCollector()
-        let displayNames = steps.map { $0.packageName ?? $0.command.display }
+        let displayNames = stepsToExecute.map { $0.packageName ?? $0.command.display }
 
         updateJob(id) {
-            $0.log.append(LogLine(stream: "system", text: "sudo 批次：osascript 提权执行 \(steps.count) 个命令"))
+            $0.log.append(LogLine(stream: "system", text: "sudo 批次：osascript 提权执行 \(stepsToExecute.count) 个命令"))
             $0.log.append(LogLine(stream: "system", text: "正在请求管理员密码…"))
         }
-        updateUpgradeProgress(jobID: id, currentPackage: "等待管理员授权执行 \(steps.count) 个命令")
+        updateUpgradeProgress(jobID: id, currentPackage: "等待管理员授权执行 \(stepsToExecute.count) 个命令")
         appendLog(id: id, stream: "command", text: "$ osascript -e <do shell script ... with administrator privileges>（\(displayNames.joined(separator: ", "))）")
 
         let result = await CommandRunner.runStreamingDetailed(
@@ -799,7 +835,7 @@ final class MaintenanceExecutor: ObservableObject {
         let capturedOutput = outputCollector.text()
 
         if result.terminationReason == .cancelled {
-            for step in steps { markCancelled(step) }
+            for step in stepsToExecute { markCancelled(step) }
             host?.executorRequestsDerivedDataRecompute()
             updateJob(id) {
                 $0.status = .cancelled
@@ -809,7 +845,7 @@ final class MaintenanceExecutor: ObservableObject {
         }
 
         if result.code != 0 && !outputCollector.containsResultMarker {
-            for step in steps {
+            for step in stepsToExecute {
                 failedInSudo += 1
                 markFailed(step, analysis: SudoScriptFailureAnalyzer.analysis(
                     command: step.command.display,
@@ -823,15 +859,24 @@ final class MaintenanceExecutor: ObservableObject {
             return failedInSudo
         }
 
-        let parsed = SudoScriptParser.outcomes(in: capturedOutput, count: steps.count)
-        for (index, step) in steps.enumerated() {
+        let parsed = SudoScriptParser.outcomes(in: capturedOutput, count: stepsToExecute.count)
+        for (index, step) in stepsToExecute.enumerated() {
             let markerNumber = index + 1
             let outcome = parsed.first { $0.packageIndex == markerNumber }
                 ?? SudoScriptParser.Outcome(packageIndex: markerNumber, exitCode: -1, outputSegment: "")
             let displayName = step.packageName ?? step.command.display
 
+            if step.purpose == .staleCaskCleanup && outcome.exitCode == CaskRecordCleanup.appReappearedExitCode {
+                markCancelled(step)
+                host?.executorRequestsDerivedDataRecompute()
+                updateJob(id) {
+                    $0.log.append(LogLine(stream: "system", text: "App 已重新出现，跳过 \(displayName) 的安装记录清理"))
+                }
+                continue
+            }
+
             if step.purpose == .staleCaskCleanup {
-                let receiptRemoved = await verifyCaskReceiptRemoved(command: step.command, caskName: step.packageName ?? "")
+                let receiptRemoved = await verifyCaskReceiptRemoved(brewPath: try? await requireCommand("brew"), caskName: step.packageName ?? "")
                 if receiptRemoved && outcome.exitCode != 0 {
                     failedInSudo += 1
                     markCleanupPartial(step, code: outcome.exitCode, output: outcome.outputSegment)
@@ -893,10 +938,10 @@ final class MaintenanceExecutor: ObservableObject {
         return failedInSudo
     }
 
-    private func verifyCaskReceiptRemoved(command: UpgradeCommand, caskName: String) async -> Bool {
-        guard !caskName.isEmpty else { return false }
+    private func verifyCaskReceiptRemoved(brewPath: String?, caskName: String) async -> Bool {
+        guard !caskName.isEmpty, let brewPath else { return false }
         let verification = await CommandRunner.run(
-            command.executable,
+            brewPath,
             arguments: ["list", "--cask", caskName],
             timeout: 30
         )
@@ -912,12 +957,27 @@ final class MaintenanceExecutor: ObservableObject {
     ) async -> Int32? {
         let appPresence = appPresenceForBrewCask(step)
         guard let caskName = BrewCaskCleanupDetector.cleanupCandidate(command: command, output: output, appPresence: appPresence) else { return nil }
+        if !step.expectedAppPaths.isEmpty,
+           !BrewCaskCleanupDetector.hasStaleInstallRecord(expectedAppPaths: step.expectedAppPaths) {
+            appendLog(id: id, stream: "system", text: "App 已重新出现，跳过 \(caskName) 的安装记录清理。")
+            return nil
+        }
         appendLog(id: id, stream: "system", text: "检测到 \(caskName) 的 App 已不存在，自动从 Homebrew Cask 中移除。")
-        let cleanupCommand = UpgradeCommand(
-            executable: command.executable,
-            arguments: ["uninstall", "--cask", "--force", caskName],
-            display: "brew uninstall --cask --force \(caskName)"
-        )
+        let cleanupCommand: UpgradeCommand
+        do {
+            guard let brewPath = try? await requireCommand("brew") else {
+                appendLog(id: id, stream: "system", text: "无法定位 Homebrew，不能验证安装记录清理结果。")
+                return nil
+            }
+            cleanupCommand = try await CaskRecordCleanup.command(
+                brewPath: brewPath,
+                caskName: caskName,
+                expectedAppPaths: step.expectedAppPaths
+            )
+        } catch {
+            appendLog(id: id, stream: "system", text: "无法构造安全安装记录清理命令：\(error.localizedDescription)")
+            return nil
+        }
         appendLog(id: id, stream: "command", text: "$ \(cleanupCommand.display)")
         let result = await CommandRunner.runStreamingDetailed(
             cleanupCommand.executable,
@@ -930,8 +990,11 @@ final class MaintenanceExecutor: ObservableObject {
                 self?.updatePackageDetail(for: step, stream: stream, text: text)
             }
         }
-        let receiptRemoved = await verifyCaskReceiptRemoved(command: cleanupCommand, caskName: caskName)
+        let receiptRemoved = await verifyCaskReceiptRemoved(brewPath: try? await requireCommand("brew"), caskName: caskName)
         guard receiptRemoved else {
+            if result.code == CaskRecordCleanup.appReappearedExitCode {
+                return result.code
+            }
             appendLog(id: id, stream: "system", text: "清理 \(caskName) 后无法确认 receipt 已移除，退出码 \(result.code)。")
             return nil
         }

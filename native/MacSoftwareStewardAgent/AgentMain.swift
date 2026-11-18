@@ -37,16 +37,32 @@ struct MacSoftwareStewardAgent {
                         print("[skip] \(cask.name): App 文件已重新出现，不再自动清理")
                         continue
                     }
-                    let display = "brew uninstall --cask --force \(cask.name)"
+                    let cleanupCommand: UpgradeCommand
+                    do {
+                        cleanupCommand = try await CaskRecordCleanup.command(
+                            brewPath: brew,
+                            caskName: cask.name,
+                            expectedAppPaths: cask.expectedAppPaths
+                        )
+                    } catch {
+                        print("[error] \(cask.name): 无法构造安全安装记录清理命令：\(error.localizedDescription)")
+                        failures.append(InspectionFailureRecord(
+                            message: "无法构造安全安装记录清理命令",
+                            commandDisplay: "brew --caskroom",
+                            exitCode: 1
+                        ))
+                        continue
+                    }
+                    let display = cleanupCommand.display
                     let result = await runWithRetry(
-                        executable: brew,
-                        arguments: ["uninstall", "--cask", "--force", cask.name],
+                        executable: cleanupCommand.executable,
+                        arguments: cleanupCommand.arguments,
                         display: display,
                         timeout: 600,
                         allowsRetry: false
                     )
-                    // 卸载不是幂等下载任务：无论退出码如何都先验证 receipt，
-                    // 非零但已删除视为部分完成，绝不为重试而再次卸载。
+                    // 安装记录清理不是幂等下载任务：无论退出码如何都先验证 receipt，
+                    // 非零但已删除视为部分完成，绝不为重试而再次删除。
                     let verification = await CommandRunner.run(
                         brew,
                         arguments: ["list", "--cask", cask.name],
@@ -93,7 +109,7 @@ struct MacSoftwareStewardAgent {
                 for cask in cleanupCandidates {
                     failures.append(InspectionFailureRecord(
                         message: "无法自动清理 \(cask.name)：找不到 brew",
-                        commandDisplay: "brew uninstall --cask --force \(cask.name)",
+                        commandDisplay: "brew --caskroom",
                         exitCode: 1
                     ))
                 }

@@ -104,6 +104,8 @@ run_or_explain "Building ${APP_NAME}Agent" xcrun swiftc \
   "$ROOT_DIR"/native/MacSoftwareSteward/HomebrewCaskUpdateAdvisor.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/BrewCaskCleanupDetector.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/CaskReceiptVerification.swift \
+  "$ROOT_DIR"/native/MacSoftwareSteward/CaskRecordCleanup.swift \
+  "$ROOT_DIR"/native/MacSoftwareSteward/SudoScriptBuilder.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/Scanner.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/BrewBatchedGreedy.swift \
   "$ROOT_DIR"/native/MacSoftwareSteward/CaskMirrorPrefetcher.swift \

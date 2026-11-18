@@ -523,6 +523,8 @@ run_test StewardModelScanGuardTest \
   "$SRC/SmartMaintenancePolicy.swift" \
   "$SRC/TransientFailureRetryPolicy.swift" \
   "$SRC/CaskReceiptVerification.swift" \
+  "$SRC/CaskRecordCleanup.swift" \
+  "$SRC/ChannelSwitchCommandBuilder.swift" \
   "$SRC/DailyAutomationDefaults.swift" \
   "$SRC/DailyInspectionRepairPolicy.swift" \
   "$SRC/MaintenanceExecutor.swift" \
@@ -608,5 +610,29 @@ run_test UpgradeVerifierTest \
 run_test CaskMirrorPrefetcherTest \
   "$SRC/CaskMirrorPrefetcher.swift" \
   "$TESTS/CaskMirrorPrefetcherTest.swift"
+
+run_test ManualCaskUpdateResolverTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/ManualCaskUpdateResolver.swift" \
+  "$TESTS/ManualCaskUpdateResolverTest.swift"
+
+run_test CaskRecordCleanupTest \
+  "$SRC/CommandRunner.swift" \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/SudoScriptBuilder.swift" \
+  "$SRC/CaskRecordCleanup.swift" \
+  "$TESTS/CaskRecordCleanupTest.swift"
+
+run_test ChannelSwitchCommandBuilderTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/SudoScriptBuilder.swift" \
+  "$SRC/ChannelSwitchCommandBuilder.swift" \
+  "$TESTS/ChannelSwitchCommandBuilderTest.swift"
+
+run_test UpdateListStabilityStructureTest \
+  "$TESTS/UpdateListStabilityStructureTest.swift"
 
 echo "All native tests passed."

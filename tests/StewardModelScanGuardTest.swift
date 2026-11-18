@@ -407,6 +407,40 @@ struct StewardModelScanGuardTest {
         precondition(orphanModel.orphanedFailedProgresses.map(\.packageID) == [orphanProgress.packageID], "Failed progress for a package no longer in scan must surface as orphan")
         precondition(orphanModel.allUpgradeablePackages.isEmpty, "Orphan must not leak into the upgradeable list")
 
+        // 残留记录已经在普通待处理列表中展示，不能再次出现在孤儿区。
+        let duplicateStale = BrewPackage(
+            id: "brew:cask:duplicate-stale",
+            kind: "cask",
+            name: "duplicate-stale",
+            installedVersion: "1",
+            currentVersion: "2",
+            pinned: false,
+            autoUpdates: false,
+            outdated: false,
+            upgradeable: false,
+            expectedAppPaths: ["/Applications/Duplicate Stale.app"],
+            hasStaleInstallRecord: true
+        )
+        let duplicateModel = StewardModel(scanner: StaticScanner(result: ScanResult(
+            scannedAt: Date(timeIntervalSince1970: 0),
+            includeGreedy: false,
+            summary: ScanSummary(applications: 0, brewFormulae: 0, brewCasks: 1, masApps: 0, outdated: 0, actionable: 0, scanMs: 1),
+            applications: ApplicationsScan(source: "test", ok: true, error: "", items: []),
+            brew: BrewScan(available: true, path: "/opt/homebrew/bin/brew", prefix: "/opt/homebrew", version: "Homebrew 5", error: "", includeGreedy: false, formulae: [], casks: [duplicateStale]),
+            mas: MasScan(available: false, path: "", error: "", apps: [])
+        )))
+        await duplicateModel.scanSoftware()
+        duplicateModel.executor.packageProgress[duplicateStale.id] = PackageUpgradeProgress(
+            packageID: duplicateStale.id,
+            packageName: duplicateStale.name,
+            status: .failed,
+            detail: "清理失败"
+        )
+        precondition(duplicateModel.updateAttentionPackages.map(\.id).contains(duplicateStale.id))
+        precondition(duplicateModel.orphanedFailedProgresses.isEmpty, "A stale package already visible in the normal list must not be duplicated in orphan section")
+        let visibleIDs = duplicateModel.updateAttentionPackages.map(\.id) + duplicateModel.orphanedFailedProgresses.map(\.packageID)
+        precondition(Set(visibleIDs).count == visibleIDs.count, "A package must have one visible representation")
+
         // 失败包重新出现在扫描中时，不再是孤儿：它回到 allUpgradeablePackages，不再算进 orphanedFailedProgresses。
         let ghostPackage = BrewPackage(
             id: orphanProgress.packageID,

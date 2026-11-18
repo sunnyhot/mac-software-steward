@@ -19,10 +19,10 @@
 #
 # 残留记录清理回归：
 #   1. 对一个 App 已删除但 receipt 仍在的 cask 点击「移除残留记录」并确认。
-#   2. 日志必须是 brew uninstall --cask --force <name>，不得变成 upgrade；
-#      清理前不得出现「镜像预下载」或「下载加速」等无关阶段。
+#   2. 日志必须是对 Caskroom/<name> 的定向 rm -rf --，不得变成 upgrade 或完整 brew uninstall；
+#      清理前不得出现「镜像预下载」或「下载加速」等无关阶段，清理后必须独立执行 brew list --cask 验证。
 #   3. 需要提权时同样只弹一次密码框；成功后列表行立即消失，旧失败待办转为已解决，
-#      不等待全量扫描。失败重试仍必须执行 uninstall。
+#      不等待全量扫描。失败重试仍必须执行定向 Caskroom 清理并独立验证 receipt。
 #   4. 用户取消与 AppleScript 语法/启动错误必须显示不同原因，后者可查看日志，
 #      不得统一误报为「管理员授权未完成」。
 set -euo pipefail

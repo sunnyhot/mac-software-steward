@@ -50,13 +50,29 @@ enum ManualCaskUpdateResolver {
             return nil
         }
         let cask = casks.first { item in
-            (item["token"] as? String) == token || (item["full_token"] as? String) == token
+            let fullToken = item["full_token"] as? String
+            let shortToken = fullToken?.split(separator: "/").last.map(String.init)
+            return (item["token"] as? String) == token
+                || fullToken == token
+                || shortToken == token
         }
         return cask?["version"] as? String
     }
 
     static func versionsMatch(_ lhs: String, _ rhs: String) -> Bool {
-        normalizedVersion(lhs) == normalizedVersion(rhs)
+        let left = normalizedVersion(lhs)
+        let right = normalizedVersion(rhs)
+        if left == right { return true }
+        // Homebrew cask 可能在预发布后追加日期/构建号，例如
+        // mos@beta 的 4.3.0-beta-20260820.1 对应 Appcast 的 4.3.0-beta。
+        return hasNumericBuildSuffix(left, base: right) || hasNumericBuildSuffix(right, base: left)
+    }
+
+    private static func hasNumericBuildSuffix(_ candidate: String, base: String) -> Bool {
+        let prefix = base + "-"
+        guard candidate.hasPrefix(prefix) else { return false }
+        let suffix = String(candidate.dropFirst(prefix.count))
+        return suffix.range(of: #"^\d+(?:\.\d+)*$"#, options: .regularExpression) != nil
     }
 
     private static func prereleaseChannel(in version: String) -> String? {

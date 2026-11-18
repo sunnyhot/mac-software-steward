@@ -97,7 +97,7 @@ MacSoftwareSteward.app/Contents/MacOS/MacSoftwareStewardAgent
 
 每日巡检会自动处理 Homebrew formula/cask，以及已安装 `mas` CLI 时的 Mac App Store 应用。普通 `.app` 仍然只扫描和提示，不做静默升级。自带更新能力的 Cask 不做重复自动升级；网络、连接和临时服务故障最多自动重试两次，权限或校验错误不盲目重试。
 
-开启「自动维护」会同时允许每日巡检、自动处理和低风险修复，Agent 还会自动清理元数据明确标记、且执行前再次确认 App 已不存在的 Homebrew 残留记录。清理使用 `brew uninstall --cask --force` 并验证 receipt，不使用 `--zap`，不会删除个人配置；需要管理员授权或无法确认结果时会保留并报告，而不是误报成功。
+开启「自动维护」会同时允许每日巡检、自动处理和低风险修复，Agent 还会自动清理元数据明确标记、且执行前再次确认 App 已不存在的 Homebrew 残留记录。此类场景只清理 Caskroom 中对应的安装记录目录，并验证 receipt；不执行 cask 的完整卸载脚本，不使用 `--zap`，不会删除个人配置。需要管理员授权或无法确认结果时会保留并报告，而不是误报成功。
 
 ## 应用自更新
 

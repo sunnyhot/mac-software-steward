@@ -191,7 +191,9 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     /// 这些孤儿会导致顶部状态横幅计数与下方升级列表对不上，这里把它们暴露出来，
     /// 让升级列表可以继续展示这些项，用户能看到失败原因并重试或清除。
     var orphanedFailedProgresses: [PackageUpgradeProgress] {
-        let knownIDs = Set(allUpgradeablePackages.map(\.id))
+        // 只把“没有出现在任何可见列表中的失败项”称为孤儿。
+        // 残留记录也展示在 updateAttentionPackages 中，不能再重复出现在孤儿区。
+        let knownIDs = Set(updateAttentionPackages.map(\.id))
         return packageProgress.values
             .filter {
                 !knownIDs.contains($0.packageID) && [
@@ -322,7 +324,12 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
             let command = try await executor.command(for: package, includeGreedy: includeGreedy)
             guard !isConfirmingUpgradePlan, !isPackageActive(package.id) else { return }
             executor.enqueueJob(label: "升级 \(package.name)", steps: [
-                UpgradeStep(command: command, packageID: package.id, packageName: package.name)
+                UpgradeStep(
+                    command: command,
+                    packageID: package.id,
+                    packageName: package.name,
+                    expectedAppPaths: package.expectedAppPaths
+                )
             ], rescanAfterSuccess: true, inboxStore: inboxStore, autoRepairProfile: autoRepairProfile)
         } catch {
             errorMessage = error.localizedDescription
@@ -468,7 +475,12 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
                 let status = packageProgress[package.id]?.status
                 guard status != .succeeded, !isPackageActive(package.id) else { continue }
                 let command = try await executor.command(for: package, includeGreedy: includeGreedy)
-                packageSteps.append(UpgradeStep(command: command, packageID: package.id, packageName: package.name))
+                packageSteps.append(UpgradeStep(
+                    command: command,
+                    packageID: package.id,
+                    packageName: package.name,
+                    expectedAppPaths: package.expectedAppPaths
+                ))
             }
 
             packageSteps = packageSteps.filter { step in
@@ -535,7 +547,7 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
             }
 
         case .switchChannel:
-            guard !isScanning, !hasRunningJob, !isConfirmingUpgradePlan else { return }
+            guard !isScanning, !isConfirmingUpgradePlan, !isPackageActive(package.id) else { return }
             do {
                 let brew = try await executor.requireCommand("brew")
                 let info = await CommandRunner.run(
@@ -553,21 +565,21 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
                     return
                 }
 
-                let uninstall = UpgradeCommand(
-                    executable: brew,
-                    arguments: ["uninstall", "--cask", "--force", cask.name],
-                    display: "brew uninstall --cask --force \(cask.name)"
-                )
-                let install = UpgradeCommand(
-                    executable: brew,
-                    arguments: ["install", "--cask", resolution.targetCaskToken],
-                    display: "brew install --cask \(resolution.targetCaskToken)"
+                guard !isPackageActive(package.id) else { return }
+                let command = ChannelSwitchCommandBuilder.command(
+                    brewPath: brew,
+                    sourceToken: cask.name,
+                    targetToken: resolution.targetCaskToken
                 )
                 executor.enqueueJob(
                     label: "将 \(cask.name) 切换到 \(resolution.targetCaskToken)",
                     steps: [
-                        UpgradeStep(command: uninstall, packageID: nil, packageName: nil),
-                        UpgradeStep(command: install, packageID: package.id, packageName: cask.name)
+                        UpgradeStep(
+                            command: command,
+                            packageID: package.id,
+                            packageName: cask.name,
+                            expectedAppPaths: cask.expectedAppPaths
+                        )
                     ],
                     rescanAfterSuccess: true,
                     inboxStore: inboxStore,
@@ -596,21 +608,26 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
             errorMessage = "检测到应用文件已重新出现，请先重新扫描。"
             return
         }
-        guard !isScanning, !hasRunningJob, !isConfirmingUpgradePlan else { return }
+        guard !isScanning, !isConfirmingUpgradePlan, !isPackageActive(package.id) else { return }
 
         do {
             let brew = try await executor.requireCommand("brew")
-            let command = UpgradeCommand(
-                executable: brew,
-                arguments: ["uninstall", "--cask", "--force", cask.name],
-                display: "brew uninstall --cask --force \(cask.name)"
+            // 只清理 Caskroom 安装记录，避免再次执行 cask 的完整卸载脚本。
+            let command = try await CaskRecordCleanup.command(
+                brewPath: brew,
+                caskName: cask.name,
+                expectedAppPaths: cask.expectedAppPaths
             )
+            // await 期间可能被重复点击或重新安装，入队前做原子复查。
+            guard BrewCaskCleanupDetector.hasStaleInstallRecord(expectedAppPaths: cask.expectedAppPaths),
+                  !isPackageActive(package.id) else { return }
             executor.enqueueJob(
                 label: "移除 \(cask.name) 的 Homebrew 残留记录",
                 steps: [UpgradeStep(
                     command: command,
                     packageID: package.id,
                     packageName: cask.name,
+                    expectedAppPaths: cask.expectedAppPaths,
                     purpose: .staleCaskCleanup
                 )],
                 rescanAfterSuccess: false,

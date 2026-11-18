@@ -43,48 +43,12 @@ struct FlowingAccentLine: View {
     var tint: Color
     var isActive: Bool
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var offset: CGFloat = -1
-
     var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(tint.opacity(isActive ? 0.18 : 0.12))
-
-                if isActive && !reduceMotion {
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [.clear, tint.opacity(0.85), .clear],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: max(80, proxy.size.width * 0.32))
-                        .offset(x: offset * proxy.size.width)
-                }
-            }
-        }
-        .frame(height: 2)
-        .clipShape(Capsule())
-        .onAppear {
-            guard isActive && !reduceMotion else { return }
-            offset = -0.35
-            withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
-                offset = 1.05
-            }
-        }
-        .onChange(of: isActive) {
-            guard isActive && !reduceMotion else {
-                offset = -0.35
-                return
-            }
-            offset = -0.35
-            withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
-                offset = 1.05
-            }
-        }
+        // 进度行会随任务状态高频插入/删除。这里保持静态，避免在
+        // display cycle 中修改 @State、反复触发布局和约束更新。
+        Capsule()
+            .fill(tint.opacity(isActive ? 0.28 : 0.12))
+            .frame(height: 2)
     }
 }
 

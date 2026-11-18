@@ -369,7 +369,7 @@ struct UpdateRow: View {
                 }
             }
         } message: {
-            Text("应用文件已经不存在。此操作将执行 brew uninstall --cask --force，清除 Homebrew receipt 和 Caskroom 残留；不会使用 --zap 删除个人配置。")
+            Text("应用文件已经不存在。此操作只清除对应的 Homebrew receipt 和 Caskroom 安装记录，不执行完整卸载，不删除个人配置。")
         }
     }
 
