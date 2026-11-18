@@ -847,7 +847,7 @@ struct PackageProgressDetail: View {
     @ViewBuilder
     private func actionButton(for action: FailureActionType) -> some View {
         switch action {
-        case .retry, .quitAndRetry, .reimport, .cleanup, .repairPerms, .promptAdminPassword, .openLog:
+        case .retry, .quitAndRetry, .reimport, .reinstall, .cleanup, .repairPerms, .promptAdminPassword, .openLog:
             Button {
                 Task { await model.retryPackage(progress.packageID, inboxStore: inboxStore) }
             } label: {
@@ -911,6 +911,7 @@ struct PackageProgressDetail: View {
         case .retry: return "重试"
         case .quitAndRetry: return "关闭后重试"
         case .reimport: return "覆盖重装"
+        case .reinstall: return "修复并重装"
         case .cleanup: return "清理并重试"
         case .repairPerms: return "重试"
         default: return "重试"
@@ -942,6 +943,7 @@ struct PackageProgressDetail: View {
         case .retry: return "arrow.clockwise"
         case .quitAndRetry: return "xmark.circle"
         case .reimport: return "square.and.arrow.down.on.square"
+        case .reinstall: return "wrench.and.screwdriver"
         case .cleanup: return "trash.circle"
         case .repairPerms: return "lock.shield"
         default: return "arrow.clockwise"

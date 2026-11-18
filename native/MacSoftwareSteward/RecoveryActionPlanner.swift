@@ -17,6 +17,8 @@ enum RecoveryActionPlanner {
             return RecoveryAction(kind: .retryPackage, title: "关闭后重试", systemImage: "xmark.circle")
         case .reimport:
             return RecoveryAction(kind: .retryPackage, title: "覆盖重装", systemImage: "square.and.arrow.down.on.square")
+        case .reinstall:
+            return RecoveryAction(kind: .retryPackage, title: "修复并重装", systemImage: "wrench.and.screwdriver")
         case .cleanup:
             return RecoveryAction(kind: .retryPackage, title: "清理并重试", systemImage: "trash.circle")
         case .repairPerms:

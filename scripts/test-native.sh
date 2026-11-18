@@ -525,6 +525,7 @@ run_test StewardModelScanGuardTest \
   "$SRC/CaskReceiptVerification.swift" \
   "$SRC/CaskRecordCleanup.swift" \
   "$SRC/ChannelSwitchCommandBuilder.swift" \
+  "$SRC/FormulaRepairCommandBuilder.swift" \
   "$SRC/DailyAutomationDefaults.swift" \
   "$SRC/DailyInspectionRepairPolicy.swift" \
   "$SRC/MaintenanceExecutor.swift" \
@@ -634,5 +635,12 @@ run_test ChannelSwitchCommandBuilderTest \
 
 run_test UpdateListStabilityStructureTest \
   "$TESTS/UpdateListStabilityStructureTest.swift"
+
+run_test FormulaRepairCommandBuilderTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/SudoScriptBuilder.swift" \
+  "$SRC/FormulaRepairCommandBuilder.swift" \
+  "$TESTS/FormulaRepairCommandBuilderTest.swift"
 
 echo "All native tests passed."

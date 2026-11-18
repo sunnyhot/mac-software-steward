@@ -336,12 +336,74 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
         }
     }
 
+    /// 用户明确点击「修复并重装」后，才允许卸载多版本 formula 的旧安装记录。
+    /// 先用 brew list 再确认多版本证据，避免把普通目录错误扩大成卸载操作。
+    private func reinstallFormulaIfNeeded(_ packageID: String, scan: ScanResult, inboxStore: InboxStore?) async {
+        guard !isConfirmingUpgradePlan,
+              !isPackageActive(packageID),
+              let formula = scan.brew.formulae.first(where: { $0.id == packageID }),
+              formula.kind == "formula" else {
+            errorMessage = "请重新扫描后，再处理 Homebrew 安装记录。"
+            return
+        }
+
+        do {
+            let brew = try await executor.requireCommand("brew")
+            let listResult = await CommandRunner.run(
+                brew,
+                arguments: ["list", "--formula", formula.name],
+                timeout: 30
+            )
+            let listOutput = "\(listResult.stdout)\n\(listResult.stderr)"
+            guard listOutput.contains("has multiple installed versions") else {
+                // 证据不足时不卸载，退回普通升级路径。
+                await upgrade(.brew(formula), inboxStore: inboxStore)
+                return
+            }
+            guard !isPackageActive(packageID) else { return }
+            let command = FormulaRepairCommandBuilder.command(
+                brewPath: brew,
+                formulaName: formula.name
+            )
+            executor.enqueueJob(
+                label: "修复 \(formula.name) 的多版本安装记录",
+                steps: [UpgradeStep(
+                    command: command,
+                    packageID: packageID,
+                    packageName: formula.name
+                )],
+                rescanAfterSuccess: true,
+                inboxStore: inboxStore
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     /// 重试升级某个包（清除失败状态后重新执行）
     func retryPackage(_ packageID: String, inboxStore: InboxStore? = nil) async {
         guard !isConfirmingUpgradePlan else { return }
         guard let scan else { return }
         if let staleCask = scan.brew.casks.first(where: { $0.id == packageID && $0.hasStaleInstallRecord }) {
             await removeStaleCaskRecord(.brew(staleCask), inboxStore: inboxStore)
+            return
+        }
+        if packageProgress[packageID]?.recoveryAction == .cleanup {
+            // 只清理该软件对应的 .incomplete 文件，避免残留临时文件阻断重命名；
+            // 不删除完整 bottle、manifest 或其他软件的缓存。
+            do {
+                // 文件已经不存在属于正常竞态结果，可以继续重试；
+                // 目录读取或删除失败则必须告知用户，不能假装已清理。
+                _ = try HomebrewDownloadMonitor.removeIncompleteDownload(
+                    packageName: packageProgress[packageID]?.packageName ?? packageID
+                )
+            } catch {
+                errorMessage = "清理 \(packageProgress[packageID]?.packageName ?? packageID) 的下载缓存失败：\(error.localizedDescription)。请检查缓存目录权限后重试。"
+                return
+            }
+        }
+        if packageProgress[packageID]?.recoveryAction == .reinstall {
+            await reinstallFormulaIfNeeded(packageID, scan: scan, inboxStore: inboxStore)
             return
         }
         let allPackages = (scan.brew.formulae.filter { $0.upgradeable }.map { UpdatablePackage.brew($0) })

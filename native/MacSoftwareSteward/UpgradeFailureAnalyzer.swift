@@ -92,6 +92,23 @@ enum UpgradeFailureAnalyzer {
             )
         }
 
+        if lowercased.contains("has multiple installed versions")
+            || (lowercased.contains("/cellar/") && lowercased.contains("is not a directory")) {
+            return FailureHint(
+                summary: "Homebrew 存在多个已安装版本，旧版本目录缺失，无法直接升级。",
+                suggestion: "请点击「修复并重装」，先清理旧版本安装记录，再安装当前版本；不要直接重复 brew upgrade。",
+                action: .reinstall
+            )
+        }
+
+        if lowercased.contains("rb_file_s_rename") && lowercased.contains(".incomplete") {
+            return FailureHint(
+                summary: "Homebrew 下载缓存重命名失败，可能是临时文件残留或并发任务冲突。",
+                suggestion: "请点击「清理并重试」，只清理该软件的 .incomplete 临时文件后重新下载，不会清空全部缓存，也不需要重新扫描。",
+                action: .cleanup
+            )
+        }
+
         if lowercased.contains("version conflict") || lowercased.contains("conflicting") || (lowercased.contains("depends on") && lowercased.contains("not installed")) || lowercased.contains("broken") || lowercased.contains("dependency") {
             return FailureHint(
                 summary: "存在依赖关系问题，无法直接升级。",

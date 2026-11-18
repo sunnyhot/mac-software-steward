@@ -50,5 +50,42 @@ struct UpgradeFailureAnalyzerTest {
 
         let networkFail = "curl: (28) connection timed out"
         precondition(UpgradeFailureAnalyzer.requiresSudo(in: networkFail) == false, "network error must NOT be treated as sudo")
+
+        let multipleVersions = UpgradeFailureAnalyzer.knownFailureHint(
+            in: "Error: /opt/homebrew/Cellar/merve/1.2.2_5 is not a directory"
+        )
+        precondition(multipleVersions?.action == .reinstall)
+        precondition(multipleVersions?.summary.contains("多个已安装版本") == true)
+        precondition(multipleVersions?.suggestion.contains("修复并重装") == true)
+
+        let explicitMultiple = UpgradeFailureAnalyzer.knownFailureHint(
+            in: "Error: merve has multiple installed versions"
+        )
+        precondition(explicitMultiple?.action == .reinstall)
+
+        let cacheRename = UpgradeFailureAnalyzer.knownFailureHint(
+            in: "Error: No such file or directory @ rb_file_s_rename - (/tmp/mongosh.bottle_manifest.json.incomplete, /tmp/mongosh.bottle_manifest.json)"
+        )
+        precondition(cacheRename?.action == .cleanup)
+        precondition(cacheRename?.summary.contains("下载缓存重命名失败") == true)
+        precondition(cacheRename?.suggestion.contains(".incomplete") == true)
+        precondition(cacheRename?.suggestion.contains("不需要重新扫描") == true)
+
+        let mixedCacheLog = """
+        Error: dependency conflict detected
+        Error: No such file or directory @ rb_file_s_rename - (/tmp/mongosh.json.incomplete, /tmp/mongosh.json)
+        """
+        let mixedHint = UpgradeFailureAnalyzer.knownFailureHint(in: mixedCacheLog)
+        precondition(mixedHint?.action == .cleanup, "cache rename must win over dependency/rescan classification")
+
+        let nodeLog = """
+        ==> Downloading bottle manifests
+        ✘ Bottle Manifest node (26.13.1_2)
+        Error: No such file or directory @ rb_file_s_rename - (/Users/xufan65/Library/Caches/Homebrew/downloads/a1e1582ede418458db7223233e613bc9e06740b02baf9de9673bd06016c899f5--node-26.13.1_2.bottle_manifest.json.incomplete, /Users/xufan65/Library/Caches/Homebrew/downloads/a1e1582ede418458db7223233e613bc9e06740b02baf9de9673bd06016c899f5--node-26.13.1_2.bottle_manifest.json)
+        """
+        let nodeHint = UpgradeFailureAnalyzer.knownFailureHint(in: nodeLog)
+        precondition(nodeHint?.action == .cleanup)
+        precondition(nodeHint?.summary.contains("下载缓存重命名失败") == true)
+        precondition(nodeHint?.suggestion.contains("不需要重新扫描") == true)
     }
 }

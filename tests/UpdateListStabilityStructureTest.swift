@@ -16,6 +16,11 @@ let removeFailure = retryBody.range(of: "packageProgress.removeValue(forKey: pac
 precondition(packageGuard != nil && removeFailure != nil)
 precondition(packageGuard!.lowerBound < removeFailure!.lowerBound, "retry must not expose failed → nil → queued")
 
+precondition(model.contains("recoveryAction == .reinstall"), "multi-version failures must route to explicit reinstall")
+precondition(model.contains("has multiple installed versions"), "formula uninstall must be gated by brew list evidence")
+precondition(model.contains("try HomebrewDownloadMonitor.removeIncompleteDownload("), "cache cleanup errors must not be silently ignored")
+precondition(model.contains("下载缓存失败"), "cache cleanup failures must be surfaced to the user")
+
 let lineBody = shared.components(separatedBy: "struct FlowingAccentLine").last?.components(separatedBy: "struct PolishedTaskSurfaceModifier").first ?? ""
 precondition(!lineBody.contains("GeometryReader"), "progress accent line must not trigger layout feedback")
 precondition(!lineBody.contains("withAnimation"), "progress accent line must not animate during row updates")

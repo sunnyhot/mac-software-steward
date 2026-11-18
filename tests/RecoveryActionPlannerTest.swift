@@ -36,6 +36,17 @@ struct RecoveryActionPlannerTest {
         precondition(terminalActions.map(\.kind) == [.copyTerminalCommand, .openUpdates, .openJobs])
         precondition(terminalActions[0].title == "复制终端命令")
 
+        let reinstall = PackageUpgradeProgress(
+            packageID: "brew:formula:merve",
+            packageName: "merve",
+            status: .failed,
+            detail: "Homebrew 存在多个已安装版本，旧版本目录缺失。",
+            recoveryAction: .reinstall
+        )
+        let reinstallActions = RecoveryActionPlanner.actions(for: reinstall)
+        precondition(reinstallActions[0].title == "修复并重装")
+        precondition(reinstallActions[0].kind == .retryPackage)
+
         let running = PackageUpgradeProgress(
             packageID: "brew:formula:jq",
             packageName: "jq",

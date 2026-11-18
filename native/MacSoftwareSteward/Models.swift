@@ -353,6 +353,7 @@ enum FailureActionType: String, Hashable {
     case openLog        /// 查看完整日志
     case quitAndRetry   /// 退出应用后重试
     case reimport       /// 重新导入/覆盖安装
+    case reinstall      /// 修复多版本安装记录后重新安装
     case cleanup        /// 清理缓存后重试
     case repairPerms    /// 修复权限后重试
     case rescan         /// 重新扫描
