@@ -90,6 +90,9 @@ run_test TabScrollStructureTest \
 run_test DisclosureInteractionTest \
   "$TESTS/DisclosureInteractionTest.swift"
 
+run_test SettingsSimplificationStructureTest \
+  "$TESTS/SettingsSimplificationStructureTest.swift"
+
 run_test SearchQueryStoreTest \
   "$SRC/SearchQueryStore.swift" \
   "$TESTS/SearchQueryStoreTest.swift"
@@ -177,6 +180,44 @@ run_test AcceleratedDownloaderTest \
   "$SRC/AcceleratedDownloader.swift" \
   "$TESTS/AcceleratedDownloaderTest.swift"
 
+run_test SmartMaintenancePolicyTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/AutomationProfileStore.swift" \
+  "$SRC/SmartMaintenancePolicy.swift" \
+  "$TESTS/SmartMaintenancePolicyTest.swift"
+
+run_test CaskReceiptVerificationTest \
+  "$SRC/CommandRunner.swift" \
+  "$SRC/CaskReceiptVerification.swift" \
+  "$TESTS/CaskReceiptVerificationTest.swift"
+
+run_test TransientFailureRetryPolicyTest \
+  "$SRC/CommandRunner.swift" \
+  "$SRC/TransientFailureRetryPolicy.swift" \
+  "$TESTS/TransientFailureRetryPolicyTest.swift"
+
+run_test DailyInspectionRepairPolicyTest \
+  "$SRC/CommandRunner.swift" \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/DailyInspectionScheduler.swift" \
+  "$SRC/DailyAutomationDefaults.swift" \
+  "$SRC/DailyInspectionRepairPolicy.swift" \
+  "$TESTS/DailyInspectionRepairPolicyTest.swift"
+
+run_test DailyInspectionSettingsStructureTest \
+  "$TESTS/DailyInspectionSettingsStructureTest.swift"
+
+run_test DailyInspectionStatusPresenterTest \
+  "$SRC/CommandRunner.swift" \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/InspectionReportStore.swift" \
+  "$SRC/DailyInspectionScheduler.swift" \
+  "$SRC/DailyInspectionStatusPresenter.swift" \
+  "$TESTS/DailyInspectionStatusPresenterTest.swift"
+
 run_test DailyPolicyFilteringTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
@@ -192,6 +233,7 @@ run_test MaintenancePlannerTest \
   "$SRC/UpgradePolicyStore.swift" \
   "$SRC/AutomationProfileStore.swift" \
   "$SRC/RiskAssessor.swift" \
+  "$SRC/SmartMaintenancePolicy.swift" \
   "$SRC/MaintenancePlanner.swift" \
   "$TESTS/MaintenancePlannerTest.swift"
 
@@ -250,6 +292,13 @@ run_test SourceIssueInboxFactoryTest \
   "$SRC/SourceIssueInboxFactory.swift" \
   "$TESTS/SourceIssueInboxFactoryTest.swift"
 
+run_test StaleCaskInboxFactoryTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/InboxStore.swift" \
+  "$SRC/StaleCaskInboxFactory.swift" \
+  "$TESTS/StaleCaskInboxFactoryTest.swift"
+
 run_test DailyInspectionInboxPublisherTest \
   "$SRC/ScanPerformance.swift" \
   "$SRC/Models.swift" \
@@ -258,8 +307,11 @@ run_test DailyInspectionInboxPublisherTest \
   "$SRC/UpgradePlanner.swift" \
   "$SRC/InboxStore.swift" \
   "$SRC/RiskInboxFactory.swift" \
+  "$SRC/StaleCaskInboxFactory.swift" \
   "$SRC/AppUpdateInboxFactory.swift" \
   "$SRC/SourceIssueInboxFactory.swift" \
+  "$SRC/AutomationProfileStore.swift" \
+  "$SRC/SmartMaintenancePolicy.swift" \
   "$SRC/DailyInspectionInboxPublisher.swift" \
   "$TESTS/DailyInspectionInboxPublisherTest.swift"
 
@@ -465,6 +517,14 @@ run_test StewardModelScanGuardTest \
   "$SRC/MaintenancePlanner.swift" \
   "$SRC/MaintenanceCommandResolver.swift" \
   "$SRC/MaintenanceFailureAnalyzer.swift" \
+  "$SRC/SudoScriptFailureAnalyzer.swift" \
+  "$SRC/SudoScriptOutputCollector.swift" \
+  "$SRC/UpgradeProgressAggregator.swift" \
+  "$SRC/SmartMaintenancePolicy.swift" \
+  "$SRC/TransientFailureRetryPolicy.swift" \
+  "$SRC/CaskReceiptVerification.swift" \
+  "$SRC/DailyAutomationDefaults.swift" \
+  "$SRC/DailyInspectionRepairPolicy.swift" \
   "$SRC/MaintenanceExecutor.swift" \
   "$SRC/CaskMirrorPrefetcher.swift" \
   "$SRC/SudoScriptBuilder.swift" \
@@ -481,6 +541,26 @@ run_test SudoScriptBuilderTest \
   "$SRC/Models.swift" \
   "$SRC/SudoScriptBuilder.swift" \
   "$TESTS/SudoScriptBuilderTest.swift"
+
+run_test SudoScriptFailureAnalyzerTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/BrewCaskCleanupDetector.swift" \
+  "$SRC/UpgradeFailureAnalyzer.swift" \
+  "$SRC/MaintenanceFailureAnalyzer.swift" \
+  "$SRC/SudoScriptFailureAnalyzer.swift" \
+  "$TESTS/SudoScriptFailureAnalyzerTest.swift"
+
+run_test SudoScriptOutputCollectorTest \
+  "$SRC/SudoScriptOutputCollector.swift" \
+  "$SRC/SudoScriptParser.swift" \
+  "$TESTS/SudoScriptOutputCollectorTest.swift"
+
+run_test UpgradeProgressAggregatorTest \
+  "$SRC/ScanPerformance.swift" \
+  "$SRC/Models.swift" \
+  "$SRC/UpgradeProgressAggregator.swift" \
+  "$TESTS/UpgradeProgressAggregatorTest.swift"
 
 run_test SudoScriptParserTest \
   "$SRC/ScanPerformance.swift" \

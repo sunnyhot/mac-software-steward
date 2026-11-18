@@ -8,27 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             return
         }
 
-        // 读取 UserDefaults，注意区分「未设值」和「显式设为 false」
-        let dockIconVisible: Bool
-        if UserDefaults.standard.object(forKey: "dockIconVisible") == nil {
-            dockIconVisible = true  // 首次使用，默认显示
-        } else {
-            dockIconVisible = UserDefaults.standard.bool(forKey: "dockIconVisible")
-        }
-
-        NSApp.setActivationPolicy(dockIconVisible ? .regular : .accessory)
+        NSApp.setActivationPolicy(.regular)
         UNUserNotificationCenter.current().delegate = self
-
-        // 如果 Dock 图标隐藏，延迟隐藏已创建的主窗口
-        if !dockIconVisible {
-            DispatchQueue.main.async {
-                for window in NSApp.windows {
-                    if window.styleMask.contains(.titled) && window.styleMask.contains(.resizable) {
-                        window.orderOut(nil)
-                    }
-                }
-            }
-        }
     }
 
     func userNotificationCenter(
@@ -77,8 +58,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 struct MacSoftwareStewardApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
-    @AppStorage("dockIconVisible") private var dockIconVisible = true
     @StateObject private var model = StewardModel()
     @StateObject private var searchQuery = SearchQueryStore()
     @StateObject private var updater = AppUpdateModel()
@@ -99,8 +78,10 @@ struct MacSoftwareStewardApp: App {
                 .frame(minWidth: 1120, minHeight: 720)
                 .task {
                     applyDockIconPolicy()
-                    model.refreshDailyInspectionStatus()
-                    await model.repairDailyInspectionIfNeeded()
+                    model.refreshDailyInspectionStatus(preference: automationProfile.profile.dailyInspectionEnabled)
+                    await model.repairDailyInspectionIfNeeded(
+                        dailyInspectionPreference: automationProfile.profile.dailyInspectionEnabled
+                    )
                     publishAutomationIssues()
                     await model.deliverPendingAutomationNotificationIfNeeded()
                     if model.scan == nil {
@@ -111,9 +92,6 @@ struct MacSoftwareStewardApp: App {
                         )
                     }
                     await updater.autoCheckIfNeeded()
-                }
-                .onChange(of: dockIconVisible) {
-                    applyDockIconPolicy()
                 }
                 .onChange(of: scenePhase) {
                     guard scenePhase == .active else { return }
@@ -136,11 +114,6 @@ struct MacSoftwareStewardApp: App {
                     model.selectedTab = .updates
                 }
                 .keyboardShortcut("1", modifiers: [.command])
-
-                Button("本机软件") {
-                    model.selectedTab = .applications
-                }
-                .keyboardShortcut("2", modifiers: [.command])
 
                 Button("搜索") {
                     guard model.selectedTab.usesSearch else { return }
@@ -215,16 +188,16 @@ struct MacSoftwareStewardApp: App {
         }.count
     }
 
-    private var currentAppearanceMode: AppearanceMode {
-        AppearanceMode(rawValue: appearanceMode) ?? .system
-    }
+    private var currentAppearanceMode: AppearanceMode { .system }
 
     private func refreshForegroundStores() {
         inboxStore.reload()
         model.inspectionReportStore.reload()
-        model.refreshDailyInspectionStatus()
+        model.refreshDailyInspectionStatus(preference: automationProfile.profile.dailyInspectionEnabled)
         Task {
-            await model.repairDailyInspectionIfNeeded()
+            await model.repairDailyInspectionIfNeeded(
+                dailyInspectionPreference: automationProfile.profile.dailyInspectionEnabled
+            )
             publishAutomationIssues()
             // 应用常驻时不重启进程，前台激活时补投巡检留下的待发通知。
             await model.deliverPendingAutomationNotificationIfNeeded()
@@ -240,7 +213,7 @@ struct MacSoftwareStewardApp: App {
     }
 
     private func applyDockIconPolicy() {
-        NSApp.setActivationPolicy(dockIconVisible ? .regular : .accessory)
+        NSApp.setActivationPolicy(.regular)
     }
 }
 

@@ -139,13 +139,13 @@ enum HistoryPresenter {
         var detailItems: [HistoryDetailItem] = [
             HistoryDetailItem(title: "触发方式", value: report.trigger.title, symbol: "play.circle"),
             HistoryDetailItem(title: "扫描范围", value: scanText(report.scanSummary), symbol: "magnifyingglass"),
-            HistoryDetailItem(title: "自动升级", value: "\(report.automaticUpgrades.count)", symbol: "bolt.badge.checkmark"),
+            HistoryDetailItem(title: "自动处理", value: "\(report.automaticUpgrades.count)", symbol: "bolt.badge.checkmark"),
             HistoryDetailItem(title: "跳过", value: "\(report.skippedItems.count)", symbol: "forward.end"),
             HistoryDetailItem(title: "待办", value: "\(report.inboxItemIDs.count)", symbol: "tray")
         ]
 
         detailItems.append(contentsOf: report.automaticUpgrades.prefix(3).map {
-            HistoryDetailItem(title: "升级项", value: "\($0.packageName) · \($0.source)", symbol: "shippingbox")
+            HistoryDetailItem(title: "处理项", value: "\($0.packageName) · \($0.source)", symbol: "shippingbox")
         })
         detailItems.append(contentsOf: report.skippedItems.prefix(3).map {
             HistoryDetailItem(title: "跳过项", value: "\($0.packageName)：\($0.reason)", symbol: "forward.end")

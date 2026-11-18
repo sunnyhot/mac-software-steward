@@ -22,6 +22,7 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     @Published var errorMessage = ""
 
     @Published var dailyInspectionEnabled = false
+    @Published var isUpdatingDailyInspection = false
     @Published var dailyHour = 9
     @Published var dailyMinute = 0
     @Published var dailyInspectionHealth: DailyInspectionHealth = .disabled
@@ -157,6 +158,7 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
                 + nextAllUpgradeablePackages.filter(\.manualUpdateOnly)
                 + nextStaleCaskRecords
         ).filter { seen.insert($0.id).inserted }
+            .filter { packageProgress[$0.id]?.status != .succeeded }
         let currentIDs = Set(nextAvailableUpdates.map(\.id))
         let nextDismissedIDs = dismissedUpgradeReminderIDs.intersection(currentIDs)
 
@@ -331,6 +333,10 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     func retryPackage(_ packageID: String, inboxStore: InboxStore? = nil) async {
         guard !isConfirmingUpgradePlan else { return }
         guard let scan else { return }
+        if let staleCask = scan.brew.casks.first(where: { $0.id == packageID && $0.hasStaleInstallRecord }) {
+            await removeStaleCaskRecord(.brew(staleCask), inboxStore: inboxStore)
+            return
+        }
         let allPackages = (scan.brew.formulae.filter { $0.upgradeable }.map { UpdatablePackage.brew($0) })
             + (scan.brew.casks.filter { $0.upgradeable }.map { UpdatablePackage.brew($0) })
             + (scan.mas.apps.filter { $0.upgradeable }.map { UpdatablePackage.mas($0) })
@@ -660,22 +666,30 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
         }
     }
 
-    func refreshDailyInspectionStatus() {
+    func refreshDailyInspectionStatus(preference: Bool? = nil) {
         let config = DailyInspectionScheduler.currentConfig()
-        dailyInspectionEnabled = config.enabled
-        dailyHour = config.hour
-        dailyMinute = config.minute
-        dailyInspectionHealth = config.health
-        if config.enabled {
-            includeGreedy = config.includeGreedy
-            runBrewUpdate = config.runBrewUpdate
+        if preference == false {
+            dailyInspectionEnabled = false
+            dailyInspectionHealth = config.enabled || dailyInspectionRuntime.isLoaded
+                ? .needsRepair("后台巡检任务尚未完全停用，请重试停用。")
+                : .disabled
+        } else {
+            dailyInspectionEnabled = config.enabled
+            dailyInspectionHealth = config.health
         }
+        dailyHour = DailyAutomationDefaults.hour
+        dailyMinute = DailyAutomationDefaults.minute
+        includeGreedy = DailyAutomationDefaults.includeGreedy
+        runBrewUpdate = DailyAutomationDefaults.runBrewUpdate
         dailyLaunchAgentPath = config.launchAgentPath
         dailyLogPath = config.logPath
         dailyLog = DailyInspectionScheduler.recentLog()
     }
 
     func enableDailyInspection() async {
+        guard !isUpdatingDailyInspection else { return }
+        isUpdatingDailyInspection = true
+        defer { isUpdatingDailyInspection = false }
         do {
             try await DailyInspectionScheduler.install(
                 hour: dailyHour,
@@ -694,21 +708,63 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     }
 
     /// 在应用升级、移动或 LaunchAgent 被卸载后恢复每日巡检。
-    /// 调度时间和高级选项从现有 plist 读取，不会覆盖用户选择。
-    func repairDailyInspectionIfNeeded() async {
+    /// 恢复每日巡检，并把隐藏的执行参数统一为新自动化默认值。
+    func repairDailyInspectionIfNeeded(dailyInspectionPreference: Bool = false) async {
+        guard !isUpdatingDailyInspection else { return }
+        let config = DailyInspectionScheduler.currentConfig()
+        let runtime = await DailyInspectionScheduler.runtimeStatus()
+        let action = DailyInspectionRepairPolicy.action(
+            preferenceEnabled: dailyInspectionPreference,
+            config: config,
+            isLoaded: runtime.isLoaded
+        )
+
+        if action == .uninstall {
+            isUpdatingDailyInspection = true
+            defer { isUpdatingDailyInspection = false }
+            do {
+                try await DailyInspectionScheduler.uninstall()
+                dailyInspectionRuntime = DailyInspectionRuntimeStatus(isLoaded: false, lastExitCode: nil)
+                refreshDailyInspectionStatus(preference: false)
+            } catch {
+                refreshDailyInspectionStatus(preference: false)
+                await refreshDailyInspectionRuntimeStatus()
+                errorMessage = "停用每日巡检失败：\(error.localizedDescription)"
+            }
+            return
+        }
+
+        if action == .restore || action == .normalize {
+            dailyHour = DailyAutomationDefaults.hour
+            dailyMinute = DailyAutomationDefaults.minute
+            includeGreedy = DailyAutomationDefaults.includeGreedy
+            runBrewUpdate = DailyAutomationDefaults.runBrewUpdate
+            await enableDailyInspection()
+            return
+        }
+
+        if action == .none {
+            refreshDailyInspectionStatus(preference: dailyInspectionPreference)
+            return
+        }
+
+        isUpdatingDailyInspection = true
+        defer { isUpdatingDailyInspection = false }
         do {
             _ = try await DailyInspectionScheduler.repairIfNeeded(currentHelperPath: dailyAgentPath)
-            refreshDailyInspectionStatus()
+            refreshDailyInspectionStatus(preference: dailyInspectionPreference)
             await refreshDailyInspectionRuntimeStatus()
         } catch {
-            refreshDailyInspectionStatus()
+            refreshDailyInspectionStatus(preference: dailyInspectionPreference)
             dailyInspectionHealth = .needsRepair("LaunchAgent 加载失败，请点击“一键修复”后重试。")
             errorMessage = "每日巡检修复失败：\(error.localizedDescription)"
         }
     }
 
     func repairDailyInspection() async {
-        guard dailyInspectionEnabled else { return }
+        guard dailyInspectionEnabled, !isUpdatingDailyInspection else { return }
+        isUpdatingDailyInspection = true
+        defer { isUpdatingDailyInspection = false }
         do {
             try await DailyInspectionScheduler.install(
                 hour: dailyHour,
@@ -727,11 +783,15 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     }
 
     func disableDailyInspection() async {
+        guard !isUpdatingDailyInspection else { return }
+        isUpdatingDailyInspection = true
+        defer { isUpdatingDailyInspection = false }
         do {
             try await DailyInspectionScheduler.uninstall()
             refreshDailyInspectionStatus()
             dailyInspectionRuntime = DailyInspectionRuntimeStatus(isLoaded: false, lastExitCode: nil)
         } catch {
+            await refreshDailyInspectionRuntimeStatus()
             errorMessage = error.localizedDescription
         }
     }
@@ -741,12 +801,14 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     }
 
     private func refreshDailyInspectionRuntimeStatus() async {
-        guard dailyInspectionEnabled else {
-            dailyInspectionRuntime = DailyInspectionRuntimeStatus(isLoaded: false, lastExitCode: nil)
-            return
-        }
         dailyInspectionRuntime = await DailyInspectionScheduler.runtimeStatus()
-        if !dailyInspectionRuntime.isLoaded {
+        if dailyInspectionRuntime.isLoaded {
+            if !dailyInspectionEnabled {
+                dailyInspectionHealth = .needsRepair("后台巡检任务尚未停用，请重试停用。")
+            }
+        } else if !dailyInspectionEnabled {
+            dailyInspectionHealth = .disabled
+        } else {
             dailyInspectionHealth = .needsRepair("LaunchAgent 尚未加载，请点击“一键修复”后重试。")
         }
     }
@@ -779,6 +841,8 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
                     executor.packageProgress[id] = UpgradeVerifier.verify(progress: progress, remainingPackageIDs: remaining)
                 }
             }
+            // 验证会把“命令成功但仍可升级”的项改为 warning，需要立即恢复列表展示。
+            recomputeDerivedData()
         }
     }
 
@@ -795,22 +859,10 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
     }
 
     func executorDidRemoveStaleCaskRecord(packageID: String) {
-        guard var updatedScan = scan else { return }
-        let previousCount = updatedScan.brew.casks.count
-        updatedScan.brew.casks.removeAll { $0.id == packageID }
-        guard updatedScan.brew.casks.count != previousCount else { return }
-        updatedScan.summary.brewCasks = updatedScan.brew.casks.count
+        guard let currentScan = scan else { return }
+        let updatedScan = SmartMaintenancePolicy.removingCasks(packageIDs: [packageID], from: currentScan)
+        guard updatedScan.brew.casks.count != currentScan.brew.casks.count else { return }
         scan = updatedScan
         recomputeDerivedData()
-    }
-}
-
-enum StewardError: LocalizedError {
-    case message(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .message(let text): return text
-        }
     }
 }

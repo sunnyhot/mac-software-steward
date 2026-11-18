@@ -8,10 +8,11 @@ enum InspectionReportBuilder {
         scan: ScanResult,
         rows: [UpgradePlanRow],
         automaticPackages: [UpdatablePackage],
+        automaticCleanupPackages: [UpdatablePackage] = [],
         inboxItemIDs: [UUID] = [],
         failures: [InspectionFailureRecord] = []
     ) -> InspectionReportRecord {
-        let automaticIDs = Set(automaticPackages.map(\.id))
+        let automaticIDs = Set((automaticPackages + automaticCleanupPackages).map(\.id))
         let skippedItems = rows
             .filter { row in
                 !automaticIDs.contains(row.packageID)
@@ -39,7 +40,9 @@ enum InspectionReportBuilder {
                 outdated: scan.summary.outdated,
                 actionable: scan.summary.actionable
             ),
-            automaticUpgrades: automaticPackages.map(packageRecord),
+            automaticUpgrades: automaticPackages.map(packageRecord) + automaticCleanupPackages.map {
+                InspectionPackageRecord(packageID: $0.id, packageName: $0.name, source: "残留清理")
+            },
             skippedItems: skippedItems,
             failures: failures,
             inboxItemIDs: inboxItemIDs

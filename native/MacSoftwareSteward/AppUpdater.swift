@@ -82,8 +82,8 @@ final class AppUpdateModel: ObservableObject {
         self.session = session
         self.downloadStrategiesProvider = downloadStrategiesProvider
         self.acceleratedDownloadRunner = acceleratedDownloadRunner
-        self.automaticChecksEnabled = UserDefaults.standard.object(forKey: Self.automaticChecksKey) as? Bool ?? true
-        self.automaticDownloadsEnabled = UserDefaults.standard.object(forKey: Self.automaticDownloadsKey) as? Bool ?? true
+        self.automaticChecksEnabled = true
+        self.automaticDownloadsEnabled = true
         if let data = UserDefaults.standard.data(forKey: Self.failedUpdateMemoryKey),
            let memory = try? JSONDecoder().decode(AppUpdateFailureMemory.self, from: data) {
             self.failedUpdateMemory = memory

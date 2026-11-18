@@ -192,6 +192,17 @@ enum DailyInspectionScheduler {
         return DailyInspectionRuntimeStatus(isLoaded: isLoaded, lastExitCode: code)
     }
 
+    static func programArguments(
+        helperPath: String,
+        includeGreedy: Bool,
+        runBrewUpdate: Bool
+    ) -> [String] {
+        var arguments = [helperPath, "daily-check", "--auto-upgrade"]
+        if includeGreedy { arguments.append("--greedy") }
+        if runBrewUpdate { arguments.append("--brew-update") }
+        return arguments
+    }
+
     static func install(
         hour: Int,
         minute: Int,
@@ -212,17 +223,11 @@ enum DailyInspectionScheduler {
             FileManager.default.createFile(atPath: logURL.path, contents: nil)
         }
 
-        var arguments = [
-            helperPath,
-            "daily-check",
-            "--auto-upgrade"
-        ]
-        if includeGreedy {
-            arguments.append("--greedy")
-        }
-        if runBrewUpdate {
-            arguments.append("--brew-update")
-        }
+        let arguments = programArguments(
+            helperPath: helperPath,
+            includeGreedy: includeGreedy,
+            runBrewUpdate: runBrewUpdate
+        )
 
         let plist: [String: Any] = [
             "Label": label,
@@ -251,9 +256,33 @@ enum DailyInspectionScheduler {
         }
     }
 
+    static func uninstallArguments(plistExists: Bool) -> [String] {
+        if plistExists {
+            return ["bootout", launchDomain, launchAgentURL.path]
+        }
+        // plist 已删除但服务仍可能存活，按 label 卸载，不能因文件缺失就跳过。
+        return ["bootout", "\(launchDomain)/\(label)"]
+    }
+
+    static func isAlreadyUnloaded(output: String) -> Bool {
+        let text = output.lowercased()
+        return text.contains("no such process")
+            || text.contains("could not find service")
+            || text.contains("not loaded")
+            || text.contains("does not exist")
+    }
+
     static func uninstall() async throws {
-        _ = await CommandRunner.run("/bin/launchctl", arguments: ["bootout", launchDomain, launchAgentURL.path], timeout: 10)
-        if FileManager.default.fileExists(atPath: launchAgentURL.path) {
+        let plistExists = FileManager.default.fileExists(atPath: launchAgentURL.path)
+        let result = await CommandRunner.run(
+            "/bin/launchctl",
+            arguments: uninstallArguments(plistExists: plistExists),
+            timeout: 10
+        )
+        guard result.ok || isAlreadyUnloaded(output: result.stderr) else {
+            throw StewardError.message(result.stderr.isEmpty ? "停用每日巡检失败。" : result.stderr)
+        }
+        if plistExists {
             try FileManager.default.removeItem(at: launchAgentURL)
         }
     }

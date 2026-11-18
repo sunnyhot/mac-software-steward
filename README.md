@@ -10,7 +10,7 @@
 
 - **一站式盘点**：`/Applications` 的 `.app`、Homebrew formula/cask、Mac App Store 应用全部纳入同一份清单
 - **升级有安全边界**：「检查并维护」先展示将执行的命令、版本变化、风险标签与跳过原因，确认后才执行；每个软件可单独设置自动/确认/仅提醒/跳过策略
-- **每日巡检全自动**：用户级 LaunchAgent 定时扫描，可升级项按策略自动升级，失败会分类分析并给出可执行建议
+- **每日巡检智能自动处理**：定时扫描并按策略升级，规避自更新应用的重复升级，安全清理无 App 的 Homebrew 残留，瞬时故障有限重试，失败分类分析并给出可执行建议
 - **普通 `.app` 不瞎碰**：没有统一升级协议的应用只识别更新能力（Sparkle / Keystone / Toolbox 等）并给指引，不做危险的静默覆盖
 
 ## 安装
@@ -30,7 +30,7 @@ brew install --cask sunnyhot/tap/mac-software-steward
 
 1. 启动后等待首次扫描完成（应用、Homebrew、可选的 App Store）
 2. 「检查并维护」生成维护计划，确认后批量升级；或按软件设置升级策略
-3. 设置页开启「每日巡检」，此后可升级项每天自动处理，日志见 `~/Library/Application Support/MacSoftwareSteward/daily-inspection.log`
+3. 设置页开启「自动维护」即可，默认每天 09:00 扫描并自动处理符合条件的项目；关闭后仅提醒。日志见 `~/Library/Application Support/MacSoftwareSteward/daily-inspection.log`
 
 ## 能自动升级什么
 
@@ -45,7 +45,7 @@ brew install --cask sunnyhot/tap/mac-software-steward
 
 普通 `.app` 没有统一升级协议。很多应用使用 Sparkle、Chrome Keystone、Adobe 更新器、JetBrains Toolbox、Microsoft AutoUpdate、内置更新器或专有安装器；应用会识别并展示这些更新能力，引导用户使用应用内或厂商更新器，不直接覆盖已安装的 App。
 
-本机软件列表会展开普通 App 的更新诊断：
+普通 App 的更新诊断会在升级事项和收件箱中展示：
 
 - 更新源异常：例如 Sparkle appcast HTTP 错误、URL 无效或解析失败
 - 无法确认版本：例如只能识别厂商更新器，但没有可靠可用版本
@@ -73,11 +73,11 @@ brew install --cask sunnyhot/tap/mac-software-steward
 - 仅提醒：显示更新，不默认执行
 - 跳过：显示跳过原因，不进入自动执行
 
-“设置”页集中提供通用、应用更新、自动化、风险与恢复设置。
+“设置”页只保留自动维护总开关、通知方式和运行状态。默认每天 09:00 执行、仅检查声明的更新来源、包含 greedy cask、执行前运行 `brew update`、并行处理 3 项、跟随系统外观并显示 Dock 图标，普通用户无需逐项配置。
 
 ## 每日巡检
 
-原生应用的“设置”页可以启用后台自动升级。启用后会写入用户级 LaunchAgent：
+原生应用的“设置”页开启「自动维护」后会写入用户级 LaunchAgent：
 
 ```text
 ~/Library/LaunchAgents/local.codex.MacSoftwareSteward.daily.plist
@@ -95,11 +95,13 @@ MacSoftwareSteward.app/Contents/MacOS/MacSoftwareStewardAgent
 ~/Library/Application Support/MacSoftwareSteward/daily-inspection.log
 ```
 
-每日巡检会自动处理 Homebrew formula/cask，以及已安装 `mas` CLI 时的 Mac App Store 应用。普通 `.app` 仍然只扫描和提示，不做静默升级。
+每日巡检会自动处理 Homebrew formula/cask，以及已安装 `mas` CLI 时的 Mac App Store 应用。普通 `.app` 仍然只扫描和提示，不做静默升级。自带更新能力的 Cask 不做重复自动升级；网络、连接和临时服务故障最多自动重试两次，权限或校验错误不盲目重试。
+
+开启「自动维护」会同时允许每日巡检、自动处理和低风险修复，Agent 还会自动清理元数据明确标记、且执行前再次确认 App 已不存在的 Homebrew 残留记录。清理使用 `brew uninstall --cask --force` 并验证 receipt，不使用 `--zap`，不会删除个人配置；需要管理员授权或无法确认结果时会保留并报告，而不是误报成功。
 
 ## 应用自更新
 
-原生应用的“设置”页支持：
+原生应用的更新菜单支持：
 
 - 启动时自动检查新版本
 - 手动检查 GitHub Release

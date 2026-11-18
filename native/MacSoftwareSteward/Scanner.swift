@@ -353,6 +353,8 @@ enum SoftwareScanner {
             metadataByName: caskMetadataByName,
             networkPolicy: regularAppNetworkPolicy
         )
+        let expectedMetadataNames = Set(installedCasks.map(\.name).filter { !$0.isEmpty })
+        let metadataComplete = expectedMetadataNames.allSatisfy { caskMetadataByName[$0] != nil }
         let casks = mergeBrew(
             installed: installedCasks,
             outdated: casksOutdatedEntries,
@@ -377,7 +379,8 @@ enum SoftwareScanner {
             includeGreedy: includeGreedy,
             formulae: formulae,
             casks: casks,
-            uncheckedCasks: uncheckedCasks
+            uncheckedCasks: uncheckedCasks,
+            metadataComplete: metadataComplete
         )
     }
 

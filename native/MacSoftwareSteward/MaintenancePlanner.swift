@@ -10,7 +10,7 @@ import Foundation
 /// 单个包在一次维护运行中的处置分类。
 enum MaintenancePlanDisposition: String, Codable, Hashable {
     /// 可执行 ∧ 未被风险阻断 ∧ 策略为自动 ∧ profile 总门控开启。
-    /// 风险理由（greedy cask、major 版本变化等）仅作展示信息，不再阻止自动升级。
+    /// greedy 等中风险按策略处理；高风险（如 major 版本变化）必须确认。
     case automatic
     /// 可执行，但风险或策略要求用户确认后才能执行。
     case confirmationRequired
@@ -146,10 +146,36 @@ enum MaintenancePlanner {
             return reminderItem(package: package, risk: risk, policy: policy, reason: "策略设置为仅提醒", commandDisplay: commandDisplay)
         }
 
+        // 高风险升级必须回到用户确认，不能被自动处理总开关直接放行。
+        if policy == .automatic && profile.lowRiskAutoUpgradeEnabled && risk.level == .high {
+            return MaintenancePlanItem(
+                packageID: package.id,
+                packageName: package.name,
+                package: package,
+                disposition: .confirmationRequired,
+                riskLevel: risk.level,
+                automationDecision: risk.automationDecision,
+                effectivePolicy: policy,
+                reasons: [risk.summary.isEmpty ? "高风险升级需要确认" : risk.summary],
+                commandDisplay: commandDisplay
+            )
+        }
+
+        // 自带更新能力的应用不重复执行 brew 自动升级；用户仍可通过手动升级入口处理。
+        if policy == .automatic && profile.lowRiskAutoUpgradeEnabled,
+           SmartMaintenancePolicy.shouldDeferToSelfUpdater(package) {
+            return reminderItem(
+                package: package,
+                risk: risk,
+                policy: policy,
+                reason: "应用具备自更新能力，自动维护不再重复升级",
+                commandDisplay: commandDisplay
+            )
+        }
+
         // 3. automatic：策略为自动 ∧ profile 总门控开启。
-        //    默认策略已统一为 automatic（见 UpgradePolicyStore），风险理由仅作展示信息，
-        //    不再要求低风险才自动升级；只有 blockExecution（固定、源不可用、不可升级等）
-        //    会拦住自动升级（已在上方提前返回）。profile.lowRiskAutoUpgradeEnabled 是总门控：
+        //    默认策略已统一为 automatic（见 UpgradePolicyStore）；blockExecution 会提前返回，
+        //    高风险已在上文转为确认项。profile.lowRiskAutoUpgradeEnabled 是总门控：
         //    关闭时所有项降级为需确认。
         if policy == .automatic && profile.lowRiskAutoUpgradeEnabled {
             return MaintenancePlanItem(

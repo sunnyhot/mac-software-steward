@@ -27,8 +27,8 @@ struct AutomationProfileStoreTest {
         let reloaded = AutomationProfileStore(fileURL: url)
         precondition(reloaded.profile.dailyInspectionEnabled == true)
         precondition(reloaded.profile.lowRiskAutoUpgradeEnabled == true)
-        precondition(reloaded.profile.notificationPolicy == .everyInspection)
-        precondition(reloaded.profile.regularAppNetworkPolicy == .localOnly)
+        precondition(reloaded.profile.notificationPolicy == .decisionsAndFailures)
+        precondition(reloaded.profile.regularAppNetworkPolicy == .declaredSourcesOnly)
         precondition(reloaded.profile.autoRepairPolicy == .allowLowRisk)
 
         var importedProfile = AutomationProfile.manualDefault
@@ -38,7 +38,9 @@ struct AutomationProfileStoreTest {
         reloaded.replace(with: importedProfile)
 
         let importedReloaded = AutomationProfileStore(fileURL: url)
-        precondition(importedReloaded.profile == importedProfile)
+        precondition(importedReloaded.profile.notificationPolicy == .silent)
+        precondition(importedReloaded.profile.regularAppNetworkPolicy == .declaredSourcesOnly)
+        precondition(importedReloaded.profile.autoRepairPolicy == .manualOnly)
 
         reloaded.setLowRiskAutoUpgradeEnabled(false)
         precondition(reloaded.profile.lowRiskAutoUpgradeEnabled == false)
@@ -62,7 +64,19 @@ struct AutomationProfileStoreTest {
         precondition(migrated.profile.dailyInspectionEnabled == true)
         precondition(migrated.profile.lowRiskAutoUpgradeEnabled == true)
         precondition(migrated.profile.notificationPolicy == .silent)
-        precondition(migrated.profile.regularAppNetworkPolicy == .localOnly)
+        precondition(migrated.profile.regularAppNetworkPolicy == .declaredSourcesOnly)
         precondition(migrated.profile.autoRepairPolicy == .allowLowRisk)
+
+        let manualURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("automation-manual-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: manualURL) }
+        let manualStore = AutomationProfileStore(fileURL: manualURL)
+        manualStore.setDailyInspectionEnabled(true)
+        manualStore.setLowRiskAutoUpgradeEnabled(true)
+        manualStore.setAutoRepairPolicy(.manualOnly)
+        let manualReloaded = AutomationProfileStore(fileURL: manualURL)
+        precondition(manualReloaded.profile.dailyInspectionEnabled)
+        precondition(manualReloaded.profile.lowRiskAutoUpgradeEnabled)
+        precondition(manualReloaded.profile.autoRepairPolicy == .manualOnly, "manualOnly must not be silently upgraded to allowLowRisk")
     }
 }

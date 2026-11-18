@@ -17,7 +17,7 @@ enum AppUpdateInboxFactory {
                     summary: "当前 \(versionText(app.version))，可用 \(app.availableVersion)。\(app.updateCapability.detector.title) 需要手动打开应用或更新器处理。",
                     sourceID: app.id,
                     actions: [
-                        InboxAction(title: "查看应用", systemImage: "macwindow", kind: .openApplications),
+                        InboxAction(title: "查看升级", systemImage: "arrow.triangle.2.circlepath", kind: .openUpdates),
                         InboxAction(title: "重新扫描", systemImage: "arrow.clockwise", kind: .rescan)
                     ]
                 )

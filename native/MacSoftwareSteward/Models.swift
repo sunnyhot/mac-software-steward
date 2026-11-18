@@ -27,7 +27,6 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
 
 enum AppTab: String, CaseIterable, Identifiable {
     case updates = "可升级"
-    case applications = "本机软件"
     case settings = "设置"
 
     var id: String { rawValue }
@@ -35,14 +34,13 @@ enum AppTab: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .updates: return "arrow.triangle.2.circlepath"
-        case .applications: return "macwindow"
         case .settings: return "gearshape"
         }
     }
 
     var usesSearch: Bool {
         switch self {
-        case .updates, .applications:
+        case .updates:
             return true
         case .settings:
             return false
@@ -201,6 +199,8 @@ struct BrewScan {
     /// greedy 分批检查中未完成（超时/失败/预算耗尽未跑）的 cask 名。
     /// 不能被当作"最新"——否则等于漏报。供 UI 诊断"部分完成，建议重试"。
     var uncheckedCasks: [String] = []
+    /// cask receipt 元数据是否完整；不完整时不能据空值退休残留待办。
+    var metadataComplete: Bool = true
 
     var outdatedCount: Int {
         formulae.filter(\.outdated).count + casks.filter(\.outdated).count
@@ -357,7 +357,7 @@ enum FailureActionType: String, Hashable {
     case checkNetwork   /// 检查网络
     case freeDisk       /// 释放磁盘空间
     case retryInTerminal /// 在终端中手动运行
-    case promptAdminPassword  /// 系统已弹出密码框进行 sudo 升级（失败后允许重试再弹）
+    case promptAdminPassword  /// 系统已弹出密码框请求 sudo 授权（失败后允许重试再弹）
 }
 
 enum RecoveryActionKind: String, Codable, Hashable {
@@ -404,6 +404,8 @@ struct PackageUpgradeProgress: Hashable, Identifiable {
     var accelerationStrategyText: String? = nil
     /// 当前重试次数描述。
     var accelerationAttemptText: String? = nil
+    /// 操作类型用于展示准确的进度、失败标题与重试行为。
+    var purpose: UpgradeStepPurpose = .maintenance
 }
 
 struct LogLine: Identifiable, Hashable {
@@ -445,5 +447,15 @@ struct UpgradeProgress: Hashable {
 
     var isRunning: Bool {
         completed < total
+    }
+}
+
+enum StewardError: LocalizedError {
+    case message(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .message(let text): return text
+        }
     }
 }

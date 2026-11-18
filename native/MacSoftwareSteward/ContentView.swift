@@ -351,8 +351,6 @@ private struct MainPanel: View {
                 switch model.selectedTab {
                 case .updates:
                     UpdatesView()
-                case .applications:
-                    ApplicationsView()
                 case .settings:
                     SettingsView()
                 }

@@ -14,6 +14,14 @@ struct AutomationNotificationDeciderTest {
         )
         precondition(failureDecision?.title == "每日巡检有失败项目")
         precondition(failureDecision?.body.contains("2") == true)
+        let partialDecision = AutomationNotificationDecider.failureDecision(
+            policy: .decisionsAndFailures,
+            failures: failures,
+            succeededActionCount: 3,
+            availableUpgradeCount: 4
+        )
+        precondition(partialDecision?.body.contains("已完成 3 项") == true)
+        precondition(partialDecision?.body.contains("仍有 4 项待处理") == true)
 
         let warning = InboxItem(
             kind: .upgradeDecision,

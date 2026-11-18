@@ -3,13 +3,13 @@ import Foundation
 enum RecoveryInboxFactory {
     static func items(from progresses: [PackageUpgradeProgress]) -> [InboxItem] {
         progresses
-            .filter { $0.status == .failed || $0.status == .timedOut }
+            .filter { $0.status == .failed || $0.status == .timedOut || $0.status == .warning }
             .filter { !$0.failureSummary.isEmpty || $0.recoveryAction != nil }
             .map { progress in
                 InboxItem(
                     kind: kind(for: progress),
                     severity: severity(for: progress),
-                    title: "\(progress.packageName) 升级失败",
+                    title: "\(progress.packageName) \(progress.purpose == .staleCaskCleanup ? "清理失败" : "升级失败")",
                     summary: summary(for: progress),
                     sourceID: progress.packageID,
                     actions: RecoveryActionPlanner.actions(for: progress).map(inboxAction)

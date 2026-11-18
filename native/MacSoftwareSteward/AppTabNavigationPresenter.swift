@@ -11,7 +11,7 @@ enum SidebarRowInteractionState: Equatable {
 }
 
 enum AppTabNavigationPresenter {
-    static let primaryTabs: [AppTab] = [.updates, .applications]
+    static let primaryTabs: [AppTab] = [.updates]
     static let footerTabs: [AppTab] = [.settings]
     static let visibleTabs = primaryTabs + footerTabs
 }

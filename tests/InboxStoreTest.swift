@@ -134,5 +134,41 @@ struct InboxStoreTest {
         let persistedAfterDecisionRemoval = InboxStore(fileURL: url)
         precondition(!persistedAfterDecisionRemoval.items.contains { $0.sourceID == "upgrade:brew:cask:warp" })
         precondition(persistedAfterDecisionRemoval.items.contains { $0.sourceID == "brew:formula:node" })
+
+        let cleanupRecovery = InboxItem(
+            kind: .failureRecovery,
+            severity: .critical,
+            title: "bartender 清理失败",
+            summary: "管理员授权脚本存在语法错误。",
+            sourceID: "brew:cask:bartender",
+            createdAt: Date(timeIntervalSince1970: 60),
+            actions: [InboxAction(title: "重试", systemImage: "arrow.clockwise", kind: .retryPackage)]
+        )
+        externalStore.add(cleanupRecovery)
+        precondition(externalStore.pendingItems.contains { $0.sourceID == "brew:cask:bartender" })
+        externalStore.resolveRecoveryItems(packageIDs: ["brew:cask:bartender"])
+        precondition(externalStore.items.first { $0.sourceID == "brew:cask:bartender" }?.status == .resolved)
+        precondition(!externalStore.pendingItems.contains { $0.sourceID == "brew:cask:bartender" })
+        precondition(externalStore.pendingItems.contains { $0.sourceID == "job:failed" })
+
+        let persistedAfterRecovery = InboxStore(fileURL: url)
+        precondition(persistedAfterRecovery.items.first { $0.sourceID == "brew:cask:bartender" }?.status == .resolved)
+
+        let externalStale = InboxItem(
+            kind: .failureRecovery,
+            severity: .warning,
+            title: "external 残留记录待清理",
+            summary: "待清理",
+            sourceID: "brew:cask:external",
+            actions: [InboxAction(title: "前往清理", systemImage: "trash", kind: .openUpdates)]
+        )
+        externalStore.add(externalStale)
+        externalStore.retireStaleCaskRecoveryItems(notPresentIn: ["brew:cask:external"])
+        precondition(externalStore.items.contains { $0.sourceID == "brew:cask:external" })
+        externalStore.retireStaleCaskRecoveryItems(notPresentIn: [])
+        precondition(!externalStore.items.contains { $0.sourceID == "brew:cask:external" })
+        precondition(externalStore.items.contains { $0.sourceID == "job:failed" })
+        let persistedAfterStaleRetire = InboxStore(fileURL: url)
+        precondition(!persistedAfterStaleRetire.items.contains { $0.sourceID == "brew:cask:external" })
     }
 }

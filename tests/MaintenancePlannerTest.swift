@@ -13,7 +13,7 @@ struct MaintenancePlannerTest {
         let lowRiskFormula = brewFormula(id: "brew:formula:jq", name: "jq", kind: "formula", outdated: true, upgradeable: true)
         // 一个 pinned cask：会被 blockExecution。
         let pinnedCask = brewPackage(id: "brew:cask:pinned", name: "pinned", kind: "cask", outdated: true, upgradeable: true, pinned: true)
-        // 一个 major 版本变化的 formula：默认策略 automatic，风险仅作展示 → automatic。
+        // 一个 major 版本变化的 formula：高风险，即使默认策略 automatic 也必须确认。
         let majorFormula = BrewPackage(id: "brew:formula:bigjump", kind: "formula", name: "bigjump", installedVersion: "1.0", currentVersion: "2.0", pinned: false, autoUpdates: false, outdated: true, upgradeable: true)
         // 一个 mas app：默认策略 automatic → automatic。
         let masAppItem = masApp(id: "mas:things", name: "Things", outdated: true, upgradeable: true)
@@ -46,9 +46,9 @@ struct MaintenancePlannerTest {
         precondition(pinnedItem?.package == nil, "blocked 不应携带可执行包")
         precondition(pinnedItem?.isExecutable == false, "blocked 不可执行")
 
-        // major 版本 formula → automatic（默认策略 automatic，风险仅展示）
+        // major 版本 formula → confirmationRequired（高风险不得被总开关自动放行）
         let majorItem = planOn.items.first { $0.packageID == "brew:formula:bigjump" }
-        precondition(majorItem?.disposition == .automatic, "major 版本 formula 应为 automatic，得到 \(String(describing: majorItem?.disposition))")
+        precondition(majorItem?.disposition == .confirmationRequired, "major 版本 formula 应为 confirmationRequired，得到 \(String(describing: majorItem?.disposition))")
 
         // mas app → automatic（默认策略 automatic）
         let masItem = planOn.items.first { $0.packageID == "mas:things" }
@@ -56,7 +56,7 @@ struct MaintenancePlannerTest {
 
         // 分组计数：全部默认 automatic，仅 pinned 为 blocked
         precondition(planOn.hasAutomatic, "应有 automatic 项")
-        precondition(planOn.hasConfirmation == false, "默认策略下不应有 confirmation 项")
+        precondition(planOn.hasConfirmation, "major 高风险应进入 confirmation 项")
         precondition(planOn.reminderItems.isEmpty, "默认策略下不应有 reminder 项")
         precondition(planOn.blockedItems.count == 1, "应有 1 个 blocked，得到 \(planOn.blockedItems.count)")
 
@@ -131,6 +131,17 @@ struct MaintenancePlannerTest {
         precondition(emptyPlan.items.isEmpty, "空扫描应产出空计划")
         precondition(emptyPlan.hasAutomatic == false && emptyPlan.hasConfirmation == false, "空计划无 automatic/confirmation")
 
+        let selfUpdating = BrewPackage(id: "brew:cask:self-updating", kind: "cask", name: "self-updating", installedVersion: "1.0", currentVersion: "1.1", pinned: false, autoUpdates: true, outdated: true, upgradeable: true)
+        let selfUpdatingPlan = MaintenancePlanner.makePlan(
+            scan: scanWith(formulae: [], casks: [selfUpdating], masApps: []),
+            policyStore: cleanStore(),
+            includeGreedy: true,
+            profile: profileOn
+        )
+        let selfUpdatingItem = selfUpdatingPlan.items.first { $0.packageID == selfUpdating.id }
+        precondition(selfUpdatingItem?.disposition == .reminderOnly, "自更新应用不应重复自动升级")
+        precondition(selfUpdatingItem?.reasons.contains("应用具备自更新能力，自动维护不再重复升级") == true)
+
         // MARK: blocked 永不进 automatic（交叉验证：blockExecution 的包即使策略设 automatic 仍 blocked）
         let blockedByRiskStore = isolatedStore()
         // pinnedCask 默认无 override → effectivePolicy 取决于 cask 规则；但 blockExecution 来自 RiskAssessor。
@@ -172,7 +183,7 @@ struct MaintenancePlannerTest {
     }
 
     private static func masApp(id: String, name: String, outdated: Bool, upgradeable: Bool) -> MasApp {
-        MasApp(id: id, appId: "999", name: name, installedVersion: "1.0", currentVersion: "2.0", outdated: outdated, upgradeable: upgradeable)
+        MasApp(id: id, appId: "999", name: name, installedVersion: "1.0", currentVersion: "1.1", outdated: outdated, upgradeable: upgradeable)
     }
 
     private static func scanWith(formulae: [BrewPackage], casks: [BrewPackage], masApps: [MasApp]) -> ScanResult {

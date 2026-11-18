@@ -49,5 +49,36 @@ struct RecoveryInboxFactoryTest {
             detail: "执行命令"
         )
         precondition(RecoveryInboxFactory.items(from: [running]).isEmpty)
+
+        let cleanupFailure = PackageUpgradeProgress(
+            packageID: "brew:cask:bartender",
+            packageName: "bartender",
+            status: .failed,
+            detail: "管理员授权脚本存在语法错误，命令未执行。",
+            failureSummary: "管理员授权脚本存在语法错误，命令未执行。",
+            recoveryAction: .openLog,
+            lastFailedCommand: "brew uninstall --cask --force bartender",
+            purpose: .staleCaskCleanup
+        )
+        let cleanupItems = RecoveryInboxFactory.items(from: [cleanupFailure])
+        precondition(cleanupItems.count == 1)
+        precondition(cleanupItems[0].title == "bartender 清理失败")
+        precondition(cleanupItems[0].actions.map(\.kind).contains(.openJobs))
+
+        let partialCleanup = PackageUpgradeProgress(
+            packageID: "brew:cask:partial",
+            packageName: "partial",
+            status: .warning,
+            detail: "receipt 已移除，但命令返回非零",
+            failureSummary: "receipt 已移除，但清理部分阶段失败",
+            recoverySuggestion: "查看日志，无需重复卸载",
+            recoveryAction: .openLog,
+            lastFailedCommand: "brew uninstall --cask --force partial",
+            purpose: .staleCaskCleanup
+        )
+        let partialItems = RecoveryInboxFactory.items(from: [partialCleanup])
+        precondition(partialItems.count == 1)
+        precondition(partialItems[0].title == "partial 清理失败")
+        precondition(partialItems[0].status == .pending)
     }
 }

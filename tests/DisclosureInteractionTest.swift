@@ -15,5 +15,5 @@ let settings = try String(
 precondition(!sharedComponents.contains("DisclosureGroup"), "高频诊断详情不应要求额外展开")
 precondition(!settings.contains("DisclosureGroup"), "高级设置应使用整行可点击入口")
 precondition(sharedComponents.contains("Label(\"错误详情\""), "来源错误应直接显示技术详情")
-precondition(settings.contains("@AppStorage(\"advancedUpgradeOptionsExpanded\")"), "高级设置展开状态应持久保存")
-precondition(settings.contains(".contentShape(Rectangle())"), "高级设置标题整行都应可点击")
+precondition(settings.contains("AutomaticMaintenanceRow()"), "设置页应提供统一的自动维护开关")
+precondition(!settings.contains("showsAdvancedUpgradeOptions"), "不再保留旧的高级设置折叠逻辑")

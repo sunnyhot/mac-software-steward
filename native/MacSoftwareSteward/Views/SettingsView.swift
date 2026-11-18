@@ -1,89 +1,22 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @EnvironmentObject private var updater: AppUpdateModel
-    @EnvironmentObject private var launchAtLogin: LaunchAtLoginModel
     @EnvironmentObject private var model: StewardModel
     @EnvironmentObject private var automationProfile: AutomationProfileStore
-    @AppStorage("advancedUpgradeOptionsExpanded") private var showsAdvancedUpgradeOptions = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 20) {
                 SettingsGroupBox {
-                    SettingsGroupHeader(
-                        title: SettingsPageGroup.general.title,
-                        symbol: SettingsPageGroup.general.symbol
-                    )
-                    AppearanceRow()
-                    SettingsDivider()
-                    LaunchAtLoginRow()
-                    SettingsDivider()
-                    DockIconRow()
-                }
-
-                SettingsGroupBox {
-                    SettingsGroupHeader(
-                        title: SettingsPageGroup.appUpdates.title,
-                        symbol: SettingsPageGroup.appUpdates.symbol
-                    )
-                    AutoCheckUpdateRow()
-                    if updater.automaticChecksEnabled {
-                        SettingsDivider()
-                        AutoDownloadUpdateRow()
-                    }
-                    SettingsDivider()
-                    ManualCheckUpdateRow()
-                }
-
-                SettingsGroupBox {
-                    SettingsGroupHeader(title: "自动化策略", symbol: "switch.2")
-                    DailyInspectionToggleRow()
-                    if model.dailyInspectionEnabled {
-                        SettingsDivider()
-                        DailyInspectionTimeRow()
-                        SettingsDivider()
-                        DailyInspectionHealthRow()
-                    }
-                    SettingsDivider()
-                    LowRiskHandlingRow()
+                    SettingsGroupHeader(title: "自动维护", symbol: "bolt.badge.checkmark")
+                    AutomaticMaintenanceRow()
                     SettingsDivider()
                     NotificationPolicyRow()
-                    SettingsDivider()
-                    RegularAppNetworkPolicyRow()
-                    SettingsDivider()
-                    AutoRepairPolicyRow()
                 }
 
                 SettingsGroupBox {
-                    Button {
-                        showsAdvancedUpgradeOptions.toggle()
-                    } label: {
-                        HStack(spacing: 10) {
-                            SettingsGroupHeader(title: "高级升级选项", symbol: "gearshape.2")
-                            Spacer()
-                            Text(showsAdvancedUpgradeOptions ? "收起" : "展开")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Image(systemName: showsAdvancedUpgradeOptions ? "chevron.up" : "chevron.down")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel(showsAdvancedUpgradeOptions ? "收起高级升级选项" : "展开高级升级选项")
-
-                    if showsAdvancedUpgradeOptions {
-                        SettingsDivider()
-                        VStack(alignment: .leading, spacing: 12) {
-                            GreedyCaskRow()
-                            SettingsDivider()
-                            BrewUpdateRow()
-                            SettingsDivider()
-                            MaxConcurrentUpgradesRow()
-                        }
-                    }
+                    SettingsGroupHeader(title: "运行状态", symbol: "clock.badge.checkmark")
+                    DailyInspectionHealthRow()
                 }
 
                 Spacer(minLength: 0)
@@ -220,9 +153,18 @@ struct GreedyCaskRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Toggle("", isOn: $model.includeGreedy)
+            Toggle("", isOn: Binding(
+                get: { model.includeGreedy },
+                set: { enabled in
+                    model.includeGreedy = enabled
+                    if model.dailyInspectionEnabled {
+                        Task { await model.enableDailyInspection() }
+                    }
+                }
+            ))
                 .toggleStyle(.switch)
                 .labelsHidden()
+                .disabled(model.isUpdatingDailyInspection)
         }
     }
 }
@@ -240,9 +182,18 @@ struct BrewUpdateRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Toggle("", isOn: $model.runBrewUpdate)
+            Toggle("", isOn: Binding(
+                get: { model.runBrewUpdate },
+                set: { enabled in
+                    model.runBrewUpdate = enabled
+                    if model.dailyInspectionEnabled {
+                        Task { await model.enableDailyInspection() }
+                    }
+                }
+            ))
                 .toggleStyle(.switch)
                 .labelsHidden()
+                .disabled(model.isUpdatingDailyInspection)
         }
     }
 }
@@ -272,6 +223,53 @@ struct MaxConcurrentUpgradesRow: View {
     }
 }
 
+struct AutomaticMaintenanceRow: View {
+    @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
+
+    private var isEnabled: Bool {
+        model.dailyInspectionEnabled
+            && automationProfile.profile.lowRiskAutoUpgradeEnabled
+            && automationProfile.profile.autoRepairPolicy == .allowLowRisk
+    }
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("自动维护")
+                    .font(.body)
+                Text("每天自动扫描，安全升级并清理可确认的残留；高风险操作仍需确认")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Toggle("", isOn: Binding(
+                get: { isEnabled },
+                set: { enabled in
+                    Task {
+                        if enabled {
+                            automationProfile.setLowRiskAutoUpgradeEnabled(true)
+                            automationProfile.setAutoRepairPolicy(.allowLowRisk)
+                            automationProfile.setDailyInspectionEnabled(true)
+                            await model.enableDailyInspection()
+                        } else {
+                            automationProfile.setDailyInspectionEnabled(false)
+                            automationProfile.setLowRiskAutoUpgradeEnabled(false)
+                            automationProfile.setAutoRepairPolicy(.manualOnly)
+                            await model.disableDailyInspection()
+                            model.refreshDailyInspectionStatus(preference: false)
+                        }
+                    }
+                }
+            ))
+            .toggleStyle(.switch)
+            .labelsHidden()
+            .disabled(model.isUpdatingDailyInspection)
+        }
+    }
+}
+
 struct DailyInspectionToggleRow: View {
     @EnvironmentObject private var model: StewardModel
     @EnvironmentObject private var automationProfile: AutomationProfileStore
@@ -281,7 +279,11 @@ struct DailyInspectionToggleRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("启用每日巡检")
                     .font(.body)
-                Text("按计划扫描软件，并根据低风险处理方式执行或提醒")
+                Text(model.dailyInspectionEnabled
+                    ? (automationProfile.profile.lowRiskAutoUpgradeEnabled
+                        ? "按计划扫描，并自动处理符合条件的更新"
+                        : "按计划扫描；当前仅提醒，不会自动升级")
+                    : "开启后按计划扫描；自动升级由下方设置独立控制")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -302,6 +304,7 @@ struct DailyInspectionToggleRow: View {
             ))
             .toggleStyle(.switch)
             .labelsHidden()
+            .disabled(model.isUpdatingDailyInspection)
             .help("启用或停用每日后台巡检")
         }
     }
@@ -333,17 +336,19 @@ struct DailyInspectionTimeRow: View {
             Button {
                 Task { await model.enableDailyInspection() }
             } label: {
-                Text("保存")
+                Text(model.isUpdatingDailyInspection ? "保存中…" : "保存")
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
             .keyboardShortcut(.defaultAction)
         }
+        .disabled(model.isUpdatingDailyInspection)
     }
 }
 
 struct DailyInspectionHealthRow: View {
     @EnvironmentObject private var model: StewardModel
+    @EnvironmentObject private var automationProfile: AutomationProfileStore
 
     var body: some View {
         HStack(spacing: 12) {
@@ -362,14 +367,19 @@ struct DailyInspectionHealthRow: View {
             Spacer()
 
             if case .needsRepair = model.dailyInspectionHealth {
-                Button("一键修复") {
-                    Task { await model.repairDailyInspection() }
+                Button(automationProfile.profile.dailyInspectionEnabled ? "一键修复" : "重试停用") {
+                    Task {
+                        if automationProfile.profile.dailyInspectionEnabled {
+                            await model.repairDailyInspection()
+                        } else {
+                            await model.repairDailyInspectionIfNeeded(dailyInspectionPreference: false)
+                        }
+                    }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .help("重新安装并加载当前版本的每日巡检后台程序")
-            } else if let lastExitCode = model.dailyInspectionRuntime.lastExitCode,
-                      lastExitCode != 0 {
+            } else if presentation.tone == .warning {
                 Button("查看日志") {
                     model.openDailyInspectionLog()
                 }
@@ -378,56 +388,27 @@ struct DailyInspectionHealthRow: View {
                 .help("打开每日巡检日志查看失败原因")
             }
         }
+        .disabled(model.isUpdatingDailyInspection)
     }
 
-    private var statusTitle: String {
-        if case .needsRepair = model.dailyInspectionHealth {
-            return model.dailyInspectionHealth.title
-        }
-        if let code = model.dailyInspectionRuntime.lastExitCode, code != 0 {
-            return "最近巡检失败"
-        }
-        if model.dailyInspectionRuntime.lastExitCode == 0 {
-            return "运行正常"
-        }
-        return model.dailyInspectionHealth.title
+    private var presentation: DailyInspectionStatusPresentation {
+        DailyInspectionStatusPresenter.make(
+            health: model.dailyInspectionHealth,
+            runtime: model.dailyInspectionRuntime,
+            latestReport: model.inspectionReportStore.reports.first { $0.trigger == .dailyAgent },
+            automaticUpgradeEnabled: automationProfile.profile.lowRiskAutoUpgradeEnabled,
+            hour: model.dailyHour,
+            minute: model.dailyMinute
+        )
     }
 
-    private var statusDetail: String {
-        if case .needsRepair = model.dailyInspectionHealth {
-            return model.dailyInspectionHealth.detail
-        }
-        if let code = model.dailyInspectionRuntime.lastExitCode, code != 0 {
-            return "后台调度正常，最近一次巡检退出码为 \(code)。"
-        }
-        if model.dailyInspectionRuntime.lastExitCode == 0 {
-            return "后台程序与当前应用一致，最近一次巡检已完成。"
-        }
-        return "后台程序与当前应用一致，正在等待首次巡检。"
-    }
-
-    private var statusSymbol: String {
-        if let code = model.dailyInspectionRuntime.lastExitCode, code != 0,
-           model.dailyInspectionHealth == .healthy {
-            return "exclamationmark.circle.fill"
-        }
-        switch model.dailyInspectionHealth {
-        case .disabled: return "minus.circle"
-        case .healthy: return "checkmark.circle.fill"
-        case .needsRepair: return "exclamationmark.triangle.fill"
-        }
-    }
+    private var statusTitle: String { presentation.title }
+    private var statusDetail: String { presentation.detail }
+    private var statusSymbol: String { presentation.symbol }
 
     private var statusColor: Color {
-        if let code = model.dailyInspectionRuntime.lastExitCode, code != 0,
-           model.dailyInspectionHealth == .healthy {
-            return .orange
-        }
-        switch model.dailyInspectionHealth {
-        case .disabled: return .secondary
-        case .healthy: return .green
-        case .needsRepair: return .orange
-        }
+        if presentation.tone == .warning { return .orange }
+        return model.dailyInspectionHealth == .disabled ? .secondary : .green
     }
 }
 

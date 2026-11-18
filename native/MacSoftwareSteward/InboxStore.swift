@@ -197,6 +197,38 @@ final class InboxStore: ObservableObject {
         save()
     }
 
+    /// 真实执行成功后，将同一包的失败/权限待办标记为已解决。
+    /// 保留历史记录，但不继续占用待处理列表；失败与取消不会调用此方法。
+    func resolveRecoveryItems(packageIDs: Set<String>) {
+        guard !packageIDs.isEmpty else { return }
+        var changed = false
+        for index in items.indices {
+            let item = items[index]
+            guard item.status == .pending,
+                  item.kind == .failureRecovery || item.kind == .permissionIssue,
+                  let sourceID = item.sourceID,
+                  packageIDs.contains(sourceID) else { continue }
+            items[index].status = .resolved
+            changed = true
+        }
+        guard changed else { return }
+        save()
+    }
+
+    /// 与最新扫描对账残留清理事项：外部清理完成或 App 重新出现后，
+    /// 不再保留过期的“残留记录待清理”入口；其他升级失败待办不受影响。
+    func retireStaleCaskRecoveryItems(notPresentIn presentPackageIDs: Set<String>) {
+        let before = items.count
+        items.removeAll { item in
+            guard item.kind == .failureRecovery,
+                  item.title.hasSuffix("残留记录待清理") else { return false }
+            guard let sourceID = item.sourceID else { return true }
+            return !presentPackageIDs.contains(sourceID)
+        }
+        guard items.count != before else { return }
+        save()
+    }
+
     func reload() {
         items = Self.load(from: fileURL)
     }

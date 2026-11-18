@@ -25,6 +25,7 @@ final class MaintenanceExecutor: ObservableObject {
     @Published var jobs: [UpgradeJob] = []
     @Published var packageProgress: [String: PackageUpgradeProgress] = [:]
     @Published var upgradeProgress: UpgradeProgress?
+    private var upgradeProgressByJob: [UUID: UpgradeProgress] = [:]
     @Published var maxConcurrentUpgrades: Int
 
     /// 用户关闭过的失败任务 ID。
@@ -35,7 +36,7 @@ final class MaintenanceExecutor: ObservableObject {
     private var pendingJobQueue: [(id: UUID, steps: [UpgradeStep], rescanAfterSuccess: Bool, inboxStore: InboxStore?, autoRepairProfile: AutomationProfile?)] = []
     private var activeCancellationTokens: [UUID: CommandCancellationToken] = [:]
     /// 当前 job 并发批里挂起等待 sudo 重试的步骤（runJob 结束时结算）。
-    private var sudoPendingSteps: [UpgradeStep] = []
+    private var sudoPendingSteps: [UUID: [UpgradeStep]] = [:]
     private var downloadMonitorTasks: [String: Task<Void, Never>] = [:]
     private var downloadSizeTasks: [String: Task<Void, Never>] = [:]
     private var downloadExpectedSizes: [String: Int64] = [:]
@@ -55,7 +56,7 @@ final class MaintenanceExecutor: ObservableObject {
 
     init(
         historyStore: UpgradeHistoryStore,
-        maxConcurrentUpgrades: Int = UserDefaults.standard.object(forKey: "maxConcurrentUpgrades") as? Int ?? 3,
+        maxConcurrentUpgrades: Int = DailyAutomationDefaults.maxConcurrentUpgrades,
         downloadStrategiesProvider: @escaping () async -> [DownloadAccelerationStrategy] = DownloadAccelerationPolicy.defaultStrategies,
         host: MaintenanceExecutorHost? = nil
     ) {
@@ -248,12 +249,9 @@ final class MaintenanceExecutor: ObservableObject {
         host?.executorRequestsDerivedDataRecompute()
 
         activeJobCount += 1
-        let packageSteps = steps.filter { $0.packageID != nil }
-        upgradeProgress = UpgradeProgress(
-            completed: 0,
-            total: packageSteps.count,
-            failed: 0,
-            currentPackage: nil
+        beginUpgradeProgress(
+            jobID: id,
+            total: steps.filter { $0.packageID != nil }.count
         )
 
         Task {
@@ -275,6 +273,10 @@ final class MaintenanceExecutor: ObservableObject {
         guard activeJobCount < maxSlots else { return }
         let next = pendingJobQueue.removeFirst()
         activeJobCount += 1
+        beginUpgradeProgress(
+            jobID: next.id,
+            total: next.steps.filter { $0.packageID != nil }.count
+        )
         Task {
             let status = await runJob(
                 id: next.id,
@@ -312,6 +314,7 @@ final class MaintenanceExecutor: ObservableObject {
         var failedCount = 0
         var firstErrorCode: Int32?
         var completedSteps = 0
+        var succeededPackageIDs: Set<String> = []
         var shouldStop = false
         let token = CommandCancellationToken()
         activeCancellationTokens[id] = token
@@ -329,7 +332,8 @@ final class MaintenanceExecutor: ObservableObject {
                 result: result,
                 failedCount: &failedCount,
                 firstErrorCode: &firstErrorCode,
-                completedSteps: &completedSteps
+                completedSteps: &completedSteps,
+                succeededPackageIDs: &succeededPackageIDs
             )
             if shouldStop { break }
         }
@@ -341,23 +345,27 @@ final class MaintenanceExecutor: ObservableObject {
                 token: token,
                 failedCount: &failedCount,
                 firstErrorCode: &firstErrorCode,
-                completedSteps: &completedSteps
+                completedSteps: &completedSteps,
+                succeededPackageIDs: &succeededPackageIDs
             )
         }
 
         // 并发批结束后：若收集到 needsSudo 步骤，弹一次密码框批量重试。
-        if !shouldStop && !sudoPendingSteps.isEmpty {
-            let pending = sudoPendingSteps
-            sudoPendingSteps.removeAll()
-            let sudoFailures = await runSudoRetryBatch(jobID: id, steps: pending, token: token)
+        if !shouldStop && !(sudoPendingSteps[id]?.isEmpty ?? true) {
+            let pending = sudoPendingSteps.removeValue(forKey: id) ?? []
+            let sudoFailures = await runSudoRetryBatch(
+                jobID: id,
+                steps: pending,
+                token: token,
+                succeededPackageIDs: &succeededPackageIDs
+            )
             failedCount += sudoFailures
             if sudoFailures > 0 && firstErrorCode == nil {
                 firstErrorCode = 1
             }
         } else {
             // 批被取消：挂起的 needsSudo 包按取消处理，不留中间态。
-            for step in sudoPendingSteps { markCancelled(step) }
-            sudoPendingSteps.removeAll()
+            for step in sudoPendingSteps.removeValue(forKey: id) ?? [] { markCancelled(step) }
         }
 
         activeCancellationTokens[id] = nil
@@ -378,6 +386,11 @@ final class MaintenanceExecutor: ObservableObject {
             finalStatus = $0.status
             $0.finishedAt = Date()
         }
+        if let inboxStore, !succeededPackageIDs.isEmpty {
+            inboxStore.resolveRecoveryItems(packageIDs: succeededPackageIDs)
+            inboxStore.removeUpgradeDecisions(packageIDs: succeededPackageIDs)
+        }
+
         if let job = jobs.first(where: { $0.id == id }) {
             historyStore.append(UpgradeHistoryRecord(
                 id: job.id,
@@ -391,7 +404,7 @@ final class MaintenanceExecutor: ObservableObject {
             ))
         }
 
-        let failedPackageIDs = Set(packageSteps.compactMap(\.packageID))
+        let failedPackageIDs = Set(packageSteps.compactMap(\.packageID)).subtracting(succeededPackageIDs)
         let automaticallyRepairedPackageIDs: Set<String>
         if let autoRepairProfile {
             automaticallyRepairedPackageIDs = await performAutomaticRepairIfAllowed(
@@ -409,7 +422,8 @@ final class MaintenanceExecutor: ObservableObject {
             )
         }
 
-        upgradeProgress = nil
+        upgradeProgressByJob.removeValue(forKey: id)
+        rebuildUpgradeProgress()
         return finalStatus
     }
 
@@ -418,13 +432,30 @@ final class MaintenanceExecutor: ObservableObject {
         markRunning(step)
         host?.executorRequestsDerivedDataRecompute()
         if step.packageName != nil {
-            updateUpgradeProgress(currentPackage: step.packageName)
+            updateUpgradeProgress(jobID: id, currentPackage: step.packageName)
         }
         appendLog(id: id, stream: "command", text: "$ \(command.display)")
         return command
     }
 
     private func runCommand(jobID id: UUID, step: UpgradeStep, command: UpgradeCommand, token: CommandCancellationToken) async -> StreamingCommandResult {
+        if step.purpose == .staleCaskCleanup {
+            if token.isCancelled {
+                return StreamingCommandResult(code: -1, recentOutput: "", terminationReason: .cancelled)
+            }
+            return await CommandRunner.runStreamingDetailed(
+                command.executable,
+                arguments: command.arguments,
+                timeout: 7200,
+                cancellationToken: token
+            ) { [weak self] stream, text in
+                Task { @MainActor in
+                    self?.appendLog(id: id, stream: stream, text: text)
+                    self?.updatePackageDetail(for: step, stream: stream, text: text)
+                }
+            }
+        }
+
         let strategies = await strategiesForStep(step)
         var attempt = CommandAccelerationAttempt(
             strategies: strategies,
@@ -493,7 +524,8 @@ final class MaintenanceExecutor: ObservableObject {
         token: CommandCancellationToken,
         failedCount: inout Int,
         firstErrorCode: inout Int32?,
-        completedSteps: inout Int
+        completedSteps: inout Int,
+        succeededPackageIDs: inout Set<String>
     ) async -> Bool {
         guard !steps.isEmpty else { return false }
         let maxSlots = maxConcurrentUpgrades <= 0 ? steps.count : max(1, maxConcurrentUpgrades)
@@ -526,7 +558,7 @@ final class MaintenanceExecutor: ObservableObject {
             }
 
             if launchCount > 1 {
-                updateUpgradeProgress(currentPackage: "\(launchCount) 个任务并行中")
+                updateUpgradeProgress(jobID: id, currentPackage: "\(launchCount) 个任务并行中")
             }
 
             while let outcome = await group.next() {
@@ -537,7 +569,8 @@ final class MaintenanceExecutor: ObservableObject {
                     result: outcome.result,
                     failedCount: &failedCount,
                     firstErrorCode: &firstErrorCode,
-                    completedSteps: &completedSteps
+                    completedSteps: &completedSteps,
+                    succeededPackageIDs: &succeededPackageIDs
                 )
                 if stop {
                     shouldStop = true
@@ -558,13 +591,51 @@ final class MaintenanceExecutor: ObservableObject {
         result: StreamingCommandResult,
         failedCount: inout Int,
         firstErrorCode: inout Int32?,
-        completedSteps: inout Int
+        completedSteps: inout Int,
+        succeededPackageIDs: inout Set<String>,
+        retryAttempt: Int = 0
     ) async -> Bool {
         let code = result.code
 
+        if step.purpose == .staleCaskCleanup, result.terminationReason == .exited {
+            let receiptRemoved = await verifyCaskReceiptRemoved(command: command, caskName: step.packageName ?? "")
+            if receiptRemoved {
+                if code == 0 {
+                    if let packageID = step.packageID { succeededPackageIDs.insert(packageID) }
+                    markSucceeded(step)
+                } else {
+                    failedCount += 1
+                    firstErrorCode = firstErrorCode ?? code
+                    markCleanupPartial(step, code: code, output: result.recentOutput)
+                }
+                host?.executorRequestsDerivedDataRecompute()
+                if step.packageID != nil {
+                    completedSteps += 1
+                    updateUpgradeProgress(jobID: id, completed: completedSteps, failed: failedCount, currentPackage: nil)
+                }
+                return false
+            }
+            if code == 0 {
+                let analysis = FailureAnalysis(
+                    summary: "清理命令已结束，但无法确认 Homebrew receipt 已移除。",
+                    suggestion: "请查看日志并重新扫描确认状态，不会重复执行卸载。",
+                    action: .rescan,
+                    copyText: result.recentOutput,
+                    command: command.display
+                )
+                failedCount += 1
+                firstErrorCode = firstErrorCode ?? 1
+                markFailed(step, analysis: analysis)
+                host?.executorRequestsDerivedDataRecompute()
+                if step.packageID != nil {
+                    completedSteps += 1
+                    updateUpgradeProgress(jobID: id, completed: completedSteps, failed: failedCount, currentPackage: nil)
+                }
+                return false
+            }
+        }
+
         if result.terminationReason == .cancelled {
-            failedCount += 1
-            firstErrorCode = firstErrorCode ?? (code == 0 ? 1 : code)
             markCancelled(step)
             updateJob(id) {
                 $0.status = .cancelled
@@ -573,7 +644,7 @@ final class MaintenanceExecutor: ObservableObject {
             }
             if step.packageID != nil {
                 completedSteps += 1
-                updateUpgradeProgress(completed: completedSteps, failed: failedCount, currentPackage: nil)
+                updateUpgradeProgress(jobID: id, completed: completedSteps, failed: failedCount, currentPackage: nil)
             }
             return true
         } else if result.terminationReason == .timedOut {
@@ -594,20 +665,68 @@ final class MaintenanceExecutor: ObservableObject {
             }
             if step.packageID != nil {
                 completedSteps += 1
-                updateUpgradeProgress(completed: completedSteps, failed: failedCount, currentPackage: nil)
+                updateUpgradeProgress(jobID: id, completed: completedSteps, failed: failedCount, currentPackage: nil)
             }
             return true
         } else if code != 0 {
-            if await cleanupStaleBrewCaskIfNeeded(jobID: id, step: step, command: command, output: result.recentOutput, token: activeCancellationTokens[id]) {
-                markCleanedUp(step)
+            if step.purpose != .staleCaskCleanup && TransientFailureRetryPolicy.shouldRetry(
+                code: code,
+                output: result.recentOutput,
+                terminationReason: result.terminationReason,
+                retryAttempt: retryAttempt
+            ) {
+                let nextAttempt = retryAttempt + 1
+                let delay = TransientFailureRetryPolicy.delay(retryAttempt: retryAttempt)
+                appendLog(
+                    id: id,
+                    stream: "system",
+                    text: "检测到临时故障，\(Int(delay)) 秒后自动重试（\(nextAttempt)/\(TransientFailureRetryPolicy.maxRetries)）：\(command.display)"
+                )
+                updatePackageDetail(
+                    for: step,
+                    phaseText: "临时故障，\(Int(delay)) 秒后自动重试 \(nextAttempt)/\(TransientFailureRetryPolicy.maxRetries)",
+                    downloadFraction: nil
+                )
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                let retryResult: StreamingCommandResult
+                if activeCancellationTokens[id]?.isCancelled == true {
+                    retryResult = StreamingCommandResult(code: -1, recentOutput: "", terminationReason: .cancelled)
+                } else {
+                    retryResult = await runCommand(jobID: id, step: step, command: command, token: activeCancellationTokens[id] ?? CommandCancellationToken())
+                }
+                return await handleStepResult(
+                    jobID: id,
+                    step: step,
+                    command: command,
+                    result: retryResult,
+                    failedCount: &failedCount,
+                    firstErrorCode: &firstErrorCode,
+                    completedSteps: &completedSteps,
+                    succeededPackageIDs: &succeededPackageIDs,
+                    retryAttempt: nextAttempt
+                )
+            }
+
+            if let cleanupCode = await cleanupStaleBrewCaskIfNeeded(jobID: id, step: step, command: command, output: result.recentOutput, token: activeCancellationTokens[id]) {
+                if cleanupCode == 0 {
+                    if let packageID = step.packageID { succeededPackageIDs.insert(packageID) }
+                    markCleanedUp(step)
+                } else {
+                    failedCount += 1
+                    firstErrorCode = firstErrorCode ?? cleanupCode
+                    markCleanupPartial(step, code: cleanupCode, output: result.recentOutput)
+                }
                 host?.executorRequestsDerivedDataRecompute()
                 updateJob(id) {
-                    $0.log.append(LogLine(stream: "system", text: "已清理失效的 Homebrew Cask：\(step.packageName ?? command.display)"))
+                    let message = cleanupCode == 0
+                        ? "已清理失效的 Homebrew Cask：\(step.packageName ?? command.display)"
+                        : "清理部分完成：\(step.packageName ?? command.display)，退出码 \(cleanupCode)"
+                    $0.log.append(LogLine(stream: "system", text: message))
                 }
             } else if UpgradeFailureAnalyzer.requiresSudo(in: result.recentOutput) {
                 // 卡在 sudo 密码：不立即计失败，挂起等待批量 osascript 重试。
                 markNeedsSudo(step)
-                sudoPendingSteps.append(step)
+                sudoPendingSteps[id, default: []].append(step)
                 host?.executorRequestsDerivedDataRecompute()
                 updateJob(id) {
                     $0.log.append(LogLine(stream: "system", text: "需要管理员密码：\(command.display)，将批量请求授权后重试"))
@@ -623,118 +742,165 @@ final class MaintenanceExecutor: ObservableObject {
                 }
             }
         } else {
+            if let packageID = step.packageID { succeededPackageIDs.insert(packageID) }
             markSucceeded(step)
             host?.executorRequestsDerivedDataRecompute()
         }
 
         if step.packageID != nil {
             completedSteps += 1
-            updateUpgradeProgress(completed: completedSteps, failed: failedCount, currentPackage: nil)
+            updateUpgradeProgress(jobID: id, completed: completedSteps, failed: failedCount, currentPackage: nil)
         }
 
         return false
     }
 
-    /// sudo 批次重试：把所有 needsSudo 的 cask 合并成一条 osascript，
-    /// 弹一次系统原生密码框串行跑完，按 __RC__ 标记回填每个包状态。
+    /// sudo 批次重试：把同一任务里所有 needsSudo 的步骤合并成一条 osascript，
+    /// 弹一次系统原生密码框串行跑完，按 __RC__ 标记回填每个原始步骤。
     /// 密码由 macOS SecurityServer 处理，本进程绝不接触。
-    /// 返回 sudo 批新增的失败数（供 runJob 累加到 failedCount）。
     private func runSudoRetryBatch(
         jobID id: UUID,
         steps: [UpgradeStep],
-        token: CommandCancellationToken
+        token: CommandCancellationToken,
+        succeededPackageIDs: inout Set<String>
     ) async -> Int {
         var failedInSudo = 0
         guard !steps.isEmpty else { return 0 }
 
-        // 1. 解析 brew 绝对路径与最小环境（CommandRunner.processEnvironment 是 private，
-        //    这里只取 PATH/HOME 透传给 root shell）。
-        guard let brewPath = try? await requireCommand("brew") else {
-            for step in steps {
-                failedInSudo += 1
-                markFailed(step, analysis: FailureAnalysis(
-                    summary: "未找到 brew 命令，无法请求管理员授权升级。",
-                    suggestion: "请确认 Homebrew 已安装，然后重试。",
-                    action: .rescan,
-                    copyText: "",
-                    command: step.command.display
-                ))
-            }
-            return failedInSudo
-        }
         let pathEnv = CommandRunner.defaultPath
         let homeEnv = ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory()
-
-        // 2. 按包名顺序拼脚本。
-        let packageNames = steps.compactMap { $0.packageName }
-        let script = SudoScriptBuilder.script(brewPath: brewPath, packageNames: packageNames, pathEnv: pathEnv, homeEnv: homeEnv)
+        let script = SudoScriptBuilder.script(
+            commands: steps.map(\.command),
+            pathEnv: pathEnv,
+            homeEnv: homeEnv
+        )
         let args = SudoScriptBuilder.osaArguments(script)
+        let outputCollector = SudoScriptOutputCollector()
+        let displayNames = steps.map { $0.packageName ?? $0.command.display }
 
         updateJob(id) {
-            $0.log.append(LogLine(stream: "system", text: "sudo 批次：osascript 提权执行 \(packageNames.count) 个 cask 升级"))
+            $0.log.append(LogLine(stream: "system", text: "sudo 批次：osascript 提权执行 \(steps.count) 个命令"))
             $0.log.append(LogLine(stream: "system", text: "正在请求管理员密码…"))
         }
-        updateUpgradeProgress(currentPackage: "等待管理员授权升级 \(packageNames.count) 个软件")
+        updateUpgradeProgress(jobID: id, currentPackage: "等待管理员授权执行 \(steps.count) 个命令")
+        appendLog(id: id, stream: "command", text: "$ osascript -e <do shell script ... with administrator privileges>（\(displayNames.joined(separator: ", "))）")
 
-        // 3. 流式跑 osascript，实时回传日志。
-        appendLog(id: id, stream: "command", text: "$ osascript -e <do shell script ... with administrator privileges>（\(packageNames.joined(separator: ", "))）")
         let result = await CommandRunner.runStreamingDetailed(
             "/usr/bin/osascript",
             arguments: args,
             timeout: 7200,
             cancellationToken: token
         ) { [weak self] stream, text in
+            outputCollector.append(stream: stream, text: text)
             Task { @MainActor in
                 self?.appendLog(id: id, stream: stream, text: text)
             }
         }
+        let capturedOutput = outputCollector.text()
 
-        // 4. 用户取消密码框 / osascript 整体失败：每个包标失败，允许重试。
         if result.terminationReason == .cancelled {
             for step in steps { markCancelled(step) }
-            updateJob(id) { $0.log.append(LogLine(stream: "system", text: "sudo 批次已取消")) }
-            return failedInSudo
+            host?.executorRequestsDerivedDataRecompute()
+            updateJob(id) {
+                $0.status = .cancelled
+                $0.log.append(LogLine(stream: "system", text: "sudo 批次已取消"))
+            }
+            return 0
         }
-        if result.code != 0 && !result.recentOutput.contains("__RC_") {
-            // 整条 osascript 失败（如用户在密码框点取消、密码错误 3 次），无任何包完成。
+
+        if result.code != 0 && !outputCollector.containsResultMarker {
             for step in steps {
                 failedInSudo += 1
-                markFailed(step, analysis: FailureAnalysis(
-                    summary: "管理员授权未完成，sudo 升级被取消。",
-                    suggestion: "点击「重试」会再次弹出密码框。若密码错误，请确认管理员密码后重试。",
-                    action: .promptAdminPassword,
-                    copyText: step.command.display,
-                    command: step.command.display
+                markFailed(step, analysis: SudoScriptFailureAnalyzer.analysis(
+                    command: step.command.display,
+                    output: capturedOutput
                 ))
             }
-            updateJob(id) { $0.log.append(LogLine(stream: "system", text: "sudo 批次授权未完成，退出码 \(result.code)")) }
+            host?.executorRequestsDerivedDataRecompute()
+            updateJob(id) {
+                $0.log.append(LogLine(stream: "system", text: "sudo 批次启动失败，退出码 \(result.code)：\(capturedOutput)"))
+            }
             return failedInSudo
         }
 
-        // 5. 解析 __RC__ 标记，回填每个包。
-        let parsed = SudoScriptParser.outcomes(in: result.recentOutput, count: packageNames.count)
+        let parsed = SudoScriptParser.outcomes(in: capturedOutput, count: steps.count)
         for (index, step) in steps.enumerated() {
-            let pkgIndex = index + 1
-            let outcome = parsed.first { $0.packageIndex == pkgIndex }
-                ?? SudoScriptParser.Outcome(packageIndex: pkgIndex, exitCode: -1, outputSegment: "")
+            let markerNumber = index + 1
+            let outcome = parsed.first { $0.packageIndex == markerNumber }
+                ?? SudoScriptParser.Outcome(packageIndex: markerNumber, exitCode: -1, outputSegment: "")
+            let displayName = step.packageName ?? step.command.display
+
+            if step.purpose == .staleCaskCleanup {
+                let receiptRemoved = await verifyCaskReceiptRemoved(command: step.command, caskName: step.packageName ?? "")
+                if receiptRemoved && outcome.exitCode != 0 {
+                    failedInSudo += 1
+                    markCleanupPartial(step, code: outcome.exitCode, output: outcome.outputSegment)
+                    host?.executorRequestsDerivedDataRecompute()
+                    updateJob(id) {
+                        $0.log.append(LogLine(stream: "system", text: "sudo 清理部分完成：\(displayName)，退出码 \(outcome.exitCode)"))
+                    }
+                    continue
+                }
+                if !receiptRemoved && outcome.exitCode == 0 {
+                    failedInSudo += 1
+                    markFailed(step, analysis: FailureAnalysis(
+                        summary: "sudo 清理已结束，但无法确认 Homebrew receipt 已移除。",
+                        suggestion: "请查看日志并重新扫描确认状态，不会重复执行卸载。",
+                        action: .rescan,
+                        copyText: outcome.outputSegment,
+                        command: step.command.display
+                    ))
+                    host?.executorRequestsDerivedDataRecompute()
+                    updateJob(id) {
+                        $0.log.append(LogLine(stream: "system", text: "sudo 清理结果未确认：\(displayName)"))
+                    }
+                    continue
+                }
+            }
 
             if outcome.exitCode == 0 {
+                if let packageID = step.packageID { succeededPackageIDs.insert(packageID) }
                 markSucceeded(step)
                 host?.executorRequestsDerivedDataRecompute()
-                updateJob(id) { $0.log.append(LogLine(stream: "system", text: "sudo 升级完成：\(step.packageName ?? "")")) }
+                updateJob(id) {
+                    $0.log.append(LogLine(stream: "system", text: "sudo 命令完成：\(displayName)"))
+                }
             } else {
-                // 已 sudo 过仍失败：不是密码问题，走常规失败分析，但 action 降级为可重试。
-                var analysis = failureAnalysis(command: step.command.display, code: outcome.exitCode, output: outcome.outputSegment)
+                var analysis: FailureAnalysis
+                if outcome.exitCode == -1 && outcome.outputSegment.isEmpty {
+                    analysis = SudoScriptFailureAnalyzer.analysis(
+                        command: step.command.display,
+                        output: "osascript 已结束（退出码 \(result.code)），但未收到该命令的 __RC_\(markerNumber)__ 结果标记。"
+                    )
+                } else {
+                    analysis = failureAnalysis(
+                        command: step.command.display,
+                        code: outcome.exitCode,
+                        output: outcome.outputSegment
+                    )
+                }
                 if analysis.action == .retryInTerminal {
                     analysis.action = .promptAdminPassword
                 }
                 failedInSudo += 1
                 markFailed(step, analysis: analysis)
                 host?.executorRequestsDerivedDataRecompute()
-                updateJob(id) { $0.log.append(LogLine(stream: "system", text: "sudo 升级失败：\(step.packageName ?? "")，退出码 \(outcome.exitCode)")) }
+                updateJob(id) {
+                    $0.log.append(LogLine(stream: "system", text: "sudo 命令失败：\(displayName)，退出码 \(outcome.exitCode)"))
+                }
             }
         }
         return failedInSudo
+    }
+
+    private func verifyCaskReceiptRemoved(command: UpgradeCommand, caskName: String) async -> Bool {
+        guard !caskName.isEmpty else { return false }
+        let verification = await CommandRunner.run(
+            command.executable,
+            arguments: ["list", "--cask", caskName],
+            timeout: 30
+        )
+        return CaskReceiptVerification.isRemoved(verification)
     }
 
     private func cleanupStaleBrewCaskIfNeeded(
@@ -743,9 +909,9 @@ final class MaintenanceExecutor: ObservableObject {
         command: UpgradeCommand,
         output: String,
         token: CommandCancellationToken?
-    ) async -> Bool {
+    ) async -> Int32? {
         let appPresence = appPresenceForBrewCask(step)
-        guard let caskName = BrewCaskCleanupDetector.cleanupCandidate(command: command, output: output, appPresence: appPresence) else { return false }
+        guard let caskName = BrewCaskCleanupDetector.cleanupCandidate(command: command, output: output, appPresence: appPresence) else { return nil }
         appendLog(id: id, stream: "system", text: "检测到 \(caskName) 的 App 已不存在，自动从 Homebrew Cask 中移除。")
         let cleanupCommand = UpgradeCommand(
             executable: command.executable,
@@ -764,11 +930,13 @@ final class MaintenanceExecutor: ObservableObject {
                 self?.updatePackageDetail(for: step, stream: stream, text: text)
             }
         }
-        guard result.terminationReason == .exited, result.code == 0 else {
-            appendLog(id: id, stream: "system", text: "清理 \(caskName) 失败，退出码 \(result.code)。")
-            return false
+        let receiptRemoved = await verifyCaskReceiptRemoved(command: cleanupCommand, caskName: caskName)
+        guard receiptRemoved else {
+            appendLog(id: id, stream: "system", text: "清理 \(caskName) 后无法确认 receipt 已移除，退出码 \(result.code)。")
+            return nil
         }
-        return true
+        // 0 才是完全成功；非零仅表示 receipt 已移除，保留部分完成状态。
+        return result.code
     }
 
     private func appPresenceForBrewCask(_ step: UpgradeStep) -> BrewCaskAppPresence {
@@ -790,12 +958,32 @@ final class MaintenanceExecutor: ObservableObject {
 
     // MARK: - Progress updates
 
-    func updateUpgradeProgress(completed: Int? = nil, failed: Int? = nil, currentPackage: String? = nil) {
-        guard var progress = upgradeProgress else { return }
+    private func beginUpgradeProgress(jobID id: UUID, total: Int) {
+        upgradeProgressByJob[id] = UpgradeProgress(
+            completed: 0,
+            total: total,
+            failed: 0,
+            currentPackage: nil
+        )
+        rebuildUpgradeProgress()
+    }
+
+    func updateUpgradeProgress(
+        jobID id: UUID,
+        completed: Int? = nil,
+        failed: Int? = nil,
+        currentPackage: String?? = nil
+    ) {
+        guard var progress = upgradeProgressByJob[id] else { return }
         if let completed { progress.completed = completed }
         if let failed { progress.failed = failed }
         if let currentPackage { progress.currentPackage = currentPackage }
-        upgradeProgress = progress
+        upgradeProgressByJob[id] = progress
+        rebuildUpgradeProgress()
+    }
+
+    private func rebuildUpgradeProgress() {
+        upgradeProgress = UpgradeProgressAggregator.make(upgradeProgressByJob)
     }
 
     func updateJob(_ id: UUID, mutate: (inout UpgradeJob) -> Void) {
@@ -835,7 +1023,9 @@ final class MaintenanceExecutor: ObservableObject {
                 + result.brew.casks.map(\.id)
                 + result.mas.apps.map(\.id)
         )
-        packageProgress = packageProgress.filter { ids.contains($0.key) }
+        packageProgress = packageProgress.filter {
+            ids.contains($0.key) && $0.value.status != .succeeded
+        }
         host?.executorRequestsDerivedDataRecompute()
     }
 
@@ -855,10 +1045,13 @@ final class MaintenanceExecutor: ObservableObject {
         step.packageID ?? step.command.display
     }
 
-    /// 判断 step 是否为 cask 升级（packageID 含 ":cask:"）。
-    /// nonisolated：只读值类型 step，不访问可变状态，可在任意 actor 上下文同步调用。
+    /// 只有真正需要下载的 cask 升级/安装才预下载；清理记录不获取目标版本，
+    /// 避免 uninstall 之前白白下载一个随后根本不会安装的包。
     nonisolated private func isCaskStep(_ step: UpgradeStep) -> Bool {
-        step.packageID?.contains(":cask:") == true
+        guard step.purpose == .maintenance,
+              step.packageID?.contains(":cask:") == true,
+              let action = step.command.arguments.first else { return false }
+        return action == "upgrade" || action == "install"
     }
 
     /// 通过国内镜像预下载 cask 文件到 brew 缓存。
@@ -952,7 +1145,8 @@ final class MaintenanceExecutor: ObservableObject {
                 packageID: packageID,
                 packageName: packageName,
                 status: .queued,
-                detail: "等待升级"
+                detail: step.purpose == .staleCaskCleanup ? "等待清理" : "等待升级",
+                purpose: step.purpose
             )
         }
     }
@@ -964,9 +1158,12 @@ final class MaintenanceExecutor: ObservableObject {
             packageName: packageName,
             status: .running,
             detail: step.command.display,
-            phaseText: "执行命令"
+            phaseText: "执行命令",
+            purpose: step.purpose
         )
-        startHomebrewDownloadMonitorIfNeeded(for: step)
+        if step.purpose == .maintenance {
+            startHomebrewDownloadMonitorIfNeeded(for: step)
+        }
     }
 
     private func markSucceeded(_ step: UpgradeStep) {
@@ -976,7 +1173,8 @@ final class MaintenanceExecutor: ObservableObject {
             packageID: packageID,
             packageName: packageName,
             status: .succeeded,
-            detail: "升级完成"
+            detail: step.purpose == .staleCaskCleanup ? "残留记录已移除" : "升级完成",
+            purpose: step.purpose
         )
         if step.purpose == .staleCaskCleanup {
             host?.executorDidRemoveStaleCaskRecord(packageID: packageID)
@@ -990,8 +1188,29 @@ final class MaintenanceExecutor: ObservableObject {
             packageID: packageID,
             packageName: packageName,
             status: .succeeded,
-            detail: "已清理失效的 Homebrew Cask"
+            detail: "已清理失效的 Homebrew Cask",
+            purpose: step.purpose
         )
+        host?.executorDidRemoveStaleCaskRecord(packageID: packageID)
+    }
+
+    private func markCleanupPartial(_ step: UpgradeStep, code: Int32, output: String) {
+        guard let packageID = step.packageID, let packageName = step.packageName else { return }
+        stopHomebrewDownloadMonitor(packageID: packageID)
+        let summary = "Homebrew receipt 已移除，但清理命令返回 \(code)，部分阶段可能未完成。"
+        packageProgress[packageID] = PackageUpgradeProgress(
+            packageID: packageID,
+            packageName: packageName,
+            status: .warning,
+            detail: summary,
+            failureSummary: summary,
+            recoverySuggestion: "请查看日志确认剩余阶段；receipt 已移除，无需重复卸载。",
+            copyText: output,
+            recoveryAction: .openLog,
+            lastFailedCommand: step.command.display,
+            purpose: .staleCaskCleanup
+        )
+        host?.executorDidRemoveStaleCaskRecord(packageID: packageID)
     }
 
     private func markFailed(_ step: UpgradeStep, analysis: FailureAnalysis) {
@@ -1006,7 +1225,8 @@ final class MaintenanceExecutor: ObservableObject {
             recoverySuggestion: analysis.suggestion,
             copyText: analysis.copyText,
             recoveryAction: analysis.action,
-            lastFailedCommand: analysis.command
+            lastFailedCommand: analysis.command,
+            purpose: step.purpose
         )
     }
 
@@ -1017,7 +1237,8 @@ final class MaintenanceExecutor: ObservableObject {
             packageID: packageID,
             packageName: packageName,
             status: .cancelled,
-            detail: "升级已取消"
+            detail: step.purpose == .staleCaskCleanup ? "清理已取消" : "升级已取消",
+            purpose: step.purpose
         )
     }
 
@@ -1027,7 +1248,8 @@ final class MaintenanceExecutor: ObservableObject {
             packageID: packageID,
             packageName: packageName,
             status: .needsSudo,
-            detail: "等待管理员授权升级"
+            detail: step.purpose == .staleCaskCleanup ? "等待管理员授权清理" : "等待管理员授权升级",
+            purpose: step.purpose
         )
     }
 
@@ -1043,7 +1265,8 @@ final class MaintenanceExecutor: ObservableObject {
             recoverySuggestion: analysis.suggestion,
             copyText: analysis.copyText,
             recoveryAction: analysis.action,
-            lastFailedCommand: analysis.command
+            lastFailedCommand: analysis.command,
+            purpose: step.purpose
         )
     }
 

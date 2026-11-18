@@ -3,45 +3,92 @@ import Foundation
 @main
 struct SudoScriptBuilderTest {
     static func main() {
-        let brewPath = "/opt/homebrew/bin/brew"
-
-        // --- N=3：分隔符、标记、路径、顺序 ---
-        let script3 = SudoScriptBuilder.script(
-            brewPath: brewPath,
-            packageNames: ["pkgA", "pkgB", "pkgC"],
-            pathEnv: "/opt/homebrew/bin:/usr/local/bin",
+        let brew = "/opt/homebrew/bin/brew"
+        let cleanup = UpgradeCommand(
+            executable: brew,
+            arguments: ["uninstall", "--cask", "--force", "bartender"],
+            display: "brew uninstall --cask --force bartender"
+        )
+        let cleanupScript = SudoScriptBuilder.script(
+            commands: [cleanup],
+            pathEnv: "/opt/homebrew/bin:/usr/bin",
             homeEnv: "/Users/test"
         )
-        precondition(script3.contains("with administrator privileges"), "must request admin privileges")
-        precondition(script3.contains("\(brewPath) upgrade --cask pkgA"), "must include pkgA with absolute brew path")
-        precondition(script3.contains("\(brewPath) upgrade --cask pkgB"), "must include pkgB")
-        precondition(script3.contains("\(brewPath) upgrade --cask pkgC"), "must include pkgC")
-        precondition(script3.contains("echo \"__RC_1_$?__\""), "pkgA must carry __RC_1_ marker")
-        precondition(script3.contains("echo \"__RC_2_$?__\""), "pkgB must carry __RC_2_ marker")
-        precondition(script3.contains("echo \"__RC_3_$?__\""), "pkgC must carry __RC_3_ marker")
-        precondition(script3.contains("; echo"), "statements must be ;-separated per cask (failure isolation)")
-        precondition(script3.contains("export PATH=/opt/homebrew/bin:/usr/local/bin"), "must export PATH for root shell")
-        precondition(script3.contains("export HOME=/Users/test"), "must export HOME for root shell")
 
-        // 顺序：pkgA 标记必须出现在 pkgB 标记之前
-        if let aRange = script3.range(of: "__RC_1_"), let bRange = script3.range(of: "__RC_2_") {
-            precondition(aRange.lowerBound < bRange.lowerBound, "markers must preserve package order")
-        } else {
-            preconditionFailure("markers not found for ordering check")
+        precondition(cleanupScript.contains("'/opt/homebrew/bin/brew' 'uninstall' '--cask' '--force' 'bartender'"))
+        precondition(!cleanupScript.contains("'upgrade' '--cask' 'bartender'"))
+        precondition(cleanupScript.contains("export PATH='/opt/homebrew/bin:/usr/bin'"))
+        precondition(cleanupScript.contains("export HOME='/Users/test'"))
+        precondition(cleanupScript.contains("__RC_1_$?__"))
+        precondition(cleanupScript.contains("with administrator privileges"))
+        assertCompiles(cleanupScript)
+
+        let upgrade = UpgradeCommand(
+            executable: brew,
+            arguments: ["upgrade", "--cask", "--greedy", "warp"],
+            display: "brew upgrade --cask --greedy warp"
+        )
+        let install = UpgradeCommand(
+            executable: brew,
+            arguments: ["install", "--cask", "token-with space"],
+            display: "brew install --cask token-with space"
+        )
+        let mixedScript = SudoScriptBuilder.script(
+            commands: [upgrade, install],
+            pathEnv: "/usr/bin",
+            homeEnv: "/Users/test"
+        )
+        precondition(mixedScript.contains("'upgrade' '--cask' '--greedy' 'warp'"))
+        precondition(mixedScript.contains("'install' '--cask' 'token-with space'"))
+        precondition(mixedScript.contains("__RC_1_$?__"))
+        precondition(mixedScript.contains("__RC_2_$?__"))
+        assertCompiles(mixedScript)
+
+        let quotedHome = "/Users/O'Brien"
+        let quotedScript = SudoScriptBuilder.script(
+            commands: [cleanup],
+            pathEnv: "/usr/bin",
+            homeEnv: quotedHome
+        )
+        precondition(quotedScript.contains("O"))
+        precondition(quotedScript.contains("Brien"))
+        assertCompiles(quotedScript)
+
+        precondition(SudoScriptBuilder.shellQuote("a'b") == "'a'\\''b'")
+        precondition(SudoScriptBuilder.shellQuote("") == "''")
+        for value in ["O'Brien", "token with spaces", "$HOME", ""] {
+            assertShellRoundTrip(value)
         }
+        precondition(SudoScriptBuilder.osaArguments(cleanupScript) == ["-e", cleanupScript])
 
-        // --- N=1：单包也要正确 ---
-        let script1 = SudoScriptBuilder.script(brewPath: brewPath, packageNames: ["only"], pathEnv: "/x", homeEnv: "/h")
-        precondition(script1.contains("\(brewPath) upgrade --cask only"), "single package must appear")
-        precondition(script1.contains("__RC_1_$?__"), "single package must carry __RC_1_ marker")
+        let emptyScript = SudoScriptBuilder.script(commands: [], pathEnv: "/usr/bin", homeEnv: "/Users/test")
+        precondition(!emptyScript.contains("__RC_"))
+        assertCompiles(emptyScript)
+    }
 
-        // --- osaArguments：必须是 ["-e", script] ---
-        let args = SudoScriptBuilder.osaArguments(script1)
-        precondition(args == ["-e", script1], "osaArguments must wrap script as -e arg, got \(args)")
+    /// 只用 /bin/sh + printf 验证参数逐字往返，不执行 brew 或管理员命令。
+    private static func assertShellRoundTrip(_ value: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", "printf '%s' \(SudoScriptBuilder.shellQuote(value))"]
+        let output = Pipe()
+        process.standardOutput = output
+        do {
+            try process.run()
+        } catch {
+            preconditionFailure("Failed to launch /bin/sh: \(error)")
+        }
+        process.waitUntilExit()
+        precondition(process.terminationStatus == 0)
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        let decoded = String(data: data, encoding: .utf8)
+        precondition(decoded == value, "Shell round trip failed for \(value): \(decoded ?? "nil")")
+    }
 
-        // --- N=0：空输入返回空 body（调用方应避免，但函数不得崩溃） ---
-        let script0 = SudoScriptBuilder.script(brewPath: brewPath, packageNames: [], pathEnv: "/x", homeEnv: "/h")
-        precondition(script0.contains("with administrator privileges"), "even empty batch keeps admin privileges wrapper")
-        precondition(!script0.contains("__RC_"), "empty batch must emit no markers")
+    /// 仅编译，不运行 AppleScript，因此不会请求密码或执行任何 brew 命令。
+    private static func assertCompiles(_ source: String, file: StaticString = #file, line: UInt = #line) {
+        var error: NSDictionary?
+        let compiled = NSAppleScript(source: source)?.compileAndReturnError(&error) ?? false
+        precondition(compiled, "AppleScript must compile: \(error ?? [:])", file: file, line: line)
     }
 }

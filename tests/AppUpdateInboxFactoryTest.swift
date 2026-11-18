@@ -31,6 +31,6 @@ struct AppUpdateInboxFactoryTest {
         precondition(items[0].severity == .info)
         precondition(items[0].sourceID == app.id)
         precondition(items[0].title == "Sparkle 可更新")
-        precondition(items[0].actions.map(\.kind) == [.openApplications, .rescan])
+        precondition(items[0].actions.map(\.kind) == [.openUpdates, .rescan])
     }
 }

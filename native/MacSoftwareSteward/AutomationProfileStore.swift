@@ -131,7 +131,19 @@ final class AutomationProfileStore: ObservableObject {
         }
 
         let decoder = JSONDecoder()
-        return (try? decoder.decode(AutomationProfile.self, from: data)) ?? .manualDefault
+        guard var profile = try? decoder.decode(AutomationProfile.self, from: data) else {
+            return .manualDefault
+        }
+        profile.regularAppNetworkPolicy = .declaredSourcesOnly
+        if !NotificationPolicy.visibleCases.contains(profile.notificationPolicy) {
+            profile.notificationPolicy = .decisionsAndFailures
+        }
+        if !profile.dailyInspectionEnabled || !profile.lowRiskAutoUpgradeEnabled {
+            profile.autoRepairPolicy = .manualOnly
+        }
+        // daily + lowRisk 已开启时保留 autoRepairPolicy 的明确授权选择；
+        // 不在读取配置时把 manualOnly 静默提升为 allowLowRisk。
+        return profile
     }
 
     private func save() {

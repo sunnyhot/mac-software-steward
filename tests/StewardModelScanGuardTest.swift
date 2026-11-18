@@ -63,6 +63,9 @@ struct StewardModelScanGuardTest {
     @MainActor
     static func main() async throws {
         UserDefaults.standard.removeObject(forKey: "maxConcurrentUpgrades")
+        precondition(DailyAutomationDefaults.hour == 9 && DailyAutomationDefaults.minute == 0)
+        precondition(DailyAutomationDefaults.includeGreedy && DailyAutomationDefaults.runBrewUpdate)
+        precondition(DailyAutomationDefaults.maxConcurrentUpgrades == 3)
         let currentHelper = "/Applications/MacSoftwareSteward.app/Contents/MacOS/MacSoftwareStewardAgent"
         let oldHelper = "/tmp/old/MacSoftwareStewardAgent"
         let plistData = try PropertyListSerialization.data(
@@ -101,6 +104,25 @@ struct StewardModelScanGuardTest {
         )
         precondition(healthyConfig.isOperational)
         precondition(healthyConfig.includeGreedy && !healthyConfig.runBrewUpdate)
+        let allOptionArguments = DailyInspectionScheduler.programArguments(
+            helperPath: currentHelper,
+            includeGreedy: true,
+            runBrewUpdate: true
+        )
+        precondition(allOptionArguments.contains("--greedy"))
+        precondition(allOptionArguments.contains("--brew-update"))
+        let noOptionArguments = DailyInspectionScheduler.programArguments(
+            helperPath: currentHelper,
+            includeGreedy: false,
+            runBrewUpdate: false
+        )
+        precondition(!noOptionArguments.contains("--greedy"))
+        precondition(!noOptionArguments.contains("--brew-update"))
+        precondition(DailyInspectionScheduler.uninstallArguments(plistExists: true).contains(DailyInspectionScheduler.launchAgentURL.path))
+        precondition(DailyInspectionScheduler.uninstallArguments(plistExists: false).last?.hasSuffix(DailyInspectionScheduler.label) == true)
+        precondition(DailyInspectionScheduler.isAlreadyUnloaded(output: "No such process"))
+        precondition(DailyInspectionScheduler.isAlreadyUnloaded(output: "Could not find service"))
+        precondition(!DailyInspectionScheduler.isAlreadyUnloaded(output: "Permission denied"))
         let failedRuntime = DailyInspectionScheduler.parseRuntimeStatus(
             output: "state = not running\nlast exit code = 7\n",
             isLoaded: true
@@ -117,6 +139,9 @@ struct StewardModelScanGuardTest {
 
         let scanner = DelayedScanner()
         let model = StewardModel(scanner: scanner)
+        model.refreshDailyInspectionStatus(preference: false)
+        precondition(!model.dailyInspectionEnabled)
+        precondition(model.dailyInspectionHealth != .healthy, "Disabled preference must not present a healthy active state")
         let inboxURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("recovery-inbox-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: inboxURL) }
@@ -265,6 +290,32 @@ struct StewardModelScanGuardTest {
             Set(manualCaskModel.availableUpdates.map(\.id)) == [executableFormula.id],
             "一键升级集合应与可执行集合一致，实际：\(manualCaskModel.availableUpdates.map(\.id))"
         )
+
+        manualCaskModel.executor.packageProgress[executableFormula.id] = PackageUpgradeProgress(
+            packageID: executableFormula.id,
+            packageName: executableFormula.name,
+            status: .succeeded,
+            detail: "升级完成"
+        )
+        manualCaskModel.executorRequestsDerivedDataRecompute()
+        precondition(!manualCaskModel.updateAttentionPackages.map(\.id).contains(executableFormula.id), "成功项应立即离开待升级列表")
+        precondition(manualCaskModel.updateAttentionPackages.map(\.id).contains(manualCask.id))
+        precondition(manualCaskModel.updateAttentionPackages.map(\.id).contains(staleCask.id))
+        precondition(manualCaskModel.allUpgradeablePackages.map(\.id).contains(executableFormula.id), "成功项仍保留在扫描与历史数据源中")
+
+        manualCaskModel.executorRequestsRescan(inboxStore: nil)
+        for _ in 0..<100 {
+            if manualCaskModel.executor.packageProgress[executableFormula.id]?.status == .warning { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        precondition(manualCaskModel.executor.packageProgress[executableFormula.id]?.status == .warning, "命令成功但仍可升级时必须转为 warning")
+        precondition(manualCaskModel.updateAttentionPackages.map(\.id).contains(executableFormula.id), "验证后仍可升级的项目必须立即恢复显示")
+        precondition(manualCaskModel.availableUpdates.map(\.id).contains(executableFormula.id), "旧成功状态不得阻挡后续新版本")
+
+        manualCaskModel.executor.packageProgress[executableFormula.id]?.status = .failed
+        manualCaskModel.executorRequestsDerivedDataRecompute()
+        precondition(manualCaskModel.updateAttentionPackages.map(\.id).contains(executableFormula.id), "失败项仍需留在待处理列表")
+
         manualCaskModel.executorDidRemoveStaleCaskRecord(packageID: staleCask.id)
         precondition(manualCaskModel.staleCaskRecords.isEmpty)
         precondition(!manualCaskModel.updateAttentionPackages.map(\.id).contains(staleCask.id))
@@ -397,6 +448,35 @@ struct StewardModelScanGuardTest {
             )
             precondition(nonFailureModel.orphanedFailedProgresses.isEmpty, "\(nonFailureStatus.rawValue) must not count as orphan")
         }
+
+        let summaryStaleCask = BrewPackage(
+            id: "brew:cask:stale-summary",
+            kind: "cask",
+            name: "stale-summary",
+            installedVersion: "1",
+            currentVersion: "2",
+            pinned: false,
+            autoUpdates: false,
+            outdated: true,
+            upgradeable: true,
+            expectedAppPaths: ["/Applications/Stale Summary.app"],
+            hasStaleInstallRecord: true
+        )
+        let summaryModel = StewardModel(scanner: orphanScanner)
+        summaryModel.scan = ScanResult(
+            scannedAt: Date(timeIntervalSince1970: 0),
+            includeGreedy: true,
+            summary: ScanSummary(applications: 0, brewFormulae: 0, brewCasks: 1, masApps: 0, outdated: 1, actionable: 1, scanMs: 1),
+            applications: ApplicationsScan(source: "test", ok: true, error: "", items: []),
+            brew: BrewScan(available: true, path: "/opt/homebrew/bin/brew", prefix: "/opt/homebrew", version: "Homebrew 5", error: "", includeGreedy: true, formulae: [], casks: [summaryStaleCask]),
+            mas: MasScan(available: false, path: "", error: "", apps: [])
+        )
+        summaryModel.executorDidRemoveStaleCaskRecord(packageID: summaryStaleCask.id)
+        precondition(summaryModel.scan?.brew.casks.isEmpty == true)
+        precondition(summaryModel.scan?.summary.brewCasks == 0)
+        precondition(summaryModel.scan?.summary.outdated == 0)
+        precondition(summaryModel.scan?.summary.actionable == 0)
+        precondition(!summaryModel.updateAttentionPackages.contains { $0.id == summaryStaleCask.id })
     }
 
     private static func appUpdateScanResult() -> ScanResult {

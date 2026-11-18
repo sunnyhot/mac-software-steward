@@ -9,13 +9,20 @@ struct AutomationNotificationDecision: Equatable {
 enum AutomationNotificationDecider {
     static func failureDecision(
         policy: NotificationPolicy,
-        failures: [InspectionFailureRecord]
+        failures: [InspectionFailureRecord],
+        succeededActionCount: Int = 0,
+        availableUpgradeCount: Int = 0
     ) -> AutomationNotificationDecision? {
         guard policy != .silent, !failures.isEmpty else { return nil }
 
         let firstCommand = failures[0].commandDisplay
         let body: String
-        if failures.count == 1 {
+        if succeededActionCount > 0 || availableUpgradeCount > 0 {
+            var parts = ["\(failures.count) 项执行失败"]
+            if succeededActionCount > 0 { parts.append("已完成 \(succeededActionCount) 项") }
+            if availableUpgradeCount > 0 { parts.append("仍有 \(availableUpgradeCount) 项待处理") }
+            body = parts.joined(separator: "；") + "。"
+        } else if failures.count == 1 {
             body = "\(firstCommand) 执行失败，其他项目已继续处理。"
         } else {
             body = "共有 \(failures.count) 项执行失败，其他项目已继续处理。"

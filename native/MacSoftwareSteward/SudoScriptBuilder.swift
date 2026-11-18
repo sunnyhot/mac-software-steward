@@ -1,28 +1,38 @@
 import Foundation
 
-/// 把同批次所有需要 sudo 的 cask 拼成一条 osascript 脚本。
+/// 把同批次需要 sudo 的命令拼成一条 osascript 脚本。
 ///
-/// 格式（parser 据此解析，改动需同步 SudoScriptParser）：
-///   do shell script "<body>" with administrator privileges
-/// body 每行：`<brewPath> upgrade --cask <name>; echo "__RC_<i>_$?__"`
-/// body 前置 `export PATH=...; export HOME=...;` 透传最小环境给 root shell。
-/// 语句间用 `;`（非 `&&`），单条失败不阻断后续，实现失败隔离。
+/// 保留每个命令的 executable 与完整参数，避免清理、安装等操作在提权时
+/// 被错误地重建成 upgrade。每个命令后追加独立的 __RC__ 标记，供 parser
+/// 将结果映射回原始步骤。
 enum SudoScriptBuilder {
-    /// 生成 AppleScript 脚本字符串（osascript -e 的内容）。
-    static func script(brewPath: String, packageNames: [String], pathEnv: String, homeEnv: String) -> String {
-        var lines: [String] = []
-        lines.append("export PATH=\(pathEnv)")
-        lines.append("export HOME=\(homeEnv)")
-        for (index, name) in packageNames.enumerated() {
-            // 标记下标从 1 开始，与 parser 约定一致。
+    static func script(commands: [UpgradeCommand], pathEnv: String, homeEnv: String) -> String {
+        var lines = [
+            "export PATH=\(shellQuote(pathEnv))",
+            "export HOME=\(shellQuote(homeEnv))"
+        ]
+
+        for (index, command) in commands.enumerated() {
             let markerNumber = index + 1
-            lines.append("\(brewPath) upgrade --cask \(name); echo \"__RC_\(markerNumber)_$?__\"")
+            let shellCommand = ([command.executable] + command.arguments)
+                .map(shellQuote)
+                .joined(separator: " ")
+            lines.append("\(shellCommand); echo \"__RC_\(markerNumber)_$?__\"")
         }
+
         let body = lines.joined(separator: "\n")
-        return "do shell script \"\(body)\" with administrator privileges"
+        let appleScriptBody = body
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return "do shell script \"\(appleScriptBody)\" with administrator privileges"
     }
 
-    /// 把脚本包装成 osascript 的参数列表。
+    /// 单个 shell token 使用单引号保护；内部的单引号按 POSIX 规则拆成
+    /// 结束引号 + 转义单引号 + 重新打开引号。
+    static func shellQuote(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
     static func osaArguments(_ script: String) -> [String] {
         ["-e", script]
     }

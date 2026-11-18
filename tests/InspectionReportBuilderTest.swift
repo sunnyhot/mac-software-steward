@@ -19,6 +19,7 @@ struct InspectionReportBuilderTest {
         ]
 
         let inboxID = UUID(uuidString: "00000000-0000-0000-0000-000000000099")!
+        let cleanedCask = BrewPackage(id: "brew:cask:cleaned", kind: "cask", name: "cleaned", installedVersion: "1", currentVersion: "2", pinned: false, autoUpdates: false, outdated: false, upgradeable: false)
         let report = InspectionReportBuilder.makeReport(
             trigger: .dailyAgent,
             startedAt: Date(timeIntervalSince1970: 100),
@@ -26,6 +27,7 @@ struct InspectionReportBuilderTest {
             scan: scan,
             rows: rows,
             automaticPackages: [.brew(formula)],
+            automaticCleanupPackages: [.brew(cleanedCask)],
             inboxItemIDs: [inboxID],
             failures: [
                 InspectionFailureRecord(message: "command failed", commandDisplay: "brew upgrade jq", exitCode: 1),
@@ -35,7 +37,8 @@ struct InspectionReportBuilderTest {
 
         precondition(report.status == .failed)
         precondition(report.scanSummary.applications == 3)
-        precondition(report.automaticUpgrades.map(\.packageID) == [formula.id])
+        precondition(report.automaticUpgrades.map(\.packageID) == [formula.id, cleanedCask.id])
+        precondition(report.automaticUpgrades.last?.source == "残留清理")
         precondition(report.skippedItems.map(\.packageID) == [risky.id])
         precondition(report.skippedItems[0].reason == "需确认：检测到 major 版本变化")
         precondition(report.failures.first?.exitCode == 1)
