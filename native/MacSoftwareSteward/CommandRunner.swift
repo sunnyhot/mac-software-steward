@@ -228,10 +228,13 @@ enum CommandRunner {
 
             process.terminationHandler = { finishedProcess in
                 guard gate.close() else { return }
+                // 先读完管道尾部，再停止回调；避免进程退出时丢掉最后的输出。
+                let remainingStdout = stdout.fileHandleForReading.readDataToEndOfFile()
+                let remainingStderr = stderr.fileHandleForReading.readDataToEndOfFile()
                 stdout.fileHandleForReading.readabilityHandler = nil
                 stderr.fileHandleForReading.readabilityHandler = nil
-                emit(stdout.fileHandleForReading.readDataToEndOfFile(), stream: "stdout", recentOutput: recentOutput, onOutput: onOutput)
-                emit(stderr.fileHandleForReading.readDataToEndOfFile(), stream: "stderr", recentOutput: recentOutput, onOutput: onOutput)
+                emit(remainingStdout, stream: "stdout", recentOutput: recentOutput, onOutput: onOutput)
+                emit(remainingStderr, stream: "stderr", recentOutput: recentOutput, onOutput: onOutput)
                 continuation.resume(returning: StreamingCommandResult(
                     code: finishedProcess.terminationStatus,
                     recentOutput: recentOutput.text(),
