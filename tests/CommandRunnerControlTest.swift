@@ -43,7 +43,10 @@ struct CommandRunnerControlTest {
             streamingCapture.append(stream: stream, text: text)
         }
         precondition(streamingOverlay.code == 0)
-        precondition(streamingCapture.text.contains("streaming"))
+        precondition(
+            streamingCapture.text.contains("streaming"),
+            "streaming assertion failed: recentOutput=\(streamingOverlay.recentOutput), capture=\(streamingCapture.text)"
+        )
     }
 }
 
