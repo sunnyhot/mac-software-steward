@@ -4,7 +4,7 @@ import UserNotifications
 
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
-        WindowDoubleClickZoomPolicy.enable()
+        WindowDoubleClickZoomPolicy.install()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             return
         }
 
-        NSApp.setActivationPolicy(.regular)
+        DockIconVisibilityPolicy.apply()
         UNUserNotificationCenter.current().delegate = self
     }
 
@@ -68,6 +68,7 @@ struct MacSoftwareStewardApp: App {
     @StateObject private var launchAtLogin = LaunchAtLoginModel()
     @StateObject private var automationProfile = AutomationProfileStore()
     @StateObject private var inboxStore = InboxStore()
+    @AppStorage(DockIconVisibilityPolicy.defaultsKey) private var dockIconVisible = true
 
     var body: some Scene {
         WindowGroup(id: "main") {
@@ -100,6 +101,9 @@ struct MacSoftwareStewardApp: App {
                 .onChange(of: scenePhase) {
                     guard scenePhase == .active else { return }
                     refreshForegroundStores()
+                }
+                .onChange(of: dockIconVisible) {
+                    applyDockIconPolicy()
                 }
         }
         .windowStyle(.titleBar)
@@ -217,7 +221,7 @@ struct MacSoftwareStewardApp: App {
     }
 
     private func applyDockIconPolicy() {
-        NSApp.setActivationPolicy(.regular)
+        DockIconVisibilityPolicy.apply()
     }
 }
 

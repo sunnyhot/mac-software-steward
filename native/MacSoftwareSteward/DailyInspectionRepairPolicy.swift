@@ -13,14 +13,16 @@ enum DailyInspectionRepairPolicy {
     static func action(
         preferenceEnabled: Bool,
         config: DailyInspectionConfig,
-        isLoaded: Bool = false
+        isLoaded: Bool = false,
+        expectedHour: Int = DailyAutomationDefaults.hour,
+        expectedMinute: Int = DailyAutomationDefaults.minute
     ) -> DailyInspectionRepairAction {
         guard preferenceEnabled else {
             return (config.enabled || isLoaded) ? .uninstall : .none
         }
         guard config.enabled else { return .restore }
-        if config.hour != DailyAutomationDefaults.hour
-            || config.minute != DailyAutomationDefaults.minute
+        if config.hour != expectedHour
+            || config.minute != expectedMinute
             || config.includeGreedy != DailyAutomationDefaults.includeGreedy
             || config.runBrewUpdate != DailyAutomationDefaults.runBrewUpdate {
             return .normalize

@@ -23,8 +23,12 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
 
     @Published var dailyInspectionEnabled = false
     @Published var isUpdatingDailyInspection = false
-    @Published var dailyHour = 9
-    @Published var dailyMinute = 0
+    @Published var dailyHour = DailyInspectionPreferences.hour() {
+        didSet { DailyInspectionPreferences.save(hour: dailyHour, minute: dailyMinute) }
+    }
+    @Published var dailyMinute = DailyInspectionPreferences.minute() {
+        didSet { DailyInspectionPreferences.save(hour: dailyHour, minute: dailyMinute) }
+    }
     @Published var dailyInspectionHealth: DailyInspectionHealth = .disabled
     @Published var dailyInspectionRuntime = DailyInspectionRuntimeStatus(isLoaded: false, lastExitCode: nil)
     @Published var dailyLog = ""
@@ -808,13 +812,21 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
             dailyInspectionEnabled = config.enabled
             dailyInspectionHealth = config.health
         }
-        dailyHour = DailyAutomationDefaults.hour
-        dailyMinute = DailyAutomationDefaults.minute
         includeGreedy = DailyAutomationDefaults.includeGreedy
         runBrewUpdate = DailyAutomationDefaults.runBrewUpdate
         dailyLaunchAgentPath = config.launchAgentPath
         dailyLogPath = config.logPath
         dailyLog = DailyInspectionScheduler.recentLog()
+    }
+
+    /// 保存时间偏好；已启用时立即重装 LaunchAgent，未启用时只保存供下次启用使用。
+    func saveDailyInspectionTime() async {
+        DailyInspectionPreferences.save(hour: dailyHour, minute: dailyMinute)
+        guard dailyInspectionEnabled else {
+            refreshDailyInspectionStatus()
+            return
+        }
+        await enableDailyInspection()
     }
 
     func enableDailyInspection() async {
@@ -847,7 +859,9 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
         let action = DailyInspectionRepairPolicy.action(
             preferenceEnabled: dailyInspectionPreference,
             config: config,
-            isLoaded: runtime.isLoaded
+            isLoaded: runtime.isLoaded,
+            expectedHour: dailyHour,
+            expectedMinute: dailyMinute
         )
 
         if action == .uninstall {
@@ -866,8 +880,6 @@ final class StewardModel: ObservableObject, MaintenanceExecutorHost {
         }
 
         if action == .restore || action == .normalize {
-            dailyHour = DailyAutomationDefaults.hour
-            dailyMinute = DailyAutomationDefaults.minute
             includeGreedy = DailyAutomationDefaults.includeGreedy
             runBrewUpdate = DailyAutomationDefaults.runBrewUpdate
             await enableDailyInspection()

@@ -11,12 +11,19 @@ struct SettingsView: View {
                     SettingsGroupHeader(title: "自动维护", symbol: "bolt.badge.checkmark")
                     AutomaticMaintenanceRow()
                     SettingsDivider()
+                    DailyInspectionTimeRow()
+                    SettingsDivider()
                     NotificationPolicyRow()
                 }
 
                 SettingsGroupBox {
                     SettingsGroupHeader(title: "运行状态", symbol: "clock.badge.checkmark")
                     DailyInspectionHealthRow()
+                }
+
+                SettingsGroupBox {
+                    SettingsGroupHeader(title: "应用", symbol: "app")
+                    DockIconRow()
                 }
 
                 Spacer(minLength: 0)
@@ -334,7 +341,7 @@ struct DailyInspectionTimeRow: View {
             .frame(width: 80)
             .labelsHidden()
             Button {
-                Task { await model.enableDailyInspection() }
+                Task { await model.saveDailyInspectionTime() }
             } label: {
                 Text(model.isUpdatingDailyInspection ? "保存中…" : "保存")
             }

@@ -43,6 +43,15 @@ run_test WindowDoubleClickZoomPolicyTest \
   "$SRC/WindowDoubleClickZoomPolicy.swift" \
   "$TESTS/WindowDoubleClickZoomPolicyTest.swift"
 
+run_test DockIconVisibilityPolicyTest \
+  "$SRC/DockIconVisibilityPolicy.swift" \
+  "$TESTS/DockIconVisibilityPolicyTest.swift"
+
+run_test DailyInspectionPreferencesTest \
+  "$SRC/DailyAutomationDefaults.swift" \
+  "$SRC/DailyInspectionPreferences.swift" \
+  "$TESTS/DailyInspectionPreferencesTest.swift"
+
 run_test AppUpdateDialogLayoutTest \
   "$SRC/AppUpdateDialogLayout.swift" \
   "$TESTS/AppUpdateDialogLayoutTest.swift"
@@ -532,6 +541,7 @@ run_test StewardModelScanGuardTest \
   "$SRC/FormulaRepairCommandBuilder.swift" \
   "$SRC/HomebrewMirrorFallback.swift" \
   "$SRC/DailyAutomationDefaults.swift" \
+  "$SRC/DailyInspectionPreferences.swift" \
   "$SRC/DailyInspectionRepairPolicy.swift" \
   "$SRC/MaintenanceExecutor.swift" \
   "$SRC/CaskMirrorPrefetcher.swift" \

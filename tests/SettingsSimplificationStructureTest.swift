@@ -5,12 +5,12 @@ let settingsURL = root.appendingPathComponent("native/MacSoftwareSteward/Views/S
 let source = try String(contentsOf: settingsURL, encoding: .utf8)
 let layout = source.components(separatedBy: "// MARK: - Settings Group Box").first ?? ""
 
-for required in ["AutomaticMaintenanceRow", "NotificationPolicyRow", "DailyInspectionHealthRow"] {
+for required in ["AutomaticMaintenanceRow", "DailyInspectionTimeRow", "NotificationPolicyRow", "DailyInspectionHealthRow", "DockIconRow"] {
     precondition(layout.contains("\(required)()"), "\(required) must remain on the automation-only settings page")
 }
 for removed in [
-    "DailyInspectionTimeRow", "LowRiskHandlingRow", "LaunchAtLoginRow", "AppearanceRow",
-    "DockIconRow", "AutoCheckUpdateRow", "AutoDownloadUpdateRow", "ManualCheckUpdateRow",
+    "LowRiskHandlingRow", "LaunchAtLoginRow", "AppearanceRow",
+    "AutoCheckUpdateRow", "AutoDownloadUpdateRow", "ManualCheckUpdateRow",
     "RegularAppNetworkPolicyRow", "AutoRepairPolicyRow", "GreedyCaskRow",
     "BrewUpdateRow", "MaxConcurrentUpgradesRow"
 ] {
