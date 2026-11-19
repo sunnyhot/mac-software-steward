@@ -3,6 +3,10 @@ import SwiftUI
 import UserNotifications
 
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        WindowDoubleClickZoomPolicy.enable()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         if activateExistingInstanceIfNeeded() {
             return

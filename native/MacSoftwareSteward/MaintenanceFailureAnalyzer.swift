@@ -39,7 +39,7 @@ enum MaintenanceFailureAnalyzer {
             return FailureAnalysis(summary: summary, suggestion: suggestion, action: action, copyText: copyText, command: command)
         }
 
-        if let hint = UpgradeFailureAnalyzer.knownFailureHint(in: trimmed) {
+        if let hint = UpgradeFailureAnalyzer.knownFailureHint(command: command, output: trimmed) {
             summary = hint.summary
             suggestion = hint.suggestion
             action = hint.action

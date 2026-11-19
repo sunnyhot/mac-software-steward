@@ -26,10 +26,20 @@ struct FormulaRepairCommandBuilderTest {
             formulaName: "formula with space"
         )
         precondition(quoted.arguments[1].contains("'formula with space'"))
-        try verifyNonzeroListTriggersUninstall()
+        let multiVersionActions = try verifyExecution(
+            listError: "Error: merve has multiple installed versions"
+        )
+        precondition(multiVersionActions.contains("uninstall"), "A nonzero multi-version brew list must still uninstall")
+        precondition(multiVersionActions.contains("install"))
+
+        let notInstalledActions = try verifyExecution(
+            listError: "Error: No such keg: /opt/homebrew/Cellar/merve"
+        )
+        precondition(!notInstalledActions.contains("uninstall"), "An already-uninstalled formula must not be uninstalled again")
+        precondition(notInstalledActions.contains("install"), "An already-uninstalled formula must still be installed")
     }
 
-    private static func verifyNonzeroListTriggersUninstall() throws {
+    private static func verifyExecution(listError: String) throws -> String {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("formula-repair-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -40,7 +50,7 @@ struct FormulaRepairCommandBuilderTest {
         let fakeBrew = """
         #!/bin/sh
         if [ "$1" = "list" ]; then
-          echo "Error: merve has multiple installed versions" >&2
+          echo "\(listError)" >&2
           exit 1
         fi
         if [ "$1" = "uninstall" ]; then
@@ -67,7 +77,6 @@ struct FormulaRepairCommandBuilderTest {
         process.waitUntilExit()
         precondition(process.terminationStatus == 0)
         let actions = try String(contentsOf: logURL, encoding: .utf8)
-        precondition(actions.contains("uninstall"), "A nonzero multi-version brew list must still uninstall")
-        precondition(actions.contains("install"))
+        return actions
     }
 }

@@ -87,5 +87,19 @@ struct UpgradeFailureAnalyzerTest {
         precondition(nodeHint?.action == .cleanup)
         precondition(nodeHint?.summary.contains("下载缓存重命名失败") == true)
         precondition(nodeHint?.suggestion.contains("不需要重新扫描") == true)
+
+        let notInstalled = UpgradeFailureAnalyzer.knownFailureHint(
+            command: "brew upgrade merve",
+            output: "Error: merve not installed"
+        )
+        precondition(notInstalled?.action == .reinstall)
+        precondition(notInstalled?.summary.contains("当前未安装") == true)
+        precondition(notInstalled?.suggestion.contains("不再回退到 brew upgrade") == true)
+
+        let caskNotInstalled = UpgradeFailureAnalyzer.knownFailureHint(
+            command: "brew upgrade --cask some-app",
+            output: "Error: some-app not installed"
+        )
+        precondition(caskNotInstalled?.action != .reinstall, "cask failures must not enter formula repair")
     }
 }

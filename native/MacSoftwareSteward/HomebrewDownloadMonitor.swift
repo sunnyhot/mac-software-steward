@@ -102,6 +102,32 @@ enum HomebrewDownloadMonitor {
         return candidates.isEmpty ? nil : newestFile(in: candidates)
     }
 
+    /// 从 Homebrew 的 rb_file_s_rename 错误中提取源临时文件路径。
+    static func incompletePath(in output: String) -> String? {
+        let marker = "@ rb_file_s_rename - ("
+        guard let markerRange = output.range(of: marker) else { return nil }
+        let tail = output[markerRange.upperBound...]
+        guard let comma = tail.firstIndex(of: ",") else { return nil }
+        let path = String(tail[..<comma]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return path.hasSuffix(".incomplete") ? path : nil
+    }
+
+    /// 只删除日志明确指向的缓存临时文件，拒绝目录外路径和非 .incomplete 文件。
+    @discardableResult
+    static func removeIncompleteDownload(
+        at path: String,
+        in directory: URL = downloadsDirectory(),
+        fileManager: FileManager = .default
+    ) throws -> URL? {
+        guard path.hasPrefix("/"), path.hasSuffix(".incomplete") else { return nil }
+        let root = directory.standardizedFileURL
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        guard url.deletingLastPathComponent().path == root.path else { return nil }
+        guard fileManager.fileExists(atPath: url.path) else { return nil }
+        try fileManager.removeItem(at: url)
+        return url
+    }
+
     @discardableResult
     static func removeIncompleteDownload(
         packageName: String,

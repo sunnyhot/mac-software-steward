@@ -7,6 +7,22 @@ struct FailureHint {
 }
 
 enum UpgradeFailureAnalyzer {
+    static func knownFailureHint(command: String, output: String) -> FailureHint? {
+        let lowerCommand = command.lowercased()
+        let lowerOutput = output.lowercased()
+        if lowerCommand.hasPrefix("brew upgrade "),
+           !lowerCommand.contains("--cask"),
+           lowerOutput.contains(" not installed"),
+           !lowerOutput.contains("depends on") {
+            return FailureHint(
+                summary: "该 Formula 当前未安装，不能继续执行升级。",
+                suggestion: "请点击「修复并重装」直接安装当前版本；重试会保留安装意图，不再回退到 brew upgrade。",
+                action: .reinstall
+            )
+        }
+        return knownFailureHint(in: output)
+    }
+
     static func knownFailureHint(in output: String) -> FailureHint? {
         let lowercased = output.lowercased()
 
@@ -104,7 +120,7 @@ enum UpgradeFailureAnalyzer {
         if lowercased.contains("rb_file_s_rename") && lowercased.contains(".incomplete") {
             return FailureHint(
                 summary: "Homebrew 下载缓存重命名失败，可能是临时文件残留或并发任务冲突。",
-                suggestion: "请点击「清理并重试」，只清理该软件的 .incomplete 临时文件后重新下载，不会清空全部缓存，也不需要重新扫描。",
+                suggestion: "请点击「清理并重试」，只清理日志指向的 .incomplete 临时文件，并仅对本次重试切换到 Homebrew 官方源；不会修改全局镜像配置，也不需要重新扫描。",
                 action: .cleanup
             )
         }

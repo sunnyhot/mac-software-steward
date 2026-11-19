@@ -91,14 +91,20 @@ final class MaintenanceExecutor: ObservableObject {
         includeGreedy: Bool,
         isConfirmingUpgradePlan: Bool,
         inboxStore: InboxStore? = nil,
-        autoRepairProfile: AutomationProfile? = nil
+        autoRepairProfile: AutomationProfile? = nil,
+        environmentOverlay: [String: String] = [:]
     ) async {
         guard !isConfirmingUpgradePlan, !isPackageActive(package.id) else { return }
         do {
             let command = try await command(for: package, includeGreedy: includeGreedy)
             guard !isConfirmingUpgradePlan, !isPackageActive(package.id) else { return }
             enqueueJob(label: "升级 \(package.name)", steps: [
-                UpgradeStep(command: command, packageID: package.id, packageName: package.name)
+                UpgradeStep(
+                    command: command,
+                    packageID: package.id,
+                    packageName: package.name,
+                    environmentOverlay: environmentOverlay
+                )
             ], rescanAfterSuccess: true, inboxStore: inboxStore, autoRepairProfile: autoRepairProfile)
         } catch {
             // 错误由调用方处理（StewardModel 转发 errorMessage）
@@ -121,7 +127,8 @@ final class MaintenanceExecutor: ObservableObject {
         includeGreedy: Bool,
         isConfirmingUpgradePlan: Bool,
         availablePackages: [UpdatablePackage],
-        inboxStore: InboxStore? = nil
+        inboxStore: InboxStore? = nil,
+        environmentOverlay: [String: String] = [:]
     ) async {
         guard !isConfirmingUpgradePlan else { return }
         guard let package = availablePackages.first(where: { $0.id == packageID }) else {
@@ -132,7 +139,13 @@ final class MaintenanceExecutor: ObservableObject {
             host?.executorRequestsRescan(inboxStore: inboxStore)
             return
         }
-        await upgrade(package, includeGreedy: includeGreedy, isConfirmingUpgradePlan: isConfirmingUpgradePlan, inboxStore: inboxStore)
+        await upgrade(
+            package,
+            includeGreedy: includeGreedy,
+            isConfirmingUpgradePlan: isConfirmingUpgradePlan,
+            inboxStore: inboxStore,
+            environmentOverlay: environmentOverlay
+        )
     }
 
     func clearPackageFailure(_ packageID: String) {
@@ -501,7 +514,7 @@ final class MaintenanceExecutor: ObservableObject {
                 arguments: command.arguments,
                 timeout: 7200,
                 cancellationToken: attemptToken,
-                environmentOverlay: attempt.currentStrategy.environmentOverlay
+                environmentOverlay: attempt.currentStrategy.environmentOverlay.merging(step.environmentOverlay) { _, stepValue in stepValue }
             ) { [weak self] stream, text in
                 Task { @MainActor in
                     self?.appendLog(id: id, stream: stream, text: text)

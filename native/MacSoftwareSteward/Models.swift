@@ -339,6 +339,8 @@ struct UpgradeStep: Hashable {
     var packageName: String?
     /// 仅用于残留清理执行边界，排队期间若 App 重新出现则跳过删除。
     var expectedAppPaths: [String] = []
+    /// 仅该步骤使用的环境覆盖，例如镜像失败后的单次官方源回退。
+    var environmentOverlay: [String: String] = [:]
     var purpose: UpgradeStepPurpose = .maintenance
 }
 

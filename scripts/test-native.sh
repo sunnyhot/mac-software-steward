@@ -39,6 +39,10 @@ run_test AppSingleInstancePolicyTest \
   "$SRC/AppSingleInstancePolicy.swift" \
   "$TESTS/AppSingleInstancePolicyTest.swift"
 
+run_test WindowDoubleClickZoomPolicyTest \
+  "$SRC/WindowDoubleClickZoomPolicy.swift" \
+  "$TESTS/WindowDoubleClickZoomPolicyTest.swift"
+
 run_test AppUpdateDialogLayoutTest \
   "$SRC/AppUpdateDialogLayout.swift" \
   "$TESTS/AppUpdateDialogLayoutTest.swift"
@@ -526,6 +530,7 @@ run_test StewardModelScanGuardTest \
   "$SRC/CaskRecordCleanup.swift" \
   "$SRC/ChannelSwitchCommandBuilder.swift" \
   "$SRC/FormulaRepairCommandBuilder.swift" \
+  "$SRC/HomebrewMirrorFallback.swift" \
   "$SRC/DailyAutomationDefaults.swift" \
   "$SRC/DailyInspectionRepairPolicy.swift" \
   "$SRC/MaintenanceExecutor.swift" \
@@ -642,5 +647,9 @@ run_test FormulaRepairCommandBuilderTest \
   "$SRC/SudoScriptBuilder.swift" \
   "$SRC/FormulaRepairCommandBuilder.swift" \
   "$TESTS/FormulaRepairCommandBuilderTest.swift"
+
+run_test HomebrewMirrorFallbackTest \
+  "$SRC/HomebrewMirrorFallback.swift" \
+  "$TESTS/HomebrewMirrorFallbackTest.swift"
 
 echo "All native tests passed."

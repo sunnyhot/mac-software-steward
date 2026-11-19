@@ -50,6 +50,17 @@ struct HomebrewDownloadMonitorTest {
         precondition(!FileManager.default.fileExists(atPath: warpFile.path), "Expected only warp incomplete file to be removed")
         precondition(FileManager.default.fileExists(atPath: otherFile.path), "Unrelated incomplete file must remain")
 
+        let mirrorFile = directory.appendingPathComponent("a1e158--node-26.13.1_2.bottle_manifest.json.incomplete")
+        try Data(repeating: 5, count: 32).write(to: mirrorFile)
+        let renameOutput = "Error: No such file or directory @ rb_file_s_rename - (\(mirrorFile.path), /tmp/node.json)"
+        precondition(HomebrewDownloadMonitor.incompletePath(in: renameOutput) == mirrorFile.path)
+        let removedMirror = try HomebrewDownloadMonitor.removeIncompleteDownload(at: mirrorFile.path, in: directory)
+        precondition(removedMirror == mirrorFile)
+        precondition(!FileManager.default.fileExists(atPath: mirrorFile.path))
+        precondition(FileManager.default.fileExists(atPath: otherFile.path), "Exact mirror cleanup must not remove other caches")
+        let outsideRemoval = try HomebrewDownloadMonitor.removeIncompleteDownload(at: "/tmp/outside.incomplete", in: directory)
+        precondition(outsideRemoval == nil, "Paths outside Homebrew downloads must be rejected")
+
         precondition(HomebrewDownloadMonitor.canApplySnapshot(toPhase: "安装中"), "Active incomplete downloads must be allowed to correct premature installing phase")
         precondition(!HomebrewDownloadMonitor.canApplySnapshot(toPhase: "替换应用"), "Cache download snapshots must not override real app replacement phase")
         precondition(!HomebrewDownloadMonitor.canApplySnapshot(toPhase: "清理中"), "Cache download snapshots must not override cleanup phase")

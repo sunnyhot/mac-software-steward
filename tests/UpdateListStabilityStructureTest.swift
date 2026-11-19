@@ -20,6 +20,12 @@ precondition(model.contains("recoveryAction == .reinstall"), "multi-version fail
 precondition(model.contains("has multiple installed versions"), "formula uninstall must be gated by brew list evidence")
 precondition(model.contains("try HomebrewDownloadMonitor.removeIncompleteDownload("), "cache cleanup errors must not be silently ignored")
 precondition(model.contains("下载缓存失败"), "cache cleanup failures must be surfaced to the user")
+precondition(model.contains("isFormulaRepairFailure(progress)"), "formula repair retries must preserve install intent")
+precondition(model.contains("no such keg"), "an already-uninstalled formula must be installable without rescan")
+precondition(model.contains("HomebrewMirrorFallback.environmentOverlay"), "cache mirror failures must use the single-retry direct endpoint fallback")
+precondition(model.contains("isFormulaPackage(packageID, scan: scan)"), "formula repair and direct endpoint fallback must exclude casks")
+precondition(model.contains("removeIncompleteDownload(at: incompletePath)"), "cache cleanup must use the exact path from the error log")
+precondition(executor.contains("step.environmentOverlay"), "step-specific endpoint fallback must reach command execution")
 
 let lineBody = shared.components(separatedBy: "struct FlowingAccentLine").last?.components(separatedBy: "struct PolishedTaskSurfaceModifier").first ?? ""
 precondition(!lineBody.contains("GeometryReader"), "progress accent line must not trigger layout feedback")
